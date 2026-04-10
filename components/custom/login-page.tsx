@@ -8,6 +8,7 @@ import { Field, FieldError, FieldGroup, FieldLabel } from "../ui/field"
 import { InputGroup, InputGroupInput } from "../ui/input-group"
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect } from "react"
+import { ablyClient } from "@/lib/ably"
 
 const signInSchema = z.object({
   username: z.string().nonempty("Employee number must not be empty."),
@@ -127,6 +128,19 @@ function LoginForm() {
 }
 
 export default function LoginPage() {
+  useEffect(() => {
+    const channel = ablyClient.channels.get("brands")
+
+    channel.subscribe("brand-created", (sub) => {
+      console.log("Brand created:", sub.data.name)
+    })
+
+    return () => {
+      channel.unsubscribe()
+      ablyClient.close()
+    }
+  }, [])
+
   return (
     <div className="flex h-screen w-full justify-end bg-primary/20">
       <div className="flex w-full flex-col items-center justify-center border border-r bg-background xl:w-md">

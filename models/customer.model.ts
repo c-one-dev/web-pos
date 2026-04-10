@@ -1,4 +1,4 @@
-import { model, Schema } from "mongoose"
+import { model, models, Schema } from "mongoose"
 import type { ICustomer } from "../types/customer.type"
 
 const Customer = new Schema<ICustomer>(
@@ -7,7 +7,7 @@ const Customer = new Schema<ICustomer>(
     email: { type: String, required: false },
     isActive: { type: Boolean, default: true },
   },
-  { timestamps: true },
+  { timestamps: true }
 )
 
-export default model<ICustomer>("Customer", Customer)
+export default models.Customer || model<ICustomer>("Customer", Customer)

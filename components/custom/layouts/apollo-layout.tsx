@@ -3,6 +3,8 @@ import { createApolloClient } from "@/lib/apollo"
 import { ApolloProvider } from "@apollo/client/react"
 import { SessionProvider, useSession } from "next-auth/react"
 import React, { useMemo } from "react"
+import { AblyProvider } from "ably/react"
+import { ablyClient } from "@/lib/ably"
 
 function ClientLayout({ children }: { children: React.ReactNode }) {
   const { data, status } = useSession()
@@ -23,9 +25,11 @@ function ApolloLayout({
   children: React.ReactNode
 }>) {
   return (
-    <SessionProvider>
-      <ClientLayout>{children}</ClientLayout>
-    </SessionProvider>
+    <AblyProvider client={ablyClient}>
+      <SessionProvider>
+        <ClientLayout>{children}</ClientLayout>
+      </SessionProvider>
+    </AblyProvider>
   )
 }
 

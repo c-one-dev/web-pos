@@ -1,4 +1,4 @@
-import { model, Schema } from "mongoose"
+import { model, models, Schema } from "mongoose"
 import { Role, type IUser } from "../types/user.type"
 
 const User = new Schema<IUser>(
@@ -18,7 +18,7 @@ const User = new Schema<IUser>(
     pin: { type: String, required: true, select: false },
     isActive: { type: Boolean, default: true },
   },
-  { timestamps: true },
+  { timestamps: true }
 )
 
-export default model<IUser>("User", User)
+export default models.User || model<IUser>("User", User)

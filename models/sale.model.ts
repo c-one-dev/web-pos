@@ -1,4 +1,4 @@
-import { model, Schema } from "mongoose"
+import { model, models, Schema } from "mongoose"
 import {
   SaleStatus,
   type IPaymentAllocation,
@@ -22,7 +22,7 @@ const SaleItem = new Schema<ISaleItem>(
   },
   {
     _id: false,
-  },
+  }
 )
 
 const PaymentAllocation = new Schema<IPaymentAllocation>(
@@ -36,7 +36,7 @@ const PaymentAllocation = new Schema<IPaymentAllocation>(
   },
   {
     _id: false,
-  },
+  }
 )
 
 const Sale = new Schema<ISale>(
@@ -60,13 +60,13 @@ const Sale = new Schema<ISale>(
     unappliedAmount: { type: Number, required: true },
     date: { type: Date, required: true },
     by: { type: Schema.Types.ObjectId, ref: "User", required: true },
-    status: {
+    currentStatus: {
       type: String,
       enum: Object.values(SaleStatus),
       required: true,
     },
   },
-  { timestamps: true },
+  { timestamps: true }
 )
 
-export default model<ISale>("Sale", Sale)
+export default models.Sale || model<ISale>("Sale", Sale)

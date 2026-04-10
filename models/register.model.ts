@@ -1,4 +1,4 @@
-import { model, Schema } from "mongoose"
+import { model, models, Schema } from "mongoose"
 import { type IScheduleItem, type IRegister } from "../types/register.type"
 import { Day } from "../types/shared.type"
 
@@ -8,7 +8,7 @@ const ScheduleItem = new Schema<IScheduleItem>(
     openingTime: { type: String, required: true },
     closingTime: { type: String, required: true },
   },
-  { _id: false },
+  { _id: false }
 )
 
 const Register = new Schema<IRegister>(
@@ -20,7 +20,7 @@ const Register = new Schema<IRegister>(
     isOpen: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
   },
-  { timestamps: true },
+  { timestamps: true }
 )
 
-export default model<IRegister>("Register", Register)
+export default models.Register || model<IRegister>("Register", Register)

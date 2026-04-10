@@ -1,4 +1,4 @@
-import { model, Schema } from "mongoose"
+import { model, models, Schema } from "mongoose"
 import { type IProductType } from "../types/productType.type"
 
 const ProductType = new Schema<IProductType>(
@@ -11,7 +11,8 @@ const ProductType = new Schema<IProductType>(
     },
     isActive: { type: Boolean, default: true },
   },
-  { timestamps: true },
+  { timestamps: true }
 )
 
-export default model<IProductType>("Product_Type", ProductType)
+export default models["Product_Type"] ||
+  model<IProductType>("Product_Type", ProductType)

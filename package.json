@@ -19,6 +19,7 @@
     "@graphql-tools/merge": "^9.1.7",
     "@phosphor-icons/react": "^2.1.10",
     "@tanstack/react-form": "^1.28.6",
+    "ably": "^2.21.0",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -29,6 +30,7 @@
     "graphql-tag": "^2.12.6",
     "graphql-ws": "^6.0.8",
     "input-otp": "^1.4.2",
+    "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.4.1",
     "next": "^16.2.2",
     "next-auth": "^4.24.13",
@@ -50,6 +52,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4.2.1",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^25.5.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

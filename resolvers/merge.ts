@@ -6,6 +6,7 @@ import { brandResolver } from "./brand.resolver"
 import { registerResolver } from "./register.resolver"
 import { productTypeResolver } from "./productType.resolver"
 import { productResolver } from "./product.resolver"
+import { authResolver } from "./auth.resolver"
 
 export default mergeResolvers([
   userResolver,
@@ -14,4 +15,5 @@ export default mergeResolvers([
   brandResolver,
   productTypeResolver,
   productResolver,
+  authResolver,
 ])

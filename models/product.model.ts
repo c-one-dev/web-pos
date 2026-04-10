@@ -1,8 +1,5 @@
-import { model, Schema } from "mongoose"
-import type {
-  IProductPriceHistoryItem,
-  IProduct,
-} from "../types/product.type"
+import { model, models, Schema } from "mongoose"
+import type { IProductPriceHistoryItem, IProduct } from "../types/product.type"
 
 const ProductPriceHistoryItem = new Schema<IProductPriceHistoryItem>(
   {
@@ -11,7 +8,7 @@ const ProductPriceHistoryItem = new Schema<IProductPriceHistoryItem>(
   },
   {
     _id: false,
-  },
+  }
 )
 
 const Product = new Schema<IProduct>(
@@ -36,7 +33,7 @@ const Product = new Schema<IProduct>(
     },
     isActive: { type: Boolean, default: true },
   },
-  { timestamps: true },
+  { timestamps: true }
 )
 
-export default model<IProduct>("Product", Product)
+export default models.Product || model<IProduct>("Product", Product)

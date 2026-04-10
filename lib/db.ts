@@ -9,7 +9,6 @@ export const connectDB = async () => {
   if (!DB_URI || !DB_NAME || !DB_APP)
     throw new Error("Please define the database environment variables!")
 
-  console.log("🔌 Connecting to database...", DB_URI)
   try {
     await mongoose.connect(DB_URI, {
       appName: DB_NAME,

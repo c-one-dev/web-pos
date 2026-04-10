@@ -35,7 +35,6 @@ const handler = NextAuth({
       },
       authorize: async (cred: Credentials | undefined) => {
         try {
-          console.log(cred)
           const result = await client.mutate({
             mutation: SIGN_IN,
             variables: {
