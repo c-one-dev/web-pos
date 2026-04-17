@@ -19,6 +19,7 @@
     "@graphql-tools/merge": "^9.1.7",
     "@phosphor-icons/react": "^2.1.10",
     "@tanstack/react-form": "^1.28.6",
+    "@tanstack/react-table": "^8.21.3",
     "ably": "^2.21.0",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",

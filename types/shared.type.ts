@@ -13,11 +13,29 @@ export interface IDataTableArgs {
   }
 }
 
+export interface IOption {
+  label: string
+  value: string
+}
+
+export interface Filter {
+  key: string
+  value: string
+  type: FilterType
+}
+
+export interface Sort {
+  key: string
+  order: "ASC" | "DESC"
+}
+
+
 export enum FilterType {
   TEXT = "TEXT",
   NUMBER = "NUMBER",
   DATE = "DATE",
   BOOLEAN = "BOOLEAN",
+  SELECT = "SELECT",
 }
 
 export interface IPageInfo {

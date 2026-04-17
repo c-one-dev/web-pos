@@ -33,7 +33,6 @@ const handler = NextAuth({
       },
       authorize: async (cred: Credentials | undefined) => {
         try {
-          console.log("Attempting to sign in with credentials:", cred)
           const result = await client.mutate({
             mutation: SIGN_IN,
             variables: {
@@ -43,7 +42,6 @@ const handler = NextAuth({
           })
           if (!result) throw new Error("Invalid sign in.")
           const user = (result as any).data?.signIn.user
-          console.log(user)
           return {
             ...user,
             accessToken: (result as any).data?.signIn.token,

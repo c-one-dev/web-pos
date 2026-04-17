@@ -11,12 +11,6 @@ import { isISOString } from "../helpers/isoString"
 
 const CURSOR_TYPE = "brand"
 
-const generateNode = (brand: any) => ({
-  _id: brand._id,
-  name: brand.name,
-  isActive: brand.isActive,
-})
-
 export const brandResolver = {
   Query: {
     brand: async (_: any, { _id }: any) => {
@@ -42,6 +36,7 @@ export const brandResolver = {
           matchStage.$and = filter.map(({ type, key, value }) => {
             switch (type) {
               case "TEXT":
+              case "SELECT":
                 return { [key]: { $regex: value, $options: "i" } }
               case "NUMBER":
                 return { [key]: Number(value) }
@@ -65,12 +60,14 @@ export const brandResolver = {
 
         const sortKey = sort?.key || "_id"
         const sortOrder = sort?.order === "ASC" ? 1 : -1
+        const total = await Brand.countDocuments(matchStage)
 
         if (after) {
           const { id, type, value } = fromCursor(after)
           if (type !== CURSOR_TYPE) throw new Error("Invalid cursor")
           const cursorId = new Types.ObjectId(id)
-          const cursorValue = isISOString(value) ? new Date(value) : value
+          const cursorValue =
+            sortKey === "dateUpdated" ? new Date(value) : value
 
           matchStage.$and = [
             ...(matchStage.$and || []),
@@ -84,7 +81,8 @@ export const brandResolver = {
                 },
                 {
                   [sortKey]: cursorValue,
-                  _id: sortOrder === 1 ? { $gt: cursorId } : { $lt: cursorId },
+                  _id:
+                    sortOrder === 1 ? { $gt: cursorId } : { $lt: cursorId },
                 },
               ],
             },
@@ -105,39 +103,28 @@ export const brandResolver = {
           },
         ]
 
-        const [result, total] = await Promise.all([
-          Brand.aggregate(pipeline),
-          Brand.aggregate([
-            ...pipeline.filter(
-              (stage) =>
-                !("$limit" in stage) &&
-                !("$sort" in stage) &&
-                !("$project" in stage)
-            ),
-            { $count: "total" },
-          ]).then((res) => (res[0] ? res[0].total : 0)),
-        ])
-
+        const result = await Brand.aggregate(pipeline)
         const sliced = result.slice(0, first)
+        const edges = sliced.map((edge) => ({
+          node: edge,
+          cursor: toCursor({
+            type: CURSOR_TYPE,
+            id: edge._id.toString(),
+            value: edge[sortKey],
+          }),
+        }))
 
         return {
           total,
           pages: Math.ceil(total / first),
-          edges: sliced.map((edge) => ({
-            node: edge,
-            cursor: toCursor({
-              id: edge._id.toString(),
-              type: CURSOR_TYPE,
-              value: edge[sortKey],
-            }),
-          })),
+          edges,
           pageInfo: {
             endCursor: sliced.length
               ? toCursor({
-                  id: sliced[sliced.length - 1]._id.toString(),
-                  type: CURSOR_TYPE,
-                  value: sliced[sliced.length - 1][sortKey],
-                })
+                id: sliced[sliced.length - 1]._id.toString(),
+                type: CURSOR_TYPE,
+                value: sliced[sliced.length - 1][sortKey],
+              })
               : null,
             hasNextPage: result.length > first,
           },

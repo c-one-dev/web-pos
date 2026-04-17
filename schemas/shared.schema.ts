@@ -24,6 +24,7 @@ export const sharedSchema = gql`
     NUMBER
     DATE
     BOOLEAN
+    SELECT
   }
 
   input Filter {

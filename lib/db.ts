@@ -14,7 +14,6 @@ export const connectDB = async () => {
       appName: DB_NAME,
       dbName: DB_APP,
     })
-    console.log("📖 Database connected!")
   } catch (error) {
     console.error("Error connecting to database: ", error)
     process.exit(1)
