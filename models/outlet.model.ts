@@ -7,6 +7,6 @@ const Outlet = new Schema<IOutlet>(
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }
-)
+) 
 
 export default models.Outlet || model<IOutlet>("Outlet", Outlet)
