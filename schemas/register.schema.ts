@@ -30,6 +30,17 @@ export const registerSchema = gql`
     updatedAt: String
   }
 
+  type ProcessedRegister {
+    _id: ID
+    name: String
+    outlet: Outlet
+    prefix: String
+    paymentMethods: [PaymentMethod]
+    schedule: [ScheduleItem]
+    productTypes: [ProductType]
+    products: [Product]
+  }
+
   type RegisterConnection {
     total: Int
     pages: Int
@@ -67,6 +78,7 @@ export const registerSchema = gql`
 
   type Query {
     register(_id: ID!): Register
+    processedRegister(_id: ID!): ProcessedRegister
     registerTable(
       first: Int
       after: String
@@ -74,6 +86,7 @@ export const registerSchema = gql`
       filter: [Filter]
       sort: Sort
     ): RegisterConnection
+    registers: [Register]
     registerOptions: [Option]
   }
 

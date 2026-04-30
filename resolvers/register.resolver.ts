@@ -8,6 +8,7 @@ import { flatten } from "../helpers/flatten"
 import { checkSchema, validate } from "../helpers/validate"
 import { registerSchema } from "../validators/register.validator"
 import { isISOString } from "../helpers/isoString"
+import Product from "../models/product.model"
 
 const CURSOR_TYPE = "register"
 
@@ -16,10 +17,37 @@ export const registerResolver = {
     register: async (_: any, { _id }: any) => {
       try {
         const register = await Register.findById(_id)
-          .populate("paymentMethods")
+          .populate("paymentMethods outlet")
           .lean()
         if (!register) throw new GraphQLError("Register not found")
         return register
+      } catch (error) {
+        throw error
+      }
+    },
+    processedRegister: async (_: any, { _id }: any) => {
+      try {
+        const register = await Register.findById(_id)
+          .populate("outlet paymentMethods")
+          .lean()
+        if (!register) throw new GraphQLError("Register not found")
+        const products = await Product.find({
+          registers: register._id,
+        })
+          .populate([
+            {
+              path: "type",
+              select: "name",
+              strictPopulate: false,
+            },
+          ])
+          .lean()
+
+        return {
+          ...register,
+          products,
+          productTypes: new Set(products.map((p) => p.type).filter((t) => t)),
+        }
       } catch (error) {
         throw error
       }
@@ -150,6 +178,16 @@ export const registerResolver = {
             hasNextPage: result.length > first,
           },
         }
+      } catch (error) {
+        throw error
+      }
+    },
+    registers: async () => {
+      try {
+        const registers = await Register.find()
+          .populate("paymentMethods outlet")
+          .lean()
+        return registers
       } catch (error) {
         throw error
       }
