@@ -68,6 +68,7 @@ import PerItem from "./_dialogs/per-item"
 import TotalDiscount from "./_dialogs/total-discount"
 import Pay from "./_dialogs/pay"
 import { toast } from "sonner"
+import { Spinner } from "@/components/ui/spinner"
 
 const GENERATE_SALE = gql`
   mutation GenerateSale($input: SaleInput) {
@@ -144,7 +145,7 @@ export default function Page() {
   const [isPending, startTransition] = useTransition()
   const params = useParams()
   const { setRegister } = useRegisterStore()
-  const { data } = useQuery(GET_REGISTER, {
+  const { data, loading } = useQuery(GET_REGISTER, {
     variables: { _id: params.id },
     fetchPolicy: "cache-and-network",
     nextFetchPolicy: "network-only",
@@ -153,6 +154,7 @@ export default function Page() {
   const router = useRouter()
   const [selectedType, setSelectedType] = useState<string>("")
   const [generateSale] = useMutation(GENERATE_SALE)
+  const [openPay, setOpenPay] = useState(false)
 
   useEffect(() => {
     if (register && register.productTypes.length > 0)
@@ -179,6 +181,10 @@ export default function Page() {
     onSubmit: ({ value: payload }: any) =>
       startTransition(async () => {
         try {
+          if (payload.receivedAmount < payload.total) {
+            toast.error("Received amount cannot be less than total")
+            return
+          }
           const result = await generateSale({
             variables: {
               input: {
@@ -214,6 +220,14 @@ export default function Page() {
       form.setFieldValue("total", 0)
     }
   }, [items, form, discount])
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Spinner className="size-10 text-primary" />
+      </div>
+    )
+  }
 
   return (
     <form
@@ -609,13 +623,19 @@ export default function Page() {
                   </div>
                   <div>
                     <DiscardDialog discard={() => form.reset()} />
-                    <Pay form={form} state={state} register={register}>
+                    <Pay
+                      form={form}
+                      state={state}
+                      register={register}
+                      open={openPay}
+                      setOpen={setOpenPay}
+                    >
                       <Button
-                        className="flex h-fit w-full justify-between p-3.5 text-xl"
-                        size="lg"
+                        className="flex h-20 w-full justify-between p-3.5 text-2xl"
                         form="sale-form"
                         type="button"
                         disabled={state.items.length === 0}
+                        loading={isPending}
                       >
                         <span>Pay</span>
                         <span>

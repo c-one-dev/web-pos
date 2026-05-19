@@ -86,7 +86,7 @@ export default function RowViewDialog({ _id, open, setOpen, onClose }: Props) {
           <div>
             <Label>SKU</Label>
             <span className="block text-muted-foreground">
-              {data?.product?.sku}
+              {data?.product?.sku || "-"}
             </span>
           </div>
           <div>

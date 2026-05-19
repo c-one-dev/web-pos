@@ -15,7 +15,7 @@ const Product = new Schema<IProduct>(
   {
     image: { type: String, required: false },
     name: { type: String, required: true, unique: true },
-    sku: { type: String, required: true, unique: true },
+    sku: { type: String, required: false, unique: true },
     barcode: { type: String, required: false },
     description: { type: String, required: false },
     type: {
@@ -24,12 +24,13 @@ const Product = new Schema<IProduct>(
       required: false,
     },
     currentPrice: { type: Number, required: true },
-    priceHistory: { type: [ProductPriceHistoryItem], required: true },
+    priceHistory: { type: [ProductPriceHistoryItem], default: [] },
     brand: { type: Schema.Types.ObjectId, ref: "Brand", required: false },
     registers: {
       type: [Schema.Types.ObjectId],
       ref: "Register",
-      required: true,
+      required: false,
+      default: [],
     },
     isActive: { type: Boolean, default: true },
   },

@@ -46,6 +46,8 @@ export const saleResolver = {
 
         if (search)
           matchStage.$or = [
+            { notes: { $regex: search, $options: "i" } },
+            { paymentNotes: { $regex: search, $options: "i" } },
             { saleNumber: { $regex: search, $options: "i" } },
             { customerName: { $regex: search, $options: "i" } },
             { saleTotal: { $regex: search, $options: "i" } },
@@ -134,6 +136,30 @@ export const saleResolver = {
               saleTotal: "$netAmount",
               currentSaleStatus: "$currentSaleStatus",
               currentSalePaymentStatus: "$currentSalePaymentStatus",
+              paymentNotes: {
+                $reduce: {
+                  input: {
+                    $filter: {
+                      input: "$payments",
+                      as: "payment",
+                      cond: { $ne: ["$$payment.note", ""] },
+                    },
+                  },
+                  initialValue: "",
+                  in: {
+                    $concat: [
+                      "$$value",
+                      {
+                        $cond: [
+                          { $ne: ["$$value", ""] },
+                          { $concat: [", ", "$$this.note"] },
+                          "$$this.note",
+                        ],
+                      },
+                    ],
+                  },
+                },
+              },
             },
           },
           { $match: matchStage },
@@ -149,11 +175,14 @@ export const saleResolver = {
               saleTotal: 1,
               currentSaleStatus: 1,
               currentSalePaymentStatus: 1,
+              notes: 1,
+              paymentNotes: 1,
             },
           },
         ]
 
         const result = await Sale.aggregate(pipeline)
+        console.log(result)
         const sliced = result.slice(0, first)
         const edges = sliced.map((edge) => ({
           node: edge,

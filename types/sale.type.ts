@@ -81,4 +81,6 @@ export interface ISaleHistoryNode {
   saleTotal: number
   currentSaleStatus: SaleStatus
   currentSalePaymentStatus: SalePaymentStatus
+  notes: string
+  paymentNotes: string
 }

@@ -5,8 +5,8 @@ import { Types } from "mongoose"
 import { Day } from "../types/shared.type"
 
 export const registerSchema = z.object({
-  _id: z.string().optional(),
-  name: z.string().nonoptional("Name is required"),
+  _id: z.string().optional().nullable(),
+  name: z.string().nonempty("Name is required"),
   outlet: z.string().nonempty("Outlet is required"),
   prefix: z.string().nonempty("Prefix is required"),
   schedule: z

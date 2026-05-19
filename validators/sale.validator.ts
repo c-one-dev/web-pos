@@ -1,7 +1,7 @@
 import { z } from "zod"
 
 export const saleSchema = z.object({
-  customer: z.string().optional(),
+  customer: z.string().optional().nullable(),
   items: z.array(
     z.object({
       product: z.string(),
@@ -14,7 +14,7 @@ export const saleSchema = z.object({
       total: z.number(),
     })
   ),
-  notes: z.string().optional(),
+  notes: z.string().optional().nullable(),
   subTotal: z.number(),
   discount: z.number(),
   total: z.number(),

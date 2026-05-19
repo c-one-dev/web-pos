@@ -66,12 +66,13 @@ export default function ColumnFilter({
       const [from, to] = filter
         .find((f: any) => f.key === filterKey)!
         .value.split("_")
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDateRange({
         from: from ? new Date(from) : undefined,
         to: to ? new Date(to) : undefined,
       })
     }
-  }, [filterType, filterValue, filterKey])
+  }, [filterType, filterValue, filterKey, filter])
 
   const clearFilter = () => {
     setFilterValue("")
@@ -265,7 +266,7 @@ export default function ColumnFilter({
               )}
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-auto p-0">
+          <PopoverContent className="w-auto p-0 pt-4 px-1">
             <Calendar
               mode="range"
               defaultMonth={dateRange?.from}
@@ -274,35 +275,37 @@ export default function ColumnFilter({
               required
               numberOfMonths={2}
             />
-            <ButtonGroup>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setDateRange({ from: undefined, to: undefined })
-                  onFilterChange((prev: Filter[]) =>
-                    prev.filter((f: Filter) => f.key != filterKey)
-                  )
-                }}
-              >
-                Reset
-              </Button>
-              <Button
-                onClick={() => {
-                  if (!dateRange?.from || !dateRange?.to) return
-                  const dateRangeISO = `${dateRange.from.toISOString()}_${dateRange.to.toISOString()}`
-                  onFilterChange((prev: Filter[]) => [
-                    ...prev.filter((f: Filter) => f.key != filterKey),
-                    {
-                      key: filterKey,
-                      value: dateRangeISO,
-                      type: FilterType.DATE,
-                    },
-                  ])
-                }}
-              >
-                Apply
-              </Button>
-            </ButtonGroup>
+            <div className="flex justify-end px-4 pb-4">
+              <ButtonGroup className="space-x-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setDateRange({ from: undefined, to: undefined })
+                    onFilterChange((prev: Filter[]) =>
+                      prev.filter((f: Filter) => f.key != filterKey)
+                    )
+                  }}
+                >
+                  Reset
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (!dateRange?.from || !dateRange?.to) return
+                    const dateRangeISO = `${dateRange.from.toISOString()}_${dateRange.to.toISOString()}`
+                    onFilterChange((prev: Filter[]) => [
+                      ...prev.filter((f: Filter) => f.key != filterKey),
+                      {
+                        key: filterKey,
+                        value: dateRangeISO,
+                        type: FilterType.DATE,
+                      },
+                    ])
+                  }}
+                >
+                  Apply
+                </Button>
+              </ButtonGroup>
+            </div>
           </PopoverContent>
         </Popover>
       )

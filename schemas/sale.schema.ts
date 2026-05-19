@@ -140,6 +140,8 @@ export const saleSchema = gql`
     saleTotal: Float
     currentSaleStatus: SaleStatus
     currentSalePaymentStatus: SalePaymentStatus
+    notes: String
+    paymentNotes: String
   }
 
   type SaleHistoryEdge {

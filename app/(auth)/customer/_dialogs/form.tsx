@@ -127,7 +127,7 @@ export default function FormDialog({ _id, onClose }: Props) {
             form.reset()
           }
         } catch (error: any) {
-          throw error
+         console.error(error)
         }
       }),
   })

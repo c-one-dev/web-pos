@@ -56,7 +56,7 @@ const ADJUST_ACCOUNT_LIMIT = gql`
 
 const adjustCreditSchema = z.object({
   amount: z.number(),
-  description: z.string().optional(),
+  description: z.string().optional().nullable(),
 })
 
 export default function AdjustCreditDialog({ _id }: Props) {

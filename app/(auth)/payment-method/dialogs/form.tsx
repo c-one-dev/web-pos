@@ -150,7 +150,7 @@ export default function FormDialog({ _id, onClose }: Props) {
             form.reset()
           }
         } catch (error: any) {
-          throw error
+         console.error(error)
         }
       }),
   })
@@ -232,7 +232,7 @@ export default function FormDialog({ _id, onClose }: Props) {
                               aria-expanded={openCommand}
                               className={cn(
                                 field.state.value &&
-                                  "rounded-tr-none rounded-br-none",
+                                  "rounded-tr-none rounded-br-none",  isInvalid && "border-destructive",
                                 "flex-1 justify-between bg-transparent text-black/80 capitalize"
                               )}
                               type="button"

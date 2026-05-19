@@ -169,7 +169,6 @@ export const productResolver = {
         try {
           const result = await Product.create({
             ...input,
-            // Initialize price history with the current price
             priceHistory: [{ price: input.currentPrice, date: new Date() }],
           })
 

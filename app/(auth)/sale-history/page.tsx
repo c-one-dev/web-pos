@@ -12,7 +12,12 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from "@/components/ui/input-group"
-import { GearIcon, MagnifyingGlassIcon } from "@phosphor-icons/react"
+import {
+  ArrowDownLeftIcon,
+  ArrowElbowDownRightIcon,
+  GearIcon,
+  MagnifyingGlassIcon,
+} from "@phosphor-icons/react"
 import { ColumnDef } from "@tanstack/react-table"
 import DataTable from "@/components/custom/data-table"
 import ColumnFilter from "@/components/custom/column-filter"
@@ -22,7 +27,6 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import ViewDialog from "./_dialogs/view"
 import SortHeader from "@/components/custom/sort-header"
 import StatusDialog from "./_dialogs/status"
 import {
@@ -40,6 +44,7 @@ import {
   SaleStatus,
 } from "@/types/sale.type"
 import { format } from "date-fns"
+import { ArrowElbowRightIcon } from "@phosphor-icons/react/dist/ssr"
 
 const GET_SALE_HISTORY = gql`
   query SaleHistoryTable(
@@ -68,6 +73,8 @@ const GET_SALE_HISTORY = gql`
           saleTotal
           currentSaleStatus
           currentSalePaymentStatus
+          notes
+          paymentNotes
         }
       }
       pageInfo {
@@ -89,12 +96,7 @@ function Actions({ row }: { row?: ISaleHistoryNode }) {
           <GearIcon />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="left" align="start">
-        <ViewDialog
-          _id={data?._id?.toString() || ""}
-          onClose={() => setOpen(false)}
-        />
-      </DropdownMenuContent>
+      <DropdownMenuContent side="left" align="start"></DropdownMenuContent>
     </DropdownMenu>
   )
 }
@@ -197,7 +199,25 @@ export default function Page() {
           />
         ),
         cell: ({ row }) => (
-          <span className="font-medium">{row.original.saleNumber}</span>
+          <div>
+            <span className="block font-medium">{row.original.saleNumber}</span>
+            {row.original.notes && (
+              <span className="flex gap-1 text-xs text-muted-foreground">
+                <ArrowElbowDownRightIcon /> {row.original.notes}
+              </span>
+            )}
+            {row.original.paymentNotes != "" &&
+              row.original.paymentNotes
+                .split(", ")
+                .map((note: string, index: number) => (
+                  <span
+                    key={index}
+                    className="flex gap-1 text-xs text-muted-foreground"
+                  >
+                    <ArrowElbowDownRightIcon /> {note}
+                  </span>
+                ))}
+          </div>
         ),
         footer: () => (
           <ColumnFilter
@@ -271,7 +291,7 @@ export default function Page() {
         ),
         cell: ({ row }) => (
           <span className="font-medium">
-            {row.original.currentSalePaymentStatus}
+            {row.original.currentSalePaymentStatus.replaceAll("_", " ")}
           </span>
         ),
         footer: () => (
@@ -283,6 +303,34 @@ export default function Page() {
               label: status.replaceAll("_", " "),
               value: status,
             }))}
+            filter={filter}
+            onFilterChange={onFilter}
+          />
+        ),
+      },
+      {
+        id: "saleTotal",
+        header: () => (
+          <SortHeader
+            label="Sale Total"
+            sortKey="saleTotal"
+            sortState={sort}
+            onSortChange={setSort}
+          />
+        ),
+        cell: ({ row }) => (
+          <span className="font-medium">
+            {new Intl.NumberFormat("en-PH", {
+              style: "currency",
+              currency: "PHP",
+            }).format(row.original.saleTotal)}
+          </span>
+        ),
+        footer: () => (
+          <ColumnFilter
+            label="Sale Total"
+            filterKey="saleTotal"
+            filterType={FilterType.NUMBER}
             filter={filter}
             onFilterChange={onFilter}
           />

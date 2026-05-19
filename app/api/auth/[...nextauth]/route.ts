@@ -47,6 +47,7 @@ const handler = NextAuth({
             accessToken: (result as any).data?.signIn.token,
           }
         } catch (error) {
+          console.error("Sign in error:", error)
           throw new Error(
             "Invalid sign in. Please check your credentials and try again."
           )

@@ -36,6 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import RowViewDialog from "./dialogs/row-view"
+import { cn } from "@/lib/utils"
 
 const GET_PRODUCTS = gql`
   query ProductTable(
@@ -161,6 +162,17 @@ export default function Page() {
     }
   }, [data])
 
+  const resetPage = () => setPage({ current: 1, loaded: 1, max: 1 })
+  const onSearch = useCallback((value: string) => {
+    setSearch(value)
+    resetPage()
+  }, [])
+
+  const onFilter = useCallback((value: any) => {
+    setFilter(value)
+    resetPage()
+  }, [])
+
   const columns: ColumnDef<IProductNode>[] = useMemo(
     () => [
       {
@@ -197,7 +209,14 @@ export default function Page() {
           />
         ),
         cell: ({ row }) => (
-          <span className="font-medium">{row.original.sku}</span>
+          <span
+            className={cn(
+              "font-medium",
+              !row.original.sku && "text-muted-foreground"
+            )}
+          >
+            {row.original.sku || "N/A"}
+          </span>
         ),
         footer: () => (
           <ColumnFilter
@@ -263,19 +282,8 @@ export default function Page() {
         ),
       },
     ],
-    [sort, filter]
+    [sort, filter, onFilter]
   )
-
-  const resetPage = () => setPage({ current: 1, loaded: 1, max: 1 })
-  const onSearch = useCallback((value: string) => {
-    setSearch(value)
-    resetPage()
-  }, [])
-
-  const onFilter = useCallback((value: any) => {
-    setFilter(value)
-    resetPage()
-  }, [])
 
   const onNextPage = async () => {
     if (page.current == page.loaded) {

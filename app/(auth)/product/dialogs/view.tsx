@@ -88,7 +88,7 @@ export default function ViewDialog({ _id, onClose }: Props) {
           <div>
             <Label>SKU</Label>
             <span className="block text-muted-foreground">
-              {data?.product?.sku}
+              {data?.product?.sku || "-"}
             </span>
           </div>
           <div>

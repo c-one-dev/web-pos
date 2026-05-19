@@ -20,7 +20,7 @@ import {
   TableRow,
 } from "../ui/table"
 import { cn } from "@/lib/utils"
-import RowViewDialog from "@/app/(auth)/brand/_dialogs/row-view"
+import { Spinner } from "../ui/spinner"
 
 type Props<TData, TValue> = {
   loading?: boolean
@@ -34,6 +34,7 @@ type Props<TData, TValue> = {
 export default function DataTable<TData, TValue>({
   columns,
   data,
+  loading,
   actionsColumn,
   rowView,
   noFooter = false,
@@ -104,7 +105,16 @@ export default function DataTable<TData, TValue>({
             ))}
         </TableHeader>
         <TableBody>
-          {table.getRowModel().rows?.length ? (
+          {loading ? (
+            <TableRow>
+              <TableCell
+                colSpan={columns.length}
+                className="h-full text-center"
+              >
+                <Spinner className="mx-auto size-10" />
+              </TableCell>
+            </TableRow>
+          ) : table.getRowModel().rows?.length ? (
             table.getRowModel().rows.map((row) => (
               <TableRow
                 key={row.id}

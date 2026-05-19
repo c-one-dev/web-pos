@@ -15,11 +15,7 @@ import { Separator } from "@/components/ui/separator"
 import { ButtonGroup } from "@/components/ui/button-group"
 import { IRegister } from "@/types/register.type"
 import { IPaymentMethod } from "@/types/paymentMethod.type"
-import {
-  ArrowArcLeftIcon,
-  ArrowElbowDownRightIcon,
-  XIcon,
-} from "@phosphor-icons/react"
+import { ArrowElbowDownRightIcon, XIcon } from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { Textarea } from "@/components/ui/textarea"
 
@@ -30,13 +26,16 @@ function Pay({
   state,
   register,
   form,
+  open,
+  setOpen,
 }: Readonly<{
   children: React.ReactNode
   form: any
   state: any
   register: any
+  open: boolean
+  setOpen: React.Dispatch<React.SetStateAction<boolean>>
 }>) {
-  const [open, setOpen] = useState<boolean>(false)
   const subTotal = state.subTotal
   const discount = state.discount
   const total = state.total
@@ -273,7 +272,7 @@ function Pay({
           </div>
         </div>
         <SheetFooter>
-          <Button type="submit" form="sale-form" onClick={() => setOpen(false)}>
+          <Button type="submit" form="sale-form">
             Pay
           </Button>
           <SheetClose asChild>

@@ -209,7 +209,7 @@ export default function FormDialog({ _id, onClose }: Props) {
             form.reset()
           }
         } catch (error: any) {
-          throw error
+          console.error(JSON.stringify(error, null, 2))
         }
       }),
   })
@@ -230,7 +230,7 @@ export default function FormDialog({ _id, onClose }: Props) {
           : []
       )
     }
-  }, [data])
+  }, [data, form])
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -415,6 +415,7 @@ export default function FormDialog({ _id, onClose }: Props) {
                               className={cn(
                                 field.state.value &&
                                   "rounded-tr-none rounded-br-none",
+                                isInvalid && "border-destructive",
                                 "flex-1 justify-between bg-transparent text-black/80 capitalize"
                               )}
                               type="button"
@@ -489,6 +490,7 @@ export default function FormDialog({ _id, onClose }: Props) {
                               className={cn(
                                 field.state.value &&
                                   "rounded-tr-none rounded-br-none",
+                                isInvalid && "border-destructive",
                                 "flex-1 justify-between bg-transparent text-black/80 capitalize"
                               )}
                               type="button"
@@ -563,6 +565,7 @@ export default function FormDialog({ _id, onClose }: Props) {
                               className={cn(
                                 field.state.value &&
                                   "rounded-tr-none rounded-br-none",
+                                isInvalid && "border-destructive",
                                 "flex-1 justify-between bg-transparent text-black/80 capitalize"
                               )}
                               type="button"
