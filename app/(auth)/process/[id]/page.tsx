@@ -195,6 +195,7 @@ export default function Page() {
           if ((result.data as any).generateSale.ok) {
             form.reset()
             toast.success((result.data as any).generateSale.message)
+            setOpenPay(false)
           }
         } catch (error: any) {
           console.error(JSON.stringify(error, null, 2))
