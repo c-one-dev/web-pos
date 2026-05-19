@@ -32,12 +32,20 @@ export const saleSchema = gql`
     change: Float
     note: String
     date: String
+    payment: Payment
   }
 
   type SaleStatusHistoryItem {
     status: SaleStatus
     date: String
     by: User
+  }
+
+  type SalePaymentStatusHistoryItem {
+    status: SalePaymentStatus
+    date: String
+    by: User
+    paymentRef: Payment
   }
 
   type Sale {
@@ -53,6 +61,8 @@ export const saleSchema = gql`
     changeAmount: Float
     netAmount: Float
     notes: String
+    currentSalePaymentStatus: SalePaymentStatus
+    salePaymentStatusHistory: [SalePaymentStatusHistoryItem]
     currentSaleStatus: SaleStatus
     saleStatusHistory: [SaleStatusHistoryItem]
     register: Register

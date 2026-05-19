@@ -21,7 +21,23 @@ import {
 import { useQuery } from "@apollo/client/react"
 import { format } from "date-fns"
 import gql from "graphql-tag"
-import { XIcon } from "@phosphor-icons/react"
+import {
+  ArrowDownRightIcon,
+  ArrowElbowDownRightIcon,
+  XIcon,
+} from "@phosphor-icons/react"
+import { Separator } from "@/components/ui/separator"
+import { ButtonGroup } from "@/components/ui/button-group"
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 
 type Props = {
   _id?: string
@@ -83,10 +99,14 @@ const GET_SALE = gql`
         method {
           _id
           name
-          type
-          isActive
-          createdAt
-          updatedAt
+        }
+        payment {
+          _id
+          by {
+            _id
+            name
+            surname
+          }
         }
       }
       saleStatusHistory {
@@ -130,6 +150,34 @@ const GET_SALE = gql`
         createdAt
         updatedAt
       }
+      currentSalePaymentStatus
+      salePaymentStatusHistory {
+        status
+        date
+        by {
+          _id
+          image
+          name
+          surname
+          displayName
+          email
+          username
+          role
+          pin
+          isActive
+          createdAt
+          updatedAt
+        }
+        paymentRef {
+          _id
+          amount
+          change
+          date
+          note
+          createdAt
+          updatedAt
+        }
+      }
     }
   }
 `
@@ -140,7 +188,7 @@ export default function RowViewDialog({ _id, open, setOpen, onClose }: Props) {
       _id,
     },
     fetchPolicy: "cache-and-network",
-    nextFetchPolicy: "cache-first",
+    nextFetchPolicy: "network-only",
     skip: !_id || !open,
   })
 
@@ -154,7 +202,7 @@ export default function RowViewDialog({ _id, open, setOpen, onClose }: Props) {
       <DrawerContent
         onOpenAutoFocus={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
-        className="lg:min-w-2xl"
+        className="min-w-screen lg:min-w-5xl"
       >
         <DrawerHeader className="flex flex-row justify-between">
           <div>
@@ -162,6 +210,13 @@ export default function RowViewDialog({ _id, open, setOpen, onClose }: Props) {
             <DrawerDescription>
               Details of sales order {data?.sale?.saleNumber || "-"}
             </DrawerDescription>
+            <ButtonGroup>
+              <Button className="bg-blue-500">Print</Button>
+              <Button className="bg-orange-500">Email</Button>
+              <Button variant="default" className="border">
+                Refund
+              </Button>
+            </ButtonGroup>
           </div>
           <DrawerClose asChild>
             <Button variant="outline" size="lg" className="h-full">
@@ -169,122 +224,268 @@ export default function RowViewDialog({ _id, open, setOpen, onClose }: Props) {
             </Button>
           </DrawerClose>
         </DrawerHeader>
-        <div className="flex flex-col gap-3 px-4">
-          <div className="max-h-40 overflow-y-auto bg-muted p-2">
-            <div className="flex justify-between">
-              <div className="-space-y-px">
-                <span className="block text-left">
-                  Customer:{" "}
-                  <span className="text-muted-foreground">
-                    {data?.sale?.customer ? data.sale.customer.name : "Walk-in"}
-                  </span>
-                </span>
-                <span className="block text-left">
-                  Sales No.:{" "}
-                  <span className="text-muted-foreground">
-                    {data?.sale?.saleNumber || "-"}
-                  </span>
-                </span>
-              </div>
-              <div className="-space-y-px">
-                <span className="block text-right">
-                  Order Date:{" "}
-                  <span className="text-muted-foreground">
-                    {data?.sale?.createdAt
-                      ? format(Number(data.sale.createdAt), "PPpp")
-                      : "-"}
-                  </span>
-                </span>
-                <span className="block text-right">
-                  User:{" "}
-                  <span className="text-muted-foreground">
-                    {data?.sale?.by
-                      ? `${data.sale.by.name} ${data.sale.by.surname}`
-                      : "-"}
-                  </span>
-                </span>
-              </div>
-            </div>
-          </div>
-          <div className="max-h-40 overflow-y-auto bg-muted p-2">
-            {data?.sale?.items.map((item: any, index: number) => (
-              <div
-                key={index}
-                className="flex items-center justify-between rounded-sm p-2 hover:bg-muted"
-              >
-                <div className="flex items-center gap-2">
-                  <div className="flex h-20 w-20 items-center justify-center bg-slate-300">
-                    <span className="block text-3xl font-medium text-white">
-                      {(() => {
-                        const nameArray = item.snapshotName.split(" ")
-                        return nameArray.length > 1
-                          ? `${nameArray[0]}${nameArray[1]}`.toUpperCase()
-                          : `${item.snapshotName[0]}${item.snapshotName[1] || ""}`.toUpperCase()
-                      })()}
+        <div className="flex flex-col space-y-2 overflow-y-auto px-4">
+          <div className="space-y-2">
+            <div className="overflow-y-auto bg-muted px-3 py-2">
+              <Label className="text-lg font-semibold text-primary">
+                Sales Summary
+              </Label>
+              <div className="space-y-1.5">
+                <div className="flex justify-between">
+                  <div className="-space-y-px">
+                    <span className="block text-left">
+                      Customer:{" "}
+                      <span className="text-muted-foreground">
+                        {data?.sale?.customer
+                          ? data.sale.customer.name
+                          : "Walk-in"}
+                      </span>
+                    </span>
+                    <span className="block text-left">
+                      Sales #:{" "}
+                      <span className="font-medium text-muted-foreground text-primary">
+                        {data?.sale?.saleNumber || "-"}
+                      </span>
                     </span>
                   </div>
                   <div className="-space-y-px">
-                    <span className="block text-lg">{item.snapshotName}</span>
-                    <span className="block text-xs font-medium text-foreground">
-                      {new Intl.NumberFormat("en-PH", {
-                        style: "currency",
-                        currency: "PHP",
-                      }).format(item.price)}{" "}
-                    </span>
-                    {item.discount > 0 && (
-                      <span className="text-xs text-muted-foreground line-through">
-                        {new Intl.NumberFormat("en-PH", {
-                          style: "currency",
-                          currency: "PHP",
-                        }).format(item.snapshotPrice)}
+                    <span className="block text-right">
+                      Order Date:{" "}
+                      <span className="text-muted-foreground">
+                        {data?.sale?.createdAt
+                          ? format(Number(data.sale.createdAt), "PPpp")
+                          : "-"}
                       </span>
-                    )}
-                    <span className="block text-xs text-muted-foreground">
-                      x{item.quantity}
+                    </span>
+                    <span className="block text-right">
+                      User:{" "}
+                      <span className="text-muted-foreground">
+                        {data?.sale?.by
+                          ? `${data.sale.by.name} ${data.sale.by.surname}`
+                          : "-"}
+                      </span>
                     </span>
                   </div>
                 </div>
-                <div className="flex flex-col h-full justify-start">
-                  <span className="block text-lg font-medium">
-                    {new Intl.NumberFormat("en-PH", {
-                      style: "currency",
-                      currency: "PHP",
-                    }).format(item.total)}
-                  </span>
-                  {item.subTotal != item.total && (
-                    <span className="block text-right text-xs text-muted-foreground line-through">
+                <div className="space-y-2">
+                  {data?.sale?.items.map((item: any, index: number) => (
+                    <div className="space-y-2" key={index}>
+                      <div className="flex items-center justify-between rounded-sm hover:bg-muted">
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-15 w-15 items-center justify-center bg-slate-300">
+                            <span className="block text-3xl font-medium text-white">
+                              {`${item.snapshotName[0]}${item.snapshotName[1] || ""}`.toUpperCase()}
+                            </span>
+                          </div>
+                          <div className="-space-y-px">
+                            <span className="block text-lg">
+                              {item.snapshotName}
+                            </span>
+                            <span className="block text-xs font-medium text-foreground">
+                              {new Intl.NumberFormat("en-PH", {
+                                style: "currency",
+                                currency: "PHP",
+                              }).format(item.price)}{" "}
+                              <span className="text-muted-foreground">
+                                x{item.quantity}
+                              </span>
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex h-full flex-col justify-start">
+                          <span className="block text-lg font-medium">
+                            {new Intl.NumberFormat("en-PH", {
+                              style: "currency",
+                              currency: "PHP",
+                            }).format(item.total)}
+                          </span>
+                        </div>
+                      </div>
+                      <Separator />
+                    </div>
+                  )) || <span className="text-muted-foreground">No items</span>}
+                </div>
+                <div className="flex flex-col space-y-1">
+                  <div className="flex w-full items-center justify-between">
+                    <span>Subtotal</span>
+                    <span className="font-medium">
                       {new Intl.NumberFormat("en-PH", {
                         style: "currency",
                         currency: "PHP",
-                      }).format(item.subTotal)}
+                      }).format(data?.sale?.subTotal || 0)}
                     </span>
-                  )}
+                  </div>
+                  <Separator />
+                  <div className="mt-1 flex w-full items-center justify-between">
+                    <span className="block">Discount</span>
+                    <span className="block font-medium">
+                      {new Intl.NumberFormat("en-PH", {
+                        style: "currency",
+                        currency: "PHP",
+                      }).format(data?.sale?.discount || 0)}
+                    </span>
+                  </div>
+                  <Separator />
+                  <div className="mt-1 flex w-full items-center justify-between">
+                    <span>Total</span>
+                    <span className="font-medium">
+                      {new Intl.NumberFormat("en-PH", {
+                        style: "currency",
+                        currency: "PHP",
+                      }).format(data?.sale?.total || 0)}
+                    </span>
+                  </div>
+                  <Separator />
+                  <div className="mt-1 flex w-full items-center justify-between">
+                    <span>Received</span>
+                    <span className="font-medium">
+                      {new Intl.NumberFormat("en-PH", {
+                        style: "currency",
+                        currency: "PHP",
+                      }).format(data?.sale?.receivedAmount || 0)}
+                    </span>
+                  </div>
+                  <Separator />
+                  <div className="mt-1 flex w-full items-center justify-between">
+                    <span>Change</span>
+                    <span className="font-medium">
+                      {new Intl.NumberFormat("en-PH", {
+                        style: "currency",
+                        currency: "PHP",
+                      }).format(data?.sale?.changeAmount || 0)}
+                    </span>
+                  </div>
+                  <Separator />
+                  <div className="mt-1 flex w-full items-center justify-between">
+                    <span className="font-semibold">Net Amount</span>
+                    <span className="font-semibold underline">
+                      {new Intl.NumberFormat("en-PH", {
+                        style: "currency",
+                        currency: "PHP",
+                      }).format(data?.sale?.netAmount || 0)}
+                    </span>
+                  </div>
                 </div>
               </div>
-            )) || <span className="text-muted-foreground">No items</span>}
+            </div>
+            <div className="overflow-y-auto bg-muted px-3 py-2">
+              <Label className="text-lg font-semibold text-primary">
+                Notes
+              </Label>
+              <span className="block whitespace-pre-wrap text-muted-foreground">
+                {data?.sale?.notes || "No notes"}
+              </span>
+            </div>
+            <div className="space-y-1 overflow-y-auto bg-muted px-3 py-2">
+              <Label className="text-lg font-semibold text-primary">
+                Payment Summary
+              </Label>
+              <Table className="border bg-white">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[100px]">Date</TableHead>
+                    <TableHead>Method</TableHead>
+                    <TableHead>User</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableCaption className="mt-1.5 font-medium">
+                  Payment Status:{" "}
+                  <span className="font-semibold text-foreground">
+                    {data?.sale?.currentSalePaymentStatus}
+                  </span>
+                </TableCaption>
+                <TableBody>
+                  {data?.sale?.payments.length > 0 ? (
+                    data.sale.payments.map((payment: any, index: number) => (
+                      <TableRow key={index}>
+                        <TableCell className="font-medium">
+                          {format(Number(payment.date), "PP")}
+                        </TableCell>
+                        <TableCell>
+                          {payment.method.name}
+                          {payment.note != "" && (
+                            <Label className="text-xs text-muted-foreground">
+                              <ArrowElbowDownRightIcon className="-mr-1" />{" "}
+                              <span className="font-medium">
+                                Note: {payment.note}
+                              </span>
+                            </Label>
+                          )}
+                        </TableCell>
+                        <TableCell className="w-[150px]">
+                          <span className="block">
+                            {payment.payment.by.name}
+                          </span>
+                        </TableCell>
+                        <TableCell className="w-[250px] text-right">
+                          {new Intl.NumberFormat("en-PH", {
+                            style: "currency",
+                            currency: "PHP",
+                          }).format(payment.amount - payment.change)}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell
+                        colSpan={4}
+                        className="text-center text-muted-foreground"
+                      >
+                        No payments
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+            <div className="space-y-1 overflow-y-auto bg-muted px-3 py-2">
+              <Label className="text-lg font-semibold text-primary">
+                Sale History
+              </Label>
+              <Table className="border bg-white">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[100px]">Date</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>User</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableCaption className="mt-1.5 font-medium">
+                  Sale Status:{" "}
+                  <span className="font-semibold text-foreground">
+                    {data?.sale?.currentSaleStatus}
+                  </span>
+                </TableCaption>
+                <TableBody>
+                  {data?.sale?.saleStatusHistory.length > 0 ? (
+                    data.sale.saleStatusHistory.map(
+                      (item: any, index: number) => (
+                        <TableRow key={index}>
+                          <TableCell className="font-medium">
+                            {format(Number(item.date), "PP")}
+                          </TableCell>
+                          <TableCell>{item.status}</TableCell>
+                          <TableCell className="w-[400px]">
+                            <span className="block">{item.by.name}</span>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    )
+                  ) : (
+                    <TableRow>
+                      <TableCell
+                        colSpan={3}
+                        className="text-center text-muted-foreground"
+                      >
+                        No status history.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </div>
-          {/* <div>
-            <Label>Customer</Label>
-            <span className="block text-muted-foreground">
-              {data?.sale?.customer ? data.sale.customer.name : "Walk-in"}
-            </span>
-          </div>
-          <div>
-            <Label>Created Date</Label>
-            <span className="block text-muted-foreground">
-              {data?.sale?.createdAt
-                ? format(Number(data.sale.createdAt), "PPpp")
-                : "-"}
-            </span>
-          </div>
-          <div>
-            <Label>Updated Date</Label>
-            <span className="block text-muted-foreground">
-              {data?.sale?.updatedAt
-                ? format(Number(data.sale.updatedAt), "PPpp")
-                : "-"}
-            </span>
-          </div> */}
         </div>
         <DrawerFooter>
           <DrawerClose asChild>

@@ -11,6 +11,7 @@ import { authSchema } from "./auth.schema"
 import { paymentMethodSchema } from "./paymentMethod.schema"
 import { customerSchema } from "./customer.schema"
 import { saleSchema } from "./sale.schema"
+import { paymentSchema } from "./payment.schema"
 
 export default mergeTypeDefs([
   authSchema,
@@ -24,4 +25,5 @@ export default mergeTypeDefs([
   paymentMethodSchema,
   customerSchema,
   saleSchema,
+  paymentSchema,
 ])
