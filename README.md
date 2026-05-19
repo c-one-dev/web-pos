@@ -6,7 +6,7 @@ This is a Next.js template with shadcn/ui.
 
 To add components to your app, run the following command:
 
-```bash
+```bash 
 npx shadcn@latest add button 
 ```
  
