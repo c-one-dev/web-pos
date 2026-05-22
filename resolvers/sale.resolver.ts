@@ -14,6 +14,17 @@ import { checkSalesPaymentStatus } from "@/helpers/salesFn"
 
 const CURSOR_TYPE = "sale"
 
+const generateSaleNode = (sale: any) => ({
+  _id: sale._id,
+  date: sale.createdAt,
+  saleNumber: sale.saleNumber,
+  customerName: sale.customer ? sale.customer.name : "Walk-in",
+  saleTotal: sale.netAmount,
+  currentSaleStatus: sale.currentSaleStatus,
+  currentSalePaymentStatus: sale.currentSalePaymentStatus,
+  notes: sale.notes,
+})
+
 export const saleResolver = {
   Query: {
     sale: async (_: any, { _id }: any) => {
@@ -50,9 +61,9 @@ export const saleResolver = {
             { paymentNotes: { $regex: search, $options: "i" } },
             { saleNumber: { $regex: search, $options: "i" } },
             { customerName: { $regex: search, $options: "i" } },
-            { saleTotal: { $regex: search, $options: "i" } },
             { currentSaleStatus: { $regex: search, $options: "i" } },
             { currentSalePaymentStatus: { $regex: search, $options: "i" } },
+            { saleTotal: isNaN(Number(search)) ? undefined : Number(search) },
           ]
 
         if (filter && filter.length > 0)
@@ -67,7 +78,6 @@ export const saleResolver = {
                 const [start, end] = value
                   .split("_")
                   .map((date) => new Date(date))
-                console.log(value)
                 if (!start || !end) return null
                 return {
                   [key]: {
@@ -182,7 +192,6 @@ export const saleResolver = {
         ]
 
         const result = await Sale.aggregate(pipeline)
-        console.log(result)
         const sliced = result.slice(0, first)
         const edges = sliced.map((edge) => ({
           node: edge,
@@ -292,10 +301,23 @@ export const saleResolver = {
             { _id: { $in: payments.map((payment) => payment._id) } },
             { $set: { sale: result._id } }
           )
+          const populatedResult = await Sale.findById(result._id)
+            .populate([
+              { path: "customer" },
+              { path: "items.product" },
+              { path: "payments.payment", populate: { path: "by" } },
+              { path: "payments.method" },
+              { path: "salePaymentStatusHistory.paymentRef" },
+              { path: "salePaymentStatusHistory.by" },
+              { path: "saleStatusHistory.by" },
+              { path: "by" },
+              { path: "register" },
+            ])
+            .lean()
           return {
             ok: true,
             message: "Sale created successfully.",
-            data: result,
+            data: generateSaleNode(populatedResult),
           }
         } catch (error) {
           throw error

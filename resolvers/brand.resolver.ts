@@ -11,6 +11,12 @@ import { isISOString } from "../helpers/isoString"
 
 const CURSOR_TYPE = "brand"
 
+const generateNode = (brand: any) => ({
+  _id: brand._id,
+  name: brand.name,
+  isActive: brand.isActive,
+})
+
 export const brandResolver = {
   Query: {
     brand: async (_: any, { _id }: any) => {
@@ -80,8 +86,7 @@ export const brandResolver = {
                 },
                 {
                   [sortKey]: cursorValue,
-                  _id:
-                    sortOrder === 1 ? { $gt: cursorId } : { $lt: cursorId },
+                  _id: sortOrder === 1 ? { $gt: cursorId } : { $lt: cursorId },
                 },
               ],
             },
@@ -120,10 +125,10 @@ export const brandResolver = {
           pageInfo: {
             endCursor: sliced.length
               ? toCursor({
-                id: sliced[sliced.length - 1]._id.toString(),
-                type: CURSOR_TYPE,
-                value: sliced[sliced.length - 1][sortKey],
-              })
+                  id: sliced[sliced.length - 1]._id.toString(),
+                  type: CURSOR_TYPE,
+                  value: sliced[sliced.length - 1][sortKey],
+                })
               : null,
             hasNextPage: result.length > first,
           },
@@ -156,7 +161,14 @@ export const brandResolver = {
           return {
             ok: true,
             message: "Brand created successfully.",
-            data: result,
+            data: {
+              cursor: toCursor({
+                id: result!._id.toString(),
+                type: CURSOR_TYPE,
+                value: result!._id.toString(),
+              }),
+              node: generateNode(result),
+            },
           }
         } catch (error) {
           throw error
@@ -174,7 +186,7 @@ export const brandResolver = {
           return {
             ok: true,
             message: "Brand updated successfully.",
-            data: result,
+            data: generateNode(result),
           }
         } catch (error) {
           throw error
@@ -195,11 +207,10 @@ export const brandResolver = {
           }
         ).lean()
         if (!result) throw new GraphQLError("Brand not found")
-
         return {
           ok: true,
           message: "Brand status updated successfully.",
-          data: result,
+          data: generateNode(result),
         }
       } catch (error) {
         throw error

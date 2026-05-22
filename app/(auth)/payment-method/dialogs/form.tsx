@@ -77,12 +77,47 @@ export default function FormDialog({ _id, onClose }: Props) {
   const [open, setOpen] = useState<boolean>(false)
   const [isPending, startTransition] = useTransition()
   const [createPaymentMethod] = useMutation(CREATE_PAYMENT_METHOD, {
-    refetchQueries: ["PaymentMethodTable"],
-    awaitRefetchQueries: true,
+    updateQueries: {
+      PaymentMethodTable: (prev, { mutationResult }: any) => {
+        if (!mutationResult.data.createPaymentMethod.ok) return prev
+        const newPaymentMethod = mutationResult.data.createPaymentMethod.data
+        return {
+          ...prev,
+          paymentMethodTable: {
+            ...prev.paymentMethodTable,
+            edges: [
+              ...prev.paymentMethodTable.edges,
+              {
+                node: newPaymentMethod.node,
+                cursor: newPaymentMethod.cursor,
+                __typename: "PaymentMethodEdge",
+              },
+            ],
+          },
+        }
+      },
+    },
   })
   const [updatePaymentMethod] = useMutation(UPDATE_PAYMENT_METHOD, {
-    refetchQueries: ["PaymentMethodTable"],
-    awaitRefetchQueries: true,
+    updateQueries: {
+      PaymentMethodTable: (prev, { mutationResult }: any) => {
+        if (!mutationResult.data.updatePaymentMethod.ok) return prev
+        const updatedPaymentMethod =
+          mutationResult.data.updatePaymentMethod.data
+        const updatedEdges = prev.paymentMethodTable.edges.map((edge: any) =>
+          edge.node._id === updatedPaymentMethod._id
+            ? { ...edge, node: { ...edge.node, ...updatedPaymentMethod } }
+            : edge
+        )
+        return {
+          ...prev,
+          paymentMethodTable: {
+            ...prev.paymentMethodTable,
+            edges: updatedEdges,
+          },
+        }
+      },
+    },
   })
   const { data }: any = useQuery(FETCH_PAYMENT_METHOD, {
     variables: {
@@ -150,7 +185,7 @@ export default function FormDialog({ _id, onClose }: Props) {
             form.reset()
           }
         } catch (error: any) {
-         console.error(error)
+          console.error(error)
         }
       }),
   })
@@ -232,7 +267,8 @@ export default function FormDialog({ _id, onClose }: Props) {
                               aria-expanded={openCommand}
                               className={cn(
                                 field.state.value &&
-                                  "rounded-tr-none rounded-br-none",  isInvalid && "border-destructive",
+                                  "rounded-tr-none rounded-br-none",
+                                isInvalid && "border-destructive",
                                 "flex-1 justify-between bg-transparent text-black/80 capitalize"
                               )}
                               type="button"

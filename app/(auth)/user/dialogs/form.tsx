@@ -72,32 +72,46 @@ export default function FormDialog({ _id, onClose }: Props) {
   const [open, setOpen] = useState<boolean>(false)
   const [isPending, startTransition] = useTransition()
   const [createUser] = useMutation(CREATE_USER, {
-    update: (cache, { data }: any) => {
-      const newUser = data.createUser.data
-      const newEdge = {
-        __typename: "UserEdge",
-        cursor: newUser._id,
-        node: newUser,
-      }
-      cache.modify({
-        fields: {
-          userTable(existing = {}) {
-            const edges = existing.edges || []
-            const exists = edges.some((e: any) => e.node._id === newUser._id)
-            if (exists) return existing
-            return {
-              ...existing,
-              edges: [newEdge, ...edges],
-              total: (existing.total || 0) + 1,
-            }
+    updateQueries: {
+      UserTable: (prev, { mutationResult }: any) => {
+        if (!mutationResult.data.createUser.ok) return prev
+        const newUser = mutationResult.data.createUser.data
+        return {
+          ...prev,
+          userTable: {
+            ...prev.userTable,
+            edges: [
+              ...prev.userTable.edges,
+              {
+                node: newUser.node,
+                __typename: "UserEdge",
+                cursor: newUser.cursor,
+              },
+            ],
           },
-        },
-      })
+        }
+      },
     },
   })
   const [updateUser] = useMutation(UPDATE_USER, {
-    refetchQueries: ["UserTable"],
-    awaitRefetchQueries: true,
+    updateQueries: {
+      UserTable: (prev, { mutationResult }: any) => {
+        if (!mutationResult.data.updateUser.ok) return prev
+        const updatedUser = mutationResult.data.updateUser.data
+        const updatedEdges = prev.userTable.edges.map((edge: any) =>
+          edge.node._id === updatedUser._id
+            ? { ...edge, node: { ...edge.node, ...updatedUser } }
+            : edge
+        )
+        return {
+          ...prev,
+          userTable: {
+            ...prev.userTable,
+            edges: updatedEdges,
+          },
+        }
+      },
+    },
   })
   const { data }: any = useQuery(FETCH_USER, {
     variables: {
@@ -163,6 +177,7 @@ export default function FormDialog({ _id, onClose }: Props) {
             toast.success(
               result.data.createUser?.message || result.data.updateUser?.message
             )
+            onClose?.()
             form.reset()
           }
         } catch (error: any) {

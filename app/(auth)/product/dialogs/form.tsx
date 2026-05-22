@@ -121,12 +121,46 @@ export default function FormDialog({ _id, onClose }: Props) {
   const [open, setOpen] = useState<boolean>(false)
   const [isPending, startTransition] = useTransition()
   const [createProduct] = useMutation(CREATE_PRODUCT, {
-    refetchQueries: ["ProcessedRegister", "ProductTable"],
-    awaitRefetchQueries: true,
+    updateQueries: {
+      ProductTable: (prev, { mutationResult }: any) => {
+        if (!mutationResult.data.createProduct.ok) return prev
+        const newProduct = mutationResult.data.createProduct.data
+        return {
+          ...prev,
+          productTable: {
+            ...prev.productTable,
+            edges: [
+              ...prev.productTable.edges,
+              {
+                node: newProduct.node,
+                cursor: newProduct.cursor,
+                __typename: "ProductEdge",
+              },
+            ],
+          },
+        }
+      },
+    },
   })
   const [updateProduct] = useMutation(UPDATE_PRODUCT, {
-    refetchQueries: ["ProcessedRegister", "ProductTable"],
-    awaitRefetchQueries: true,
+    updateQueries: {
+      ProductTable: (prev, { mutationResult }: any) => {
+        if (!mutationResult.data.updateProduct.ok) return prev
+        const updatedProduct = mutationResult.data.updateProduct.data
+        const updatedEdges = prev.productTable.edges.map((edge: any) =>
+          edge.node._id === updatedProduct._id
+            ? { ...edge, node: { ...edge.node, ...updatedProduct } }
+            : edge
+        )
+        return {
+          ...prev,
+          productTable: {
+            ...prev.productTable,
+            edges: updatedEdges,
+          },
+        }
+      },
+    },
   })
   const { data }: any = useQuery(FETCH_PRODUCT, {
     variables: {

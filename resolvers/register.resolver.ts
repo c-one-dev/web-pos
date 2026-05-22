@@ -12,6 +12,14 @@ import Product from "../models/product.model"
 
 const CURSOR_TYPE = "register"
 
+const generateNode = (register: any) => ({
+  _id: register._id,
+  name: register.name,
+  outletName: register.outlet.name,
+  prefix: register.prefix,
+  isActive: register.isActive,
+})
+
 export const registerResolver = {
   Query: {
     register: async (_: any, { _id }: any) => {
@@ -219,7 +227,14 @@ export const registerResolver = {
           return {
             ok: true,
             message: "Register created successfully.",
-            data: populatedResult,
+            data: {
+              cursor: toCursor({
+                id: populatedResult!._id.toString(),
+                type: CURSOR_TYPE,
+                value: populatedResult!._id.toString(),
+              }),
+              node: generateNode(populatedResult),
+            },
           }
         } catch (error) {
           throw error
@@ -239,7 +254,7 @@ export const registerResolver = {
           return {
             ok: true,
             message: "Register updated successfully.",
-            data: result,
+            data: generateNode(result),
           }
         } catch (error) {
           throw error
@@ -266,7 +281,7 @@ export const registerResolver = {
         return {
           ok: true,
           message: "Register status updated successfully.",
-          data: result,
+          data: generateNode(result),
         }
       } catch (error) {
         throw error

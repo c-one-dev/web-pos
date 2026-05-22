@@ -12,6 +12,17 @@ import { IStoreCreditHistoryItem } from "@/types/customer.type"
 
 const CURSOR_TYPE = "customer"
 
+const generateCustomerNode = (customer: any) => ({
+  _id: customer._id,
+  name: customer.name,
+  email: customer.email,
+  remainingAccountLimit: customer.accountLimit.current,
+  remainingStoreCredit: customer.storeCredit.current,
+  isActive: customer.isActive,
+  createdAt: customer.createdAt,
+  updatedAt: customer.updatedAt,
+})
+
 export const customerResolver = {
   Query: {
     customer: async (_: any, { _id }: any) => {
@@ -464,7 +475,14 @@ export const customerResolver = {
           return {
             ok: true,
             message: "Customer created successfully.",
-            data: result,
+            data: {
+              cursor: toCursor({
+                id: result!._id.toString(),
+                type: CURSOR_TYPE,
+                value: result!._id.toString(),
+              }),
+              node: generateCustomerNode(result),
+            },
           }
         } catch (error) {
           throw error
@@ -498,7 +516,7 @@ export const customerResolver = {
         return {
           ok: true,
           message: "Account limit adjusted successfully.",
-          data: result,
+          data: generateCustomerNode(result),
         }
       } catch (error) {
         throw error
@@ -529,7 +547,7 @@ export const customerResolver = {
         return {
           ok: true,
           message: "Store credit adjusted successfully.",
-          data: result,
+          data: generateCustomerNode(result),
         }
       } catch (error) {
         throw error
@@ -545,7 +563,7 @@ export const customerResolver = {
           return {
             ok: true,
             message: "Customer updated successfully.",
-            data: result,
+            data: generateCustomerNode(result),
           }
         } catch (error) {
           throw error
@@ -570,7 +588,7 @@ export const customerResolver = {
         return {
           ok: true,
           message: "Customer status updated successfully.",
-          data: result,
+          data: generateCustomerNode(result),
         }
       } catch (error) {
         throw error

@@ -233,7 +233,6 @@ function Pay({
                           state.receivedAmount + amountTendered
                         const changeAmount = receivedAmount - state.total
                         const netAmount = receivedAmount - changeAmount
-                        console.log({ receivedAmount, changeAmount, netAmount })
                         form.setFieldValue("payments", [
                           ...state.payments,
                           {

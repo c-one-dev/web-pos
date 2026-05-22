@@ -8,6 +8,7 @@ import {
   DrawerFooter,
   DrawerHeader,
   DrawerTitle,
+  DrawerTrigger,
 } from "@/components/ui/drawer"
 import { useQuery } from "@apollo/client/react"
 import { format } from "date-fns"
@@ -38,6 +39,7 @@ type Props = {
   open?: boolean
   setOpen?: (open: boolean) => void
   onClose?: () => void
+  external?: boolean
 }
 
 const GET_SALE = gql`
@@ -109,7 +111,13 @@ const GET_SALE = gql`
   }
 `
 
-export default function RowViewDialog({ _id, open, setOpen, onClose }: Props) {
+export default function RowViewDialog({
+  _id,
+  open,
+  setOpen,
+  onClose,
+  external = false,
+}: Props) {
   const { data, loading }: any = useQuery(GET_SALE, {
     variables: {
       _id,

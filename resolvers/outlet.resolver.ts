@@ -12,6 +12,16 @@ import Register from "../models/register.model"
 
 const CURSOR_TYPE = "outlet"
 
+const generateNode = (outlet: any) => ({
+  _id: outlet._id,
+  name: outlet.name,
+  isActive: outlet.isActive,
+  registers: outlet.registers.map((reg: any) => ({
+    _id: reg._id,
+    name: reg.name,
+  })),
+})
+
 export const outletResolver = {
   Query: {
     outlet: async (_: any, { _id }: any) => {
@@ -182,7 +192,14 @@ export const outletResolver = {
           return {
             ok: true,
             message: "Outlet created successfully.",
-            data: result,
+            data: {
+              cursor: toCursor({
+                id: result!._id.toString(),
+                type: CURSOR_TYPE,
+                value: result!._id.toString(),
+              }),
+              node: generateNode({ ...result, registers: [] }),
+            },
           }
         } catch (error) {
           throw error
@@ -195,11 +212,14 @@ export const outletResolver = {
           const result = await Outlet.findByIdAndUpdate(_id, flatten(input), {
             returnDocument: "after",
           }).lean()
+          const registers = await Register.find({ outlet: _id })
+            .select("_id name")
+            .lean()
           if (!result) throw new GraphQLError("Outlet not found")
           return {
             ok: true,
             message: "Outlet updated successfully.",
-            data: result,
+            data: generateNode({ ...result, registers }),
           }
         } catch (error) {
           throw error
@@ -219,11 +239,14 @@ export const outletResolver = {
             returnDocument: "after",
           }
         ).lean()
+        const registers = await Register.find({ outlet: _id })
+          .select("_id name")
+          .lean()
         if (!result) throw new GraphQLError("Outlet not found")
         return {
           ok: true,
           message: "Outlet status updated successfully.",
-          data: result,
+          data: generateNode({ ...result, registers }),
         }
       } catch (error) {
         throw error

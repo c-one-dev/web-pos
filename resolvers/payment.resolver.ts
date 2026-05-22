@@ -1,35 +1,40 @@
 import { GraphQLError } from "graphql"
-import PaymentMethod from "../models/paymentMethod.model"
+import Payment from "../models/payment.model"
 import { startOfDay, endOfDay } from "date-fns"
 import { Types, type PipelineStage } from "mongoose"
 import type { IDataTableArgs } from "../types/shared.type"
 import { fromCursor, toCursor } from "../helpers/cursor"
 import { flatten } from "../helpers/flatten"
 import { checkSchema, validate } from "../helpers/validate"
-import { paymentMethodSchema } from "../validators/paymentMethod.validator"
 import { isISOString } from "../helpers/isoString"
+import Sale from "../models/sale.model"
 
-const CURSOR_TYPE = "payment_method"
+const CURSOR_TYPE = "payment"
 
-const generateNode = (paymentMethod: any) => ({
-  _id: paymentMethod._id,
-  name: paymentMethod.name,
-  type: paymentMethod.type,
-  isActive: paymentMethod.isActive,
+const generateNode = (payment: any) => ({
+  _id: payment._id,
+  amount: payment.amount - payment.change,
+  note: payment.note,
+  byName: `${payment.by.name} ${payment.by.surname}`,
+  saleList: payment.sale.map((s: any) => s.saleNumber),
+  methodName: payment.method.name,
+  paymentDate: payment.date,
 })
 
-export const paymentMethodResolver = {
+export const paymentResolver = {
   Query: {
-    paymentMethod: async (_: any, { _id }: any) => {
+    payment: async (_: any, { _id }: any) => {
       try {
-        const paymentMethod = await PaymentMethod.findById(_id).lean()
-        if (!paymentMethod) throw new GraphQLError("Payment method not found")
-        return paymentMethod
+        const payment = await Payment.findById(_id)
+          .populate("method by sale")
+          .lean()
+        if (!payment) throw new GraphQLError("Payment not found")
+        return payment
       } catch (error) {
         throw error
       }
     },
-    paymentMethodTable: async (
+    paymentTable: async (
       _: any,
       { first = 10, after, search, filter, sort }: IDataTableArgs
     ) => {
@@ -37,13 +42,21 @@ export const paymentMethodResolver = {
         const matchStage: Record<string, any> = {}
 
         if (search)
-          matchStage.$or = [{ name: { $regex: search, $options: "i" } }]
+          matchStage.$or = [
+            { note: { $regex: search, $options: "i" } },
+            { byName: { $regex: search, $options: "i" } },
+            { methodName: { $regex: search, $options: "i" } },
+            { "sale.saleNumber": { $regex: search, $options: "i" } },
+            { amount: isNaN(Number(search)) ? undefined : Number(search) },
+          ]
 
         if (filter && filter.length > 0)
           matchStage.$and = filter.map(({ type, key, value }) => {
             switch (type) {
               case "TEXT":
               case "SELECT":
+                if (key === "methodName")
+                  return { "method._id": new Types.ObjectId(value) }
                 return { [key]: { $regex: value, $options: "i" } }
               case "NUMBER":
                 return { [key]: Number(value) }
@@ -67,7 +80,7 @@ export const paymentMethodResolver = {
 
         const sortKey = sort?.key || "_id"
         const sortOrder = sort?.order === "ASC" ? 1 : -1
-        const total = await PaymentMethod.countDocuments(matchStage)
+        const total = await Payment.countDocuments(matchStage)
 
         if (after) {
           const { id, type, value } = fromCursor(after)
@@ -95,6 +108,61 @@ export const paymentMethodResolver = {
         }
 
         const pipeline: PipelineStage[] = [
+          {
+            $lookup: {
+              from: "payment_methods",
+              localField: "method",
+              foreignField: "_id",
+              as: "method",
+            },
+          },
+          {
+            $unwind: {
+              path: "$method",
+              preserveNullAndEmptyArrays: true,
+            },
+          },
+          {
+            $lookup: {
+              from: "sales",
+              localField: "sale",
+              foreignField: "_id",
+              as: "sale",
+            },
+          },
+          {
+            $lookup: {
+              from: "users",
+              localField: "by",
+              foreignField: "_id",
+              as: "by",
+            },
+          },
+          {
+            $unwind: {
+              path: "$by",
+              preserveNullAndEmptyArrays: true,
+            },
+          },
+          {
+            $addFields: {
+              amount: {
+                $subtract: ["$amount", "$change"],
+              },
+              paymentDate: "$date",
+              methodName: "$method.name",
+              byName: {
+                $concat: ["$by.name", " ", "$by.surname"],
+              },
+              saleList: {
+                $map: {
+                  input: "$sale",
+                  as: "s",
+                  in: "$$s.saleNumber",
+                },
+              },
+            },
+          },
           { $match: matchStage },
           {
             $sort: { [sortKey]: sortOrder, _id: sortOrder },
@@ -102,14 +170,18 @@ export const paymentMethodResolver = {
           { $limit: first + 1 },
           {
             $project: {
-              name: 1,
-              type: 1,
-              isActive: 1,
+              _id: 1,
+              amount: 1,
+              note: 1,
+              paymentDate: 1,
+              methodName: 1,
+              byName: 1,
+              saleList: 1,
             },
           },
         ]
 
-        const result = await PaymentMethod.aggregate(pipeline)
+        const result = await Payment.aggregate(pipeline)
         const sliced = result.slice(0, first)
         const edges = sliced.map((edge) => ({
           node: edge,
@@ -139,86 +211,29 @@ export const paymentMethodResolver = {
         throw error
       }
     },
-    paymentMethodOptions: async () => {
-      try {
-        const paymentMethods = await PaymentMethod.find({ isActive: true })
-          .select("_id name")
-          .lean()
-        if (!paymentMethods || paymentMethods.length === 0)
-          throw new GraphQLError("No paymentMethods found.")
-        return paymentMethods.map((paymentMethod) => ({
-          value: paymentMethod._id,
-          label: paymentMethod.name,
-        }))
-      } catch (error) {
-        throw error
-      }
-    },
   },
   Mutation: {
-    createPaymentMethod: validate(checkSchema(paymentMethodSchema))(
-      async (_: any, { input }: any) => {
-        try {
-          const result = await PaymentMethod.create(input)
-          return {
-            ok: true,
-            message: "Payment method created successfully.",
-            data: {
-              cursor: toCursor({
-                id: result!._id.toString(),
-                type: CURSOR_TYPE,
-                value: result!._id.toString(),
-              }),
-              node: generateNode(result),
-            },
-          }
-        } catch (error) {
-          throw error
-        }
-      }
-    ),
-    updatePaymentMethod: validate(checkSchema(paymentMethodSchema))(
-      async (_: any, { _id, input }: any) => {
-        try {
-          const result = await PaymentMethod.findByIdAndUpdate(
-            _id,
-            flatten(input),
-            {
-              returnDocument: "after",
-            }
-          ).lean()
-          if (!result) throw new GraphQLError("PaymentMethod not found")
-          return {
-            ok: true,
-            message: "Payment method updated successfully.",
-            data: generateNode(result),
-          }
-        } catch (error) {
-          throw error
-        }
-      }
-    ),
-    changePaymentMethodStatus: async (_: any, { _id }: any) => {
+    updatePaymentNote: async (_: any, { _id, note }: any) => {
       try {
-        const paymentMethod = await PaymentMethod.findById(_id)
-          .select("isActive")
-          .lean()
-        if (!paymentMethod) throw new GraphQLError("PaymentMethod not found")
-        const result = await PaymentMethod.findByIdAndUpdate(
+        const payment = await Payment.findByIdAndUpdate(
           _id,
+          { note },
+          { returnDocument: "after" }
+        )
+          .populate("method by sale")
+          .lean()
+        // Update corresponding note in sales payments array
+        await Sale.updateMany(
           {
-            isActive: !paymentMethod.isActive,
+            "payments.payment": new Types.ObjectId(_id),
           },
-          {
-            returnDocument: "after",
-          }
-        ).lean()
-        if (!result) throw new GraphQLError("PaymentMethod not found")
-
+          { $set: { "payments.$.note": note } }
+        )
+        if (!payment) throw new GraphQLError("Payment not found")
         return {
           ok: true,
-          message: "Payment method status updated successfully.",
-          data: generateNode(result),
+          message: "Payment note and its references updated successfully.",
+          data: generateNode(payment),
         }
       } catch (error) {
         throw error

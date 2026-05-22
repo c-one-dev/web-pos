@@ -13,3 +13,13 @@ export interface IPayment {
   by: IUser | Types.ObjectId | string
   sale: ISale[] | Types.ObjectId[] | string[]
 }
+
+export interface IPaymentNode {
+  _id: Types.ObjectId
+  amount: number
+  note: string
+  byName: string
+  saleList: string[]
+  methodName: string
+  paymentDate: string
+}

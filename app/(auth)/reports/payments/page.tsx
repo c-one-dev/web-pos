@@ -13,11 +13,11 @@ import {
   InputGroupInput,
 } from "@/components/ui/input-group"
 import {
-  ArrowDownLeftIcon,
   ArrowElbowDownRightIcon,
   GearIcon,
   MagnifyingGlassIcon,
 } from "@phosphor-icons/react"
+import { IPaymentNode } from "@/types/payment.type"
 import { ColumnDef } from "@tanstack/react-table"
 import DataTable from "@/components/custom/data-table"
 import ColumnFilter from "@/components/custom/column-filter"
@@ -37,23 +37,17 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import RowViewDialog from "./_dialogs/row-view"
-import {
-  ISaleHistoryNode,
-  SalePaymentStatus,
-  SaleStatus,
-} from "@/types/sale.type"
-import { format } from "date-fns"
-import { ArrowElbowRightIcon } from "@phosphor-icons/react/dist/ssr"
+import UpdatePaymentNoteDialog from "./_dialogs/update-note"
 
-const GET_SALE_HISTORY = gql`
-  query SaleHistoryTable(
+const GET_PAYMENTS = gql`
+  query PaymentTable(
     $first: Int
     $after: String
     $search: String
     $filter: [Filter]
     $sort: Sort
   ) {
-    saleHistoryTable(
+    paymentTable(
       first: $first
       after: $after
       search: $search
@@ -66,14 +60,12 @@ const GET_SALE_HISTORY = gql`
         cursor
         node {
           _id
-          date
-          saleNumber
-          customerName
-          saleTotal
-          currentSaleStatus
-          currentSalePaymentStatus
-          notes
-          paymentNotes
+          amount
+          note
+          byName
+          saleList
+          methodName
+          paymentDate
         }
       }
       pageInfo {
@@ -84,7 +76,16 @@ const GET_SALE_HISTORY = gql`
   }
 `
 
-function Actions({ row }: { row?: ISaleHistoryNode }) {
+const GET_PAYMENT_METHOD_OPTIONS = gql`
+  query PaymentMethodOptions {
+    paymentMethodOptions {
+      label
+      value
+    }
+  }
+`
+
+function Actions({ row }: { row?: IPaymentNode }) {
   const [open, setOpen] = useState(false)
   const data = useMemo(() => row, [row])
 
@@ -95,7 +96,12 @@ function Actions({ row }: { row?: ISaleHistoryNode }) {
           <GearIcon />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="left" align="start"></DropdownMenuContent>
+      <DropdownMenuContent side="left" align="start">
+        <UpdatePaymentNoteDialog
+          _id={data?._id?.toString() || ""}
+          onClose={() => setOpen(false)}
+        />
+      </DropdownMenuContent>
     </DropdownMenu>
   )
 }
@@ -124,7 +130,7 @@ export default function Page() {
   const [filter, setFilter] = useState<
     { key: string; value: string; type: FilterType }[]
   >([])
-  const { data, fetchMore, loading } = useQuery(GET_SALE_HISTORY, {
+  const { data, fetchMore, loading, error } = useQuery(GET_PAYMENTS, {
     variables: {
       first: rows,
       search,
@@ -132,211 +138,154 @@ export default function Page() {
       sort,
     },
     fetchPolicy: "cache-and-network",
+    nextFetchPolicy: "cache-first",
   })
+  if (error) console.error(error)
+  // Payment Method options for filter dropdown
+  const { data: methodOptionsData } = useQuery(GET_PAYMENT_METHOD_OPTIONS, {
+    fetchPolicy: "cache-first",
+  })
+  const paymentMethodOptions = useMemo(
+    () => (methodOptionsData as any)?.paymentMethodOptions,
+    [methodOptionsData]
+  )
   // Responsiveness
   const isMobile = useIsMobile()
 
   const { total, nodes, endCursor } = useMemo(() => {
     const result = data as any
     const nodes =
-      result?.saleHistoryTable?.edges?.map((edge: any) => edge.node) || []
-    const hasNextPage = result?.saleHistoryTable?.pageInfo?.hasNextPage || false
-    const endCursor = result?.saleHistoryTable?.pageInfo?.endCursor || null
+      result?.paymentTable?.edges?.map((edge: any) => edge.node) || []
+    const hasNextPage = result?.paymentTable?.pageInfo?.hasNextPage || false
+    const endCursor = result?.paymentTable?.pageInfo?.endCursor || null
 
     // eslint-disable-next-line react-hooks/set-state-in-render
     setPage((prev) => ({
       ...prev,
-      max: result?.saleHistoryTable?.pages || 1,
+      max: result?.paymentTable?.pages || 1,
     }))
 
     return {
-      total: result?.saleHistoryTable?.total || 0,
-      pages: result?.saleHistoryTable?.pages || 0,
+      total: result?.paymentTable?.total || 0,
+      pages: result?.paymentTable?.pages || 0,
       nodes,
       hasNextPage,
       endCursor,
     }
   }, [data])
 
-  const columns: ColumnDef<ISaleHistoryNode>[] = useMemo(
+  const columns: ColumnDef<IPaymentNode>[] = useMemo(
     () => [
       {
-        id: "date",
+        id: "amount",
         header: () => (
           <SortHeader
-            label="Date"
-            sortKey="date"
-            sortState={sort}
-            onSortChange={setSort}
-          />
-        ),
-        cell: ({ row }) => (
-          <span className="font-medium">
-            {row.original.date
-              ? format(new Date(Number(row.original.date)), "PP")
-              : ""}
-          </span>
-        ),
-        footer: () => (
-          <ColumnFilter
-            label="Date"
-            filterKey="date"
-            filterType={FilterType.DATE}
-            filter={filter}
-            onFilterChange={onFilter}
-          />
-        ),
-      },
-      {
-        id: "saleNumber",
-        header: () => (
-          <SortHeader
-            label="Sale No."
-            sortKey="saleNumber"
+            label="Amount"
+            sortKey="amount"
             sortState={sort}
             onSortChange={setSort}
           />
         ),
         cell: ({ row }) => (
           <div>
-            <span className="block font-medium">{row.original.saleNumber}</span>
-            {row.original.notes && (
-              <span className="flex gap-1 text-xs text-muted-foreground">
-                <ArrowElbowDownRightIcon /> {row.original.notes}
+            <span className="block font-medium">
+              {new Intl.NumberFormat("en-PH", {
+                style: "currency",
+                currency: "PHP",
+              }).format(row.original.amount)}
+            </span>
+            {row.original.note && (
+              <span className="text-xs text-muted-foreground">
+                <ArrowElbowDownRightIcon className="inline" />{" "}
+                {row.original.note}
               </span>
             )}
-            {row.original.paymentNotes != "" &&
-              row.original.paymentNotes
-                .split(", ")
-                .map((note: string, index: number) => (
-                  <span
-                    key={index}
-                    className="flex gap-1 text-xs text-muted-foreground"
-                  >
-                    <ArrowElbowDownRightIcon /> {note}
-                  </span>
-                ))}
           </div>
         ),
         footer: () => (
           <ColumnFilter
-            label="Sale No."
-            filterKey="saleNumber"
-            filterType={FilterType.TEXT}
-            filter={filter}
-            onFilterChange={onFilter}
-          />
-        ),
-      },
-      {
-        id: "customerName",
-        header: () => (
-          <SortHeader
-            label="Customer"
-            sortKey="customerName"
-            sortState={sort}
-            onSortChange={setSort}
-          />
-        ),
-        cell: ({ row }) => (
-          <span className="font-medium">{row.original.customerName}</span>
-        ),
-        footer: () => (
-          <ColumnFilter
-            label="Customer"
-            filterKey="customerName"
-            filterType={FilterType.TEXT}
-            filter={filter}
-            onFilterChange={onFilter}
-          />
-        ),
-      },
-      {
-        id: "currentSaleStatus",
-        header: () => (
-          <SortHeader
-            label="Sale Status"
-            sortKey="currentSaleStatus"
-            sortState={sort}
-            onSortChange={setSort}
-          />
-        ),
-        cell: ({ row }) => (
-          <span className="font-medium">{row.original.currentSaleStatus}</span>
-        ),
-        footer: () => (
-          <ColumnFilter
-            label="Sale Status"
-            filterKey="currentSaleStatus"
-            filterType={FilterType.SELECT}
-            options={Object.values(SaleStatus).map((status) => ({
-              label: status.replaceAll("_", " "),
-              value: status,
-            }))}
-            filter={filter}
-            onFilterChange={onFilter}
-          />
-        ),
-      },
-      {
-        id: "currentSalePaymentStatus",
-        header: () => (
-          <SortHeader
-            label="Payment Status"
-            sortKey="currentSalePaymentStatus"
-            sortState={sort}
-            onSortChange={setSort}
-          />
-        ),
-        cell: ({ row }) => (
-          <span className="font-medium">
-            {row.original.currentSalePaymentStatus.replaceAll("_", " ")}
-          </span>
-        ),
-        footer: () => (
-          <ColumnFilter
-            label="Payment Status"
-            filterKey="currentSalePaymentStatus"
-            filterType={FilterType.SELECT}
-            options={Object.values(SalePaymentStatus).map((status) => ({
-              label: status.replaceAll("_", " "),
-              value: status,
-            }))}
-            filter={filter}
-            onFilterChange={onFilter}
-          />
-        ),
-      },
-      {
-        id: "saleTotal",
-        header: () => (
-          <SortHeader
-            label="Sale Total"
-            sortKey="saleTotal"
-            sortState={sort}
-            onSortChange={setSort}
-          />
-        ),
-        cell: ({ row }) => (
-          <span className="font-medium">
-            {new Intl.NumberFormat("en-PH", {
-              style: "currency",
-              currency: "PHP",
-            }).format(row.original.saleTotal)}
-          </span>
-        ),
-        footer: () => (
-          <ColumnFilter
-            label="Sale Total"
-            filterKey="saleTotal"
+            label="Amount"
+            filterKey="amount"
             filterType={FilterType.NUMBER}
             filter={filter}
             onFilterChange={onFilter}
           />
         ),
       },
+      {
+        id: "by",
+        header: () => (
+          <SortHeader
+            label="User"
+            sortKey="byName"
+            sortState={sort}
+            onSortChange={setSort}
+          />
+        ),
+        cell: ({ row }) => (
+          <span className="font-medium">{row.original.byName}</span>
+        ),
+        footer: () => (
+          <ColumnFilter
+            label="User"
+            filterKey="byName"
+            filterType={FilterType.TEXT}
+            filter={filter}
+            onFilterChange={onFilter}
+          />
+        ),
+      },
+      {
+        id: "methodName",
+        header: () => (
+          <SortHeader
+            label="Method"
+            sortKey="methodName"
+            sortState={sort}
+            onSortChange={setSort}
+          />
+        ),
+        cell: ({ row }) => (
+          <span className="font-medium">{row.original.methodName}</span>
+        ),
+        footer: () => (
+          <ColumnFilter
+            label="Method"
+            filterKey="methodName"
+            filterType={FilterType.SELECT}
+            filter={filter}
+            onFilterChange={onFilter}
+            options={paymentMethodOptions}
+          />
+        ),
+      },
+      {
+        id: "saleList",
+        header: () => (
+          <SortHeader
+            label="Sale List"
+            sortKey="saleList"
+            sortState={sort}
+            onSortChange={setSort}
+          />
+        ),
+        cell: ({ row }) => (
+          <span className="font-medium">
+            {row.original.saleList.join(", ")}
+          </span>
+        ),
+        footer: () => (
+          <ColumnFilter
+            label="Sale List"
+            filterKey="saleList"
+            filterType={FilterType.TEXT}
+            filter={filter}
+            onFilterChange={onFilter}
+          />
+        ),
+      },
     ],
-    [sort, filter]
+    [sort, filter, paymentMethodOptions]
   )
 
   const resetPage = () => setPage({ current: 1, loaded: 1, max: 1 })
@@ -364,17 +313,17 @@ export default function Page() {
         updateQuery: (prev: any, { fetchMoreResult: more }: any) => {
           if (!more) return prev
           const cursorSet = new Set([
-            ...prev.saleHistoryTable.edges.map((edge: any) => edge.cursor),
-            ...more.saleHistoryTable.edges.map((edge: any) => edge.cursor),
+            ...prev.paymentTable.edges.map((edge: any) => edge.cursor),
+            ...more.paymentTable.edges.map((edge: any) => edge.cursor),
           ])
           const filteredEdges = [
-            ...prev.saleHistoryTable.edges,
-            ...more.saleHistoryTable.edges,
+            ...prev.paymentTable.edges,
+            ...more.paymentTable.edges,
           ].filter((edge: any) => cursorSet.has(edge.cursor))
-          const pageInfo = more.saleHistoryTable.pageInfo
+          const pageInfo = more.paymentTable.pageInfo
           return {
-            saleHistoryTable: {
-              ...more.saleHistoryTable,
+            paymentTable: {
+              ...more.paymentTable,
               edges: filteredEdges,
               pageInfo,
             },
@@ -403,7 +352,7 @@ export default function Page() {
   return (
     <div className="flex h-full w-full flex-col gap-1.5 p-2.5">
       <div className="flex items-center gap-1.5">
-        <Label className="text-xl font-medium">Sale History</Label>
+        <Label className="text-xl font-medium">Payment</Label>
       </div>
       <div className="flex justify-between">
         <InputGroup>

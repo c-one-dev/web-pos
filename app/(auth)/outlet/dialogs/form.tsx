@@ -58,12 +58,46 @@ export default function FormDialog({ _id, onClose }: Props) {
   const [open, setOpen] = useState<boolean>(false)
   const [isPending, startTransition] = useTransition()
   const [createOutlet] = useMutation(CREATE_OUTLET, {
-    refetchQueries: ["OutletTable"],
-    awaitRefetchQueries: true,
+    updateQueries: {
+      OutletTable: (prev, { mutationResult }: any) => {
+        if (!mutationResult.data.createOutlet.ok) return prev
+        const newOutlet = mutationResult.data.createOutlet.data
+        return {
+          ...prev,
+          outletTable: {
+            ...prev.outletTable,
+            edges: [
+              ...prev.outletTable.edges,
+              {
+                node: newOutlet.node,
+                cursor: newOutlet.cursor,
+                __typename: "OutletEdge",
+              },
+            ],
+          },
+        }
+      },
+    },
   })
   const [updateOutlet] = useMutation(UPDATE_OUTLET, {
-    refetchQueries: ["OutletTable"],
-    awaitRefetchQueries: true,
+    updateQueries: {
+      OutletTable: (prev, { mutationResult }: any) => {
+        if (!mutationResult.data.updateOutlet.ok) return prev
+        const updatedOutlet = mutationResult.data.updateOutlet.data
+        const updatedEdges = prev.outletTable.edges.map((edge: any) =>
+          edge.node._id === updatedOutlet._id
+            ? { ...edge, node: { ...edge.node, ...updatedOutlet } }
+            : edge
+        )
+        return {
+          ...prev,
+          outletTable: {
+            ...prev.outletTable,
+            edges: updatedEdges,
+          },
+        }
+      },
+    },
   })
   const { data }: any = useQuery(FETCH_OUTLET, {
     variables: {

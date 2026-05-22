@@ -51,8 +51,27 @@ export default function StatusDialog({ _id, status, onClose }: Props) {
     skip: !_id || !open,
   })
   const [changeStatus] = useMutation(CHANGE_STATUS, {
-    refetchQueries: ["ProcessedRegister", "ProductTypeTable"],
-    awaitRefetchQueries: true,
+    // refetchQueries: ["ProcessedRegister"],
+    // awaitRefetchQueries: true,
+    updateQueries: {
+      ProductTypeTable: (prev, { mutationResult }: any) => {
+        if (!mutationResult.data.changeProductTypeStatus.ok) return prev
+        const updatedProductType =
+          mutationResult.data.changeProductTypeStatus.data
+        const updatedEdges = prev.productTypeTable.edges.map((edge: any) => {
+          return edge.node._id === updatedProductType._id
+            ? { ...edge, node: { ...edge.node, ...updatedProductType } }
+            : edge
+        })
+        return {
+          ...prev,
+          productTypeTable: {
+            ...prev.productTypeTable,
+            edges: updatedEdges,
+          },
+        }
+      },
+    },
   })
   const statusText = status ? "Deactivate" : "Activate"
 
@@ -62,7 +81,7 @@ export default function StatusDialog({ _id, status, onClose }: Props) {
       if (result.data.changeProductTypeStatus?.ok) {
         // Optionally, you can show a success message here
         toast.success(result.data.changeProductTypeStatus.message)
-        onClose()
+        onClose?.()
       }
     } catch (error) {
       console.error("Error changing status:", error)
@@ -96,7 +115,7 @@ export default function StatusDialog({ _id, status, onClose }: Props) {
             <Button variant="outline">Close</Button>
           </DialogClose>
           <Button
-            variant={statusText ? "destructive" : "default"}
+            variant={status ? "destructive" : "default"}
             onClick={onStatusChange}
           >
             {statusText}

@@ -50,8 +50,24 @@ export default function StatusDialog({ _id, status, onClose }: Props) {
     skip: !_id || !open,
   })
   const [changeStatus] = useMutation(CHANGE_STATUS_PRODUCT, {
-    refetchQueries: ["ProcessedRegister", "ProductTable"],
-    awaitRefetchQueries: true,
+    updateQueries: {
+      ProductTable: (prev, { mutationResult }: any) => {
+        if (!mutationResult.data.changeProductStatus.ok) return prev
+        const updatedProduct = mutationResult.data.changeProductStatus.data
+        const updatedEdges = prev.productTable.edges.map((edge: any) => {
+          return edge.node._id === updatedProduct._id
+            ? { ...edge, node: { ...edge.node, ...updatedProduct } }
+            : edge
+        })
+        return {
+          ...prev,
+          productTable: {
+            ...prev.productTable,
+            edges: updatedEdges,
+          },
+        }
+      },
+    },
   })
   const statusText = status ? "Deactivate" : "Activate"
 

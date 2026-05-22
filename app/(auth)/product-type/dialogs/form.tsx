@@ -87,12 +87,50 @@ export default function FormDialog({ _id, onClose }: Props) {
   const [open, setOpen] = useState<boolean>(false)
   const [isPending, startTransition] = useTransition()
   const [createProductType] = useMutation(CREATE_PRODUCT_TYPE, {
-    refetchQueries: ["ProcessedRegister", "ProductTypeTable"],
-    awaitRefetchQueries: true,
+    // refetchQueries: ["ProcessedRegister"],
+    // awaitRefetchQueries: true,
+    updateQueries: {
+      ProductTypeTable: (prev, { mutationResult }: any) => {
+        if (!mutationResult.data.createProductType.ok) return prev
+        const newProductType = mutationResult.data.createProductType.data
+        return {
+          ...prev,
+          productTypeTable: {
+            ...prev.productTypeTable,
+            edges: [
+              ...prev.productTypeTable.edges,
+              {
+                node: newProductType.node,
+                cursor: newProductType.cursor,
+                __typename: "ProductTypeEdge",
+              },
+            ],
+          },
+        }
+      },
+    },
   })
   const [updateProductType] = useMutation(UPDATE_PRODUCT_TYPE, {
-    refetchQueries: ["ProcessedRegister", "ProductTypeTable"],
-    awaitRefetchQueries: true,
+    // refetchQueries: ["ProcessedRegister"],
+    // awaitRefetchQueries: true,
+    updateQueries: {
+      ProductTypeTable: (prev, { mutationResult }: any) => {
+        if (!mutationResult.data.updateProductType.ok) return prev
+        const updatedProductType = mutationResult.data.updateProductType.data
+        const updatedEdges = prev.productTypeTable.edges.map((edge: any) =>
+          edge.node._id === updatedProductType._id
+            ? { ...edge, node: { ...edge.node, ...updatedProductType } }
+            : edge
+        )
+        return {
+          ...prev,
+          productTypeTable: {
+            ...prev.productTypeTable,
+            edges: updatedEdges,
+          },
+        }
+      },
+    },
   })
   const { data }: any = useQuery(FETCH_PRODUCT_TYPE, {
     variables: {
@@ -158,6 +196,7 @@ export default function FormDialog({ _id, onClose }: Props) {
               result.data.createProductType?.message ||
                 result.data.updateProductType?.message
             )
+            onClose?.()
             form.reset()
           }
         } catch (error: any) {
@@ -244,7 +283,8 @@ export default function FormDialog({ _id, onClose }: Props) {
                               aria-expanded={openCommand}
                               className={cn(
                                 field.state.value &&
-                                  "rounded-tr-none rounded-br-none",  isInvalid && "border-destructive",
+                                  "rounded-tr-none rounded-br-none",
+                                isInvalid && "border-destructive",
                                 "flex-1 justify-between bg-transparent text-black/80 capitalize"
                               )}
                               type="button"

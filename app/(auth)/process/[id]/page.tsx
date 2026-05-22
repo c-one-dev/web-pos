@@ -147,8 +147,7 @@ export default function Page() {
   const { setRegister } = useRegisterStore()
   const { data, loading } = useQuery(GET_REGISTER, {
     variables: { _id: params.id },
-    fetchPolicy: "cache-and-network",
-    nextFetchPolicy: "network-only",
+    fetchPolicy: "network-only",
   })
   const register = (data as any)?.processedRegister || null
   const router = useRouter()

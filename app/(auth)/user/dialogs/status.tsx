@@ -51,8 +51,24 @@ export default function StatusDialog({ _id, status, onClose }: Props) {
     skip: !_id || !open,
   })
   const [changeStatus] = useMutation(CHANGE_STATUS_USER, {
-    refetchQueries: ["UserTable"],
-    awaitRefetchQueries: true,
+    updateQueries: {
+      UserTable: (prev, { mutationResult }: any) => {
+        if (!mutationResult.data.changeUserStatus.ok) return prev
+        const updatedUser = mutationResult.data.changeUserStatus.data
+        const updatedEdges = prev.userTable.edges.map((edge: any) =>
+          edge.node._id === updatedUser._id
+            ? { ...edge, node: { ...edge.node, ...updatedUser } }
+            : edge
+        )
+        return {
+          ...prev,
+          userTable: {
+            ...prev.userTable,
+            edges: updatedEdges,
+          },
+        }
+      },
+    },
   })
   const statusText = status ? "Deactivate" : "Activate"
 
@@ -83,7 +99,8 @@ export default function StatusDialog({ _id, status, onClose }: Props) {
       >
         <DialogHeader>
           <DialogTitle>
-            {statusText} User: <span className="underline">{data?.user?.name}</span>
+            {statusText} User:{" "}
+            <span className="underline">{data?.user?.name}</span>
           </DialogTitle>
           <DialogDescription>
             Are you sure you want to {statusText.toLowerCase()} this user?

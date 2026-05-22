@@ -69,8 +69,26 @@ export default function AdjustCreditDialog({ _id }: Props) {
     skip: !_id || !open,
   })
   const [adjustCredit] = useMutation(ADJUST_STORE_CREDIT, {
-    refetchQueries: ["CustomerReport", "CustomerReportTable", "ViewStoreCreditDetails"],
+    refetchQueries: ["ViewStoreCreditDetails", "CustomerReport"],
     awaitRefetchQueries: true,
+    updateQueries: {
+      CustomerReportTable: (prev, { mutationResult }: any) => {
+        if (!mutationResult.data.adjustStoreCredit.ok) return prev
+        const updatedCustomerReport = mutationResult.data.adjustStoreCredit.data
+        const updatedEdges = prev.customerReportTable.edges.map((edge: any) =>
+          edge.node._id === updatedCustomerReport._id
+            ? { ...edge, node: { ...edge.node, ...updatedCustomerReport } }
+            : edge
+        )
+        return {
+          ...prev,
+          customerReportTable: {
+            ...prev.customerReportTable,
+            edges: updatedEdges,
+          },
+        }
+      },
+    },
   })
 
   const form = useForm({
@@ -169,6 +187,8 @@ export default function AdjustCreditDialog({ _id }: Props) {
                             field.handleChange(Number(e.target.value))
                           }
                           type="number"
+                          inputMode="decimal"
+                          step="any"
                           aria-invalid={isInvalid}
                         />
                       </InputGroup>

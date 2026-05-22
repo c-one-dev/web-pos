@@ -10,6 +10,7 @@ import { authResolver } from "./auth.resolver"
 import { paymentMethodResolver } from "./paymentMethod.resolver"
 import { customerResolver } from "./customer.resolver"
 import { saleResolver } from "./sale.resolver"
+import { paymentResolver } from "./payment.resolver"
 
 export default mergeResolvers([
   userResolver,
@@ -21,5 +22,6 @@ export default mergeResolvers([
   authResolver,
   paymentMethodResolver,
   customerResolver,
-  saleResolver
+  saleResolver,
+  paymentResolver,
 ])

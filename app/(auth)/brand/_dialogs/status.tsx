@@ -51,8 +51,24 @@ export default function StatusDialog({ _id, status, onClose }: Props) {
     skip: !_id || !open,
   })
   const [changeStatus] = useMutation(CHANGE_STATUS_BRAND, {
-    refetchQueries: ["BrandTable"],
-    awaitRefetchQueries: true,
+    updateQueries: {
+      BrandTable: (prev, { mutationResult }: any) => {
+        if (!mutationResult.data.changeBrandStatus.ok) return prev
+        const updatedBrand = mutationResult.data.changeBrandStatus.data
+        const updatedEdges = prev.brandTable.edges.map((edge: any) => {
+          return edge.node._id === updatedBrand._id
+            ? { ...edge, node: { ...edge.node, ...updatedBrand } }
+            : edge
+        })
+        return {
+          ...prev,
+          brandTable: {
+            ...prev.brandTable,
+            edges: updatedEdges,
+          },
+        }
+      },
+    },
   })
   const statusText = status ? "Deactivate" : "Activate"
 
@@ -83,7 +99,8 @@ export default function StatusDialog({ _id, status, onClose }: Props) {
       >
         <DialogHeader>
           <DialogTitle>
-            {statusText} Brand: <span className="underline">{data?.brand?.name}</span>
+            {statusText} Brand:{" "}
+            <span className="underline">{data?.brand?.name}</span>
           </DialogTitle>
           <DialogDescription>
             Are you sure you want to {statusText.toLowerCase()} this brand?

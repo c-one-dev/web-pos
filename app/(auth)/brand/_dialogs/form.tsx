@@ -58,32 +58,46 @@ export default function FormDialog({ _id, onClose }: Props) {
   const [open, setOpen] = useState<boolean>(false)
   const [isPending, startTransition] = useTransition()
   const [createBrand] = useMutation(CREATE_BRAND, {
-    update: (cache, { data }: any) => {
-      const newBrand = data.createBrand.data
-      const newEdge = {
-        __typename: "BrandEdge",
-        cursor: newBrand._id,
-        node: newBrand,
-      }
-      cache.modify({
-        fields: {
-          brandTable(existing = {}) {
-            const edges = existing.edges || []
-            const exists = edges.some((e: any) => e.node._id === newBrand._id)
-            if (exists) return existing
-            return {
-              ...existing,
-              edges: [newEdge, ...edges],
-              total: (existing.total || 0) + 1,
-            }
+    updateQueries: {
+      BrandTable: (prev, { mutationResult }: any) => {
+        if (!mutationResult.data.createBrand.ok) return prev
+        const newBrand = mutationResult.data.createBrand.data
+        return {
+          ...prev,
+          brandTable: {
+            ...prev.brandTable,
+            edges: [
+              ...prev.brandTable.edges,
+              {
+                node: newBrand.node,
+                cursor: newBrand.cursor,
+                __typename: "BrandEdge",
+              },
+            ],
           },
-        },
-      })
+        }
+      },
     },
   })
   const [updateBrand] = useMutation(UPDATE_BRAND, {
-    refetchQueries: ["BrandTable"],
-    awaitRefetchQueries: true,
+    updateQueries: {
+      BrandTable: (prev, { mutationResult }: any) => {
+        if (!mutationResult.data.updateBrand.ok) return prev
+        const updatedBrand = mutationResult.data.updateBrand.data
+        const updatedEdges = prev.brandTable.edges.map((edge: any) =>
+          edge.node._id === updatedBrand._id
+            ? { ...edge, node: { ...edge.node, ...updatedBrand } }
+            : edge
+        )
+        return {
+          ...prev,
+          brandTable: {
+            ...prev.brandTable,
+            edges: updatedEdges,
+          },
+        }
+      },
+    },
   })
   const { data }: any = useQuery(FETCH_BRAND, {
     variables: {
@@ -141,7 +155,7 @@ export default function FormDialog({ _id, onClose }: Props) {
             form.reset()
           }
         } catch (error: any) {
-         console.error(error)
+          console.error(error)
         }
       }),
   })

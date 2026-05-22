@@ -62,11 +62,27 @@ export default function StatusDialog({ _id, status, onClose }: Props) {
     skip: !_id || !open,
   })
   const [changeStatus] = useMutation(CHANGE_STATUS_PAYMENT_METHOD, {
-    refetchQueries: ["PaymentMethodTable"],
-    awaitRefetchQueries: true,
+    updateQueries: {
+      PaymentMethodTable: (prev, { mutationResult }: any) => {
+        if (!mutationResult.data.changePaymentMethodStatus.ok) return prev
+        const updatedPaymentMethod =
+          mutationResult.data.changePaymentMethodStatus.data
+        const updatedEdges = prev.paymentMethodTable.edges.map((edge: any) => {
+          return edge.node._id === updatedPaymentMethod._id
+            ? { ...edge, node: { ...edge.node, ...updatedPaymentMethod } }
+            : edge
+        })
+        return {
+          ...prev,
+          paymentMethodTable: {
+            ...prev.paymentMethodTable,
+            edges: updatedEdges,
+          },
+        }
+      },
+    },
   })
   const statusText = status ? "Deactivate" : "Activate"
-  console.log(data)
 
   const onStatusChange = async () => {
     try {
@@ -84,21 +100,12 @@ export default function StatusDialog({ _id, status, onClose }: Props) {
   return (
     <Dialog modal open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Tooltip>
-          <TooltipTrigger className="w-full">
-            <DropdownMenuItem
-              onSelect={(e) => e.preventDefault()}
-              disabled={LOCKED_PAYMENT_METHODS.includes(_id)}
-            >
-              {statusText}
-            </DropdownMenuItem>
-          </TooltipTrigger>
-          <TooltipContent>
-            {LOCKED_PAYMENT_METHODS.includes(_id)
-              ? "This payment method cannot be deactivated."
-              : `${statusText} this payment method.`}
-          </TooltipContent>
-        </Tooltip>
+        <DropdownMenuItem
+          onSelect={(e) => e.preventDefault()}
+          disabled={LOCKED_PAYMENT_METHODS.includes(_id)}
+        >
+          {statusText}
+        </DropdownMenuItem>
       </DialogTrigger>
       <DialogContent
         onOpenAutoFocus={(e) => e.preventDefault()}

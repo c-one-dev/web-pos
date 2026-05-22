@@ -12,6 +12,14 @@ import { isISOString } from "../helpers/isoString"
 
 const CURSOR_TYPE = "user"
 
+const generateNode = (user: any) => ({
+  _id: user._id,
+  image: user.image,
+  fullName: `${user.name} ${user.surname}`,
+  role: user.role,
+  isActive: user.isActive,
+})
+
 export const userResolver = {
   Query: {
     user: async (_: any, { _id }: any) => {
@@ -63,7 +71,6 @@ export const userResolver = {
                 return { [key]: value === "true" }
               default:
                 return { [key]: { $regex: value, $options: "i" } }
-
             }
           })
 
@@ -117,7 +124,6 @@ export const userResolver = {
           },
         ]
 
-
         const result = await User.aggregate(pipeline)
         const sliced = result.slice(0, first)
         const edges = sliced.map((edge) => ({
@@ -136,10 +142,10 @@ export const userResolver = {
           pageInfo: {
             endCursor: sliced.length
               ? toCursor({
-                id: sliced[sliced.length - 1]._id.toString(),
-                type: CURSOR_TYPE,
-                value: sliced[sliced.length - 1][sortKey],
-              })
+                  id: sliced[sliced.length - 1]._id.toString(),
+                  type: CURSOR_TYPE,
+                  value: sliced[sliced.length - 1][sortKey],
+                })
               : null,
             hasNextPage: result.length > first,
           },
@@ -170,13 +176,21 @@ export const userResolver = {
         try {
           const result = await User.create({
             ...input,
+            image: "",
             password: await bcrypt.hash(input.username, 10),
           })
 
           return {
             ok: true,
             message: "User created successfully.",
-            data: result,
+            data: {
+              cursor: toCursor({
+                id: result!._id.toString(),
+                type: CURSOR_TYPE,
+                value: result!._id.toString(),
+              }),
+              node: generateNode(result),
+            },
           }
         } catch (error) {
           throw error
@@ -194,7 +208,7 @@ export const userResolver = {
           return {
             ok: true,
             message: "User updated successfully.",
-            data: result,
+            data: generateNode(result),
           }
         } catch (error) {
           throw error
@@ -219,7 +233,7 @@ export const userResolver = {
         return {
           ok: true,
           message: "User status updated successfully.",
-          data: result,
+          data: generateNode(result),
         }
       } catch (error) {
         throw error

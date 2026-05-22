@@ -59,7 +59,7 @@ const adjustCreditSchema = z.object({
   description: z.string().optional().nullable(),
 })
 
-export default function AdjustCreditDialog({ _id }: Props) {
+export default function AdjustLimitDialog({ _id }: Props) {
   const [isPending, startTransition] = useTransition()
   const [open, setOpen] = useState(false)
   const { data }: any = useQuery(GET_CUSTOMER_REPORT, {
@@ -70,12 +70,27 @@ export default function AdjustCreditDialog({ _id }: Props) {
     skip: !_id || !open,
   })
   const [adjustCredit] = useMutation(ADJUST_ACCOUNT_LIMIT, {
-    refetchQueries: [
-      "CustomerReport",
-      "CustomerReportTable",
-      "ViewAccountLimitDetails",
-    ],
+    refetchQueries: ["ViewAccountLimitDetails", "CustomerReport"],
     awaitRefetchQueries: true,
+    updateQueries: {
+      CustomerReportTable: (prev, { mutationResult }: any) => {
+        if (!mutationResult.data.adjustAccountLimit.ok) return prev
+        const updatedCustomerReport =
+          mutationResult.data.adjustAccountLimit.data
+        const updatedEdges = prev.customerReportTable.edges.map((edge: any) =>
+          edge.node._id === updatedCustomerReport._id
+            ? { ...edge, node: { ...edge.node, ...updatedCustomerReport } }
+            : edge
+        )
+        return {
+          ...prev,
+          customerReportTable: {
+            ...prev.customerReportTable,
+            edges: updatedEdges,
+          },
+        }
+      },
+    },
   })
 
   const form = useForm({
@@ -146,7 +161,7 @@ export default function AdjustCreditDialog({ _id }: Props) {
               <div className="grid grid-cols-2 gap-1.5 border p-2">
                 <div>
                   <Label>Max Account Limit</Label>
-                  <span className="block text-lg font-medium ">
+                  <span className="block text-lg font-medium">
                     {new Intl.NumberFormat("en-PH", {
                       style: "currency",
                       currency: "PHP",
@@ -169,7 +184,9 @@ export default function AdjustCreditDialog({ _id }: Props) {
                     field.state.meta.isTouched && !field.state.meta.isValid
                   return (
                     <Field data-invalid={isInvalid}>
-                      <FieldLabel htmlFor={field.name}>Adjustment Amount for Max Limit</FieldLabel>
+                      <FieldLabel htmlFor={field.name}>
+                        Adjustment Amount for Max Limit
+                      </FieldLabel>
                       <InputGroup className="-my-1">
                         <InputGroupAddon>
                           <InputGroupText>₱</InputGroupText>
@@ -185,6 +202,8 @@ export default function AdjustCreditDialog({ _id }: Props) {
                             field.handleChange(Number(e.target.value))
                           }
                           type="number"
+                          inputMode="decimal"
+                          step="any"
                           aria-invalid={isInvalid}
                         />
                       </InputGroup>

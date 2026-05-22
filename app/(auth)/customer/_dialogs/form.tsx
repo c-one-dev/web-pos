@@ -59,12 +59,46 @@ export default function FormDialog({ _id, onClose }: Props) {
   const [open, setOpen] = useState<boolean>(false)
   const [isPending, startTransition] = useTransition()
   const [createCustomer] = useMutation(CREATE_CUSTOMER, {
-    refetchQueries: ["CustomerTable", "CustomerReportTable"],
-    awaitRefetchQueries: true,
+    updateQueries: {
+      CustomerTable: (prev, { mutationResult }: any) => {
+        if (!mutationResult.data.createCustomer.ok) return prev
+        const newCustomer = mutationResult.data.createCustomer.data
+        return {
+          ...prev,
+          customerTable: {
+            ...prev.customerTable,
+            edges: [
+              ...prev.customerTable.edges,
+              {
+                node: newCustomer.node,
+                cursor: newCustomer.cursor,
+                __typename: "CustomerEdge",
+              },
+            ],
+          },
+        }
+      },
+    },
   })
   const [updateCustomer] = useMutation(UPDATE_CUSTOMER, {
-    refetchQueries: ["CustomerTable", "CustomerReportTable"],
-    awaitRefetchQueries: true,
+    updateQueries: {
+      CustomerTable: (prev, { mutationResult }: any) => {
+        if (!mutationResult.data.updateCustomer.ok) return prev
+        const updatedCustomer = mutationResult.data.updateCustomer.data
+        const updatedEdges = prev.customerTable.edges.map((edge: any) =>
+          edge.node._id === updatedCustomer._id
+            ? { ...edge, node: { ...edge.node, ...updatedCustomer } }
+            : edge
+        )
+        return {
+          ...prev,
+          customerTable: {
+            ...prev.customerTable,
+            edges: updatedEdges,
+          },
+        }
+      },
+    },
   })
   const { data }: any = useQuery(FETCH_CUSTOMER, {
     variables: {
@@ -127,7 +161,7 @@ export default function FormDialog({ _id, onClose }: Props) {
             form.reset()
           }
         } catch (error: any) {
-         console.error(error)
+          console.error(error)
         }
       }),
   })

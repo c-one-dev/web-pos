@@ -14,7 +14,7 @@ const CURSOR_TYPE = "product_type"
 const generateNode = (productType: any) => ({
   _id: productType._id,
   name: productType.name,
-  parent: productType.parentName,
+  parentName: productType.parent.name,
   isActive: productType.isActive,
 })
 
@@ -22,7 +22,7 @@ export const productTypeResolver = {
   Query: {
     productType: async (_: any, { _id }: any) => {
       try {
-        const type = await ProductType.findById(_id).lean()
+        const type = await ProductType.findById(_id).populate("parent").lean()
         if (!type) throw new GraphQLError("Product type not found")
         return type
       } catch (error) {
@@ -195,7 +195,14 @@ export const productTypeResolver = {
           return {
             ok: true,
             message: "Product type created successfully.",
-            data: populatedResult,
+            data: {
+              cursor: toCursor({
+                id: populatedResult!._id.toString(),
+                type: CURSOR_TYPE,
+                value: populatedResult!._id.toString(),
+              }),
+              node: generateNode(populatedResult),
+            },
           }
         } catch (error) {
           throw error
@@ -219,7 +226,7 @@ export const productTypeResolver = {
           return {
             ok: true,
             message: "Product type updated successfully.",
-            data: result,
+            data: generateNode(result),
           }
         } catch (error) {
           throw error
@@ -238,7 +245,7 @@ export const productTypeResolver = {
             isActive: !oldData.isActive,
           },
           {
-            returnDocument: "after",
+            new: true,
           }
         )
           .populate({ path: "parent", select: "name" })
@@ -248,7 +255,7 @@ export const productTypeResolver = {
         return {
           ok: true,
           message: "Product type status updated successfully.",
-          data: result,
+          data: generateNode(result),
         }
       } catch (error) {
         throw error

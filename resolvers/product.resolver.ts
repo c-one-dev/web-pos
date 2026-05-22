@@ -11,6 +11,15 @@ import { isISOString } from "../helpers/isoString"
 
 const CURSOR_TYPE = "product"
 
+const generateNode = (product: any) => ({
+  _id: product._id,
+  name: product.name,
+  image: product.image,
+  sku: product.sku,
+  currentPrice: product.currentPrice,
+  isActive: product.isActive,
+})
+
 export const productResolver = {
   Query: {
     product: async (_: any, { _id }: any) => {
@@ -175,7 +184,14 @@ export const productResolver = {
           return {
             ok: true,
             message: "Product created successfully.",
-            data: result,
+            data: {
+              cursor: toCursor({
+                id: result!._id.toString(),
+                type: CURSOR_TYPE,
+                value: result!._id.toString(),
+              }),
+              node: generateNode(result),
+            },
           }
         } catch (error) {
           throw error
@@ -210,7 +226,7 @@ export const productResolver = {
           return {
             ok: true,
             message: "Product updated successfully.",
-            data: result,
+            data: generateNode(result),
           }
         } catch (error) {
           throw error
@@ -235,7 +251,7 @@ export const productResolver = {
         return {
           ok: true,
           message: "Product status updated successfully.",
-          data: result,
+          data: generateNode(result),
         }
       } catch (error) {
         throw error
