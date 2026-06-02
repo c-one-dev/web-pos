@@ -72,7 +72,7 @@ type Props = {
   onClose?: () => void
 }
 
-export default function FormDialog({ _id, onClose }: Props) {
+export default function FormDialog({ _id }: Props) {
   const isUpdate = Boolean(_id)
   const [open, setOpen] = useState<boolean>(false)
   const [isPending, startTransition] = useTransition()
@@ -185,7 +185,7 @@ export default function FormDialog({ _id, onClose }: Props) {
             form.reset()
           }
         } catch (error: any) {
-          console.error(error)
+          toast.error(error.graphQLErrors?.[0]?.message ?? error.message)
         }
       }),
   })
@@ -195,7 +195,7 @@ export default function FormDialog({ _id, onClose }: Props) {
       form.setFieldValue("name", data.paymentMethod.name)
       form.setFieldValue("type", data.paymentMethod.type)
     }
-  }, [data])
+  }, [data, form])
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>

@@ -130,7 +130,7 @@ export default function Page() {
   const [filter, setFilter] = useState<
     { key: string; value: string; type: FilterType }[]
   >([])
-  const { data, fetchMore, loading, error } = useQuery(GET_PAYMENTS, {
+  const { data, fetchMore, loading } = useQuery(GET_PAYMENTS, {
     variables: {
       first: rows,
       search,
@@ -140,7 +140,6 @@ export default function Page() {
     fetchPolicy: "cache-and-network",
     nextFetchPolicy: "cache-first",
   })
-  if (error) console.error(error)
   // Payment Method options for filter dropdown
   const { data: methodOptionsData } = useQuery(GET_PAYMENT_METHOD_OPTIONS, {
     fetchPolicy: "cache-first",
@@ -150,7 +149,7 @@ export default function Page() {
     [methodOptionsData]
   )
   // Responsiveness
-  const isMobile = useIsMobile()
+  useIsMobile()
 
   const { total, nodes, endCursor } = useMemo(() => {
     const result = data as any
@@ -285,6 +284,7 @@ export default function Page() {
         ),
       },
     ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [sort, filter, paymentMethodOptions]
   )
 

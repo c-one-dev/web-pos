@@ -113,7 +113,7 @@ type Props = {
   outlet?: string
 }
 
-export default function RegisterFormDialog({ _id, onClose, outlet }: Props) {
+export default function RegisterFormDialog({ _id, outlet }: Props) {
   const isUpdate = Boolean(_id)
   const [open, setOpen] = useState<boolean>(false)
   const [isPending, startTransition] = useTransition()
@@ -206,8 +206,7 @@ export default function RegisterFormDialog({ _id, onClose, outlet }: Props) {
             form.reset()
           }
         } catch (error: any) {
-          console.error(error)
-          throw error
+          toast.error(error.graphQLErrors?.[0]?.message ?? error.message)
         }
       }),
   })

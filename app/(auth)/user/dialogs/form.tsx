@@ -181,8 +181,7 @@ export default function FormDialog({ _id, onClose }: Props) {
             form.reset()
           }
         } catch (error: any) {
-          console.error(error)
-          throw error
+          toast.error(error.graphQLErrors?.[0]?.message ?? error.message)
         }
       }),
   })
@@ -197,7 +196,7 @@ export default function FormDialog({ _id, onClose }: Props) {
       form.setFieldValue("role", data.user.role)
       form.setFieldValue("pin", data.user.pin)
     }
-  }, [data])
+  }, [data, form])
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
