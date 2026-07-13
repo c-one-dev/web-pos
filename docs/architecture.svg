@@ -1,0 +1,76 @@
+<svg width="100%" viewBox="0 0 680 735" xmlns="http://www.w3.org/2000/svg" role="img" font-family="system-ui, -apple-system, Segoe UI, sans-serif">
+<title>POS system architecture</title>
+<desc>Layered diagram: the browser talks through Next.js page middleware and two API routes, NextAuth and a single GraphQL endpoint, into a centralized schema-level guard that requires a session and validates every mutation, then into resolvers grouped into Identity, Catalog, and Commerce domains, all backed by Mongoose models on MongoDB Atlas.</desc>
+<defs>
+<marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+<path d="M2 1L8 5L2 9" fill="none" stroke="#8a8a86" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</marker>
+</defs>
+
+<rect width="680" height="735" fill="#ffffff"/>
+
+<line x1="340" y1="96" x2="340" y2="156" stroke="#8a8a86" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="280" y1="212" x2="180" y2="272" stroke="#8a8a86" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="400" y1="212" x2="500" y2="272" stroke="#8a8a86" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="180" y1="328" x2="280" y2="388" stroke="#8a8a86" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="500" y1="328" x2="400" y2="388" stroke="#8a8a86" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="280" y1="444" x2="133" y2="504" stroke="#8a8a86" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="340" y1="444" x2="340" y2="504" stroke="#8a8a86" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="400" y1="444" x2="547" y2="504" stroke="#8a8a86" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="133" y1="560" x2="280" y2="620" stroke="#8a8a86" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="340" y1="560" x2="340" y2="620" stroke="#8a8a86" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="547" y1="560" x2="400" y2="620" stroke="#8a8a86" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+<g>
+<rect x="190" y="40" width="300" height="56" rx="8" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="340" y="58" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="500" fill="#2C2C2A">Browser</text>
+<text x="340" y="76" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#5F5E5A">Next.js pages + Apollo Client</text>
+</g>
+
+<g>
+<rect x="190" y="156" width="300" height="56" rx="8" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="340" y="174" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="500" fill="#2C2C2A">proxy.ts middleware</text>
+<text x="340" y="192" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#5F5E5A">Blocks unauthenticated pages</text>
+</g>
+
+<g>
+<rect x="42" y="272" width="276" height="56" rx="8" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="180" y="290" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="500" fill="#2C2C2A">NextAuth</text>
+<text x="180" y="308" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#5F5E5A">Login + JWT session</text>
+</g>
+<g>
+<rect x="362" y="272" width="276" height="56" rx="8" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="500" y="290" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="500" fill="#2C2C2A">/graphql</text>
+<text x="500" y="308" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#5F5E5A">Apollo Server endpoint</text>
+</g>
+
+<g>
+<rect x="170" y="388" width="340" height="56" rx="8" fill="#E6F1FB" stroke="#85B7EB" stroke-width="0.5"/>
+<text x="340" y="406" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="500" fill="#042C53">Schema-level guard</text>
+<text x="340" y="424" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#0C447C">Session + validation gate</text>
+</g>
+
+<g>
+<rect x="42" y="504" width="182" height="56" rx="8" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="133" y="522" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="500" fill="#2C2C2A">Identity</text>
+<text x="133" y="540" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#5F5E5A">2 domains</text>
+</g>
+<g>
+<rect x="249" y="504" width="182" height="56" rx="8" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="340" y="522" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="500" fill="#2C2C2A">Catalog</text>
+<text x="340" y="540" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#5F5E5A">6 domains</text>
+</g>
+<g>
+<rect x="456" y="504" width="182" height="56" rx="8" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="547" y="522" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="500" fill="#2C2C2A">Commerce</text>
+<text x="547" y="540" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#5F5E5A">3 domains</text>
+</g>
+
+<g>
+<rect x="190" y="620" width="300" height="56" rx="8" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="340" y="638" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="500" fill="#2C2C2A">Mongoose + MongoDB Atlas</text>
+<text x="340" y="656" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#5F5E5A">Data layer, replica set</text>
+</g>
+
+<text x="340" y="700" text-anchor="middle" font-size="12" fill="#5F5E5A">Blue = centralized guard added this session</text>
+</svg>

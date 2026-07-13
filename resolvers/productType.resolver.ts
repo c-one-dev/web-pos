@@ -235,17 +235,12 @@ export const productTypeResolver = {
     ),
     changeProductTypeStatus: async (_: any, { _id }: any) => {
       try {
-        const oldData = await ProductType.findById(_id)
-          .select("isActive")
-          .lean()
-        if (!oldData) throw new GraphQLError("productType not found")
         const result = await ProductType.findByIdAndUpdate(
           _id,
-          {
-            isActive: !oldData.isActive,
-          },
+          [{ $set: { isActive: { $not: "$isActive" } } }],
           {
             new: true,
+            updatePipeline: true,
           }
         )
           .populate({ path: "parent", select: "name" })

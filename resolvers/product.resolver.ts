@@ -235,15 +235,12 @@ export const productResolver = {
     ),
     changeProductStatus: async (_: any, { _id }: any) => {
       try {
-        const oldData = await Product.findById(_id).select("isActive").lean()
-        if (!oldData) throw new GraphQLError("Product not found")
         const result = await Product.findByIdAndUpdate(
           _id,
-          {
-            isActive: !oldData.isActive,
-          },
+          [{ $set: { isActive: { $not: "$isActive" } } }],
           {
             returnDocument: "after",
+            updatePipeline: true,
           }
         ).lean()
         if (!result) throw new GraphQLError("Product not found")

@@ -16,6 +16,7 @@ const User = new Schema<IUser>(
       required: true,
     },
     pin: { type: String, required: true },
+    mustChangePassword: { type: Boolean, default: true },
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }

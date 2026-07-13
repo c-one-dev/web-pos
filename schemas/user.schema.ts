@@ -17,6 +17,7 @@ export const userSchema = gql`
     username: String
     role: Role
     pin: String
+    mustChangePassword: Boolean
     isActive: Boolean
     createdAt: String
     updatedAt: String
@@ -69,5 +70,6 @@ export const userSchema = gql`
     createUser(input: UserInput): Response
     updateUser(_id: ID!, input: UserInput): Response
     changeUserStatus(_id: ID!): Response
+    changePassword(oldPassword: String!, newPassword: String!): Response
   }
 `
