@@ -72,4 +72,5 @@ export const mutationValidationRegistry: Record<
   changeOutletStatus: NO_VALIDATION,
 
   generateSale: saleSchema,
+  voidSale: NO_VALIDATION,
 }

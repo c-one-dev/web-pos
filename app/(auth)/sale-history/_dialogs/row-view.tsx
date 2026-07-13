@@ -10,7 +10,7 @@ import {
   DrawerTitle,
   DrawerTrigger,
 } from "@/components/ui/drawer"
-import { useQuery } from "@apollo/client/react"
+import { useMutation, useQuery } from "@apollo/client/react"
 import { format } from "date-fns"
 import gql from "graphql-tag"
 import { ArrowElbowDownRightIcon, XIcon } from "@phosphor-icons/react"
@@ -33,6 +33,18 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
+import { useTransition } from "react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 type Props = {
   _id?: string
@@ -111,6 +123,15 @@ const GET_SALE = gql`
   }
 `
 
+const VOID_SALE = gql`
+  mutation VoidSale($_id: ID!) {
+    voidSale(_id: $_id) {
+      ok
+      message
+    }
+  }
+`
+
 export default function RowViewDialog({
   _id,
   open,
@@ -126,11 +147,30 @@ export default function RowViewDialog({
     nextFetchPolicy: "network-only",
     skip: !_id || !open,
   })
+  const [isPending, startTransition] = useTransition()
+  const [voidSale] = useMutation(VOID_SALE, {
+    refetchQueries: ["Sale"],
+    awaitRefetchQueries: true,
+  })
 
   const handleClose = () => {
     setOpen?.(false)
     onClose?.()
   }
+
+  const isVoided = data?.sale?.currentSaleStatus === "VOIDED"
+
+  const handleVoid = () =>
+    startTransition(async () => {
+      try {
+        const result: any = await voidSale({ variables: { _id } })
+        if (result.data.voidSale.ok) {
+          toast.success(result.data.voidSale.message)
+        }
+      } catch (error: any) {
+        toast.error(error.graphQLErrors?.[0]?.message ?? error.message)
+      }
+    })
 
   return (
     <Drawer modal open={open} onOpenChange={handleClose} direction="right">
@@ -151,6 +191,35 @@ export default function RowViewDialog({
               <Button variant="default" className="border">
                 Refund
               </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="destructive"
+                    disabled={isVoided || loading || isPending}
+                  >
+                    {isVoided ? "Voided" : "Void"}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Void this sale?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This marks sale {data?.sale?.saleNumber} as voided. This
+                      does not reverse any payments already recorded, and cannot
+                      be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="bg-destructive"
+                      onClick={handleVoid}
+                    >
+                      Yes, Void Sale
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </ButtonGroup>
           </div>
           <DrawerClose asChild>

@@ -337,5 +337,42 @@ export const saleResolver = {
         }
       }
     ),
+    voidSale: async (_: any, { _id }: any, ctx: any) => {
+      try {
+        const result = await Sale.findOneAndUpdate(
+          { _id, currentSaleStatus: { $ne: "VOIDED" } },
+          {
+            $set: { currentSaleStatus: "VOIDED" },
+            $push: {
+              saleStatusHistory: {
+                status: "VOIDED",
+                date: new Date(),
+                by: ctx.session._id,
+              },
+            },
+          },
+          { returnDocument: "after" }
+        )
+          .select("_id saleNumber currentSaleStatus")
+          .lean()
+        if (!result) {
+          const existing = await Sale.findById(_id)
+            .select("currentSaleStatus")
+            .lean()
+          if (!existing) throw new GraphQLError("Sale not found")
+          throw new GraphQLError("Sale is already voided.")
+        }
+        return {
+          ok: true,
+          message: `Sale ${result.saleNumber} voided successfully.`,
+          data: {
+            _id: result._id,
+            currentSaleStatus: result.currentSaleStatus,
+          },
+        }
+      } catch (error) {
+        throw error
+      }
+    },
   },
 }

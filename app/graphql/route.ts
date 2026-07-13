@@ -17,6 +17,11 @@ import {
 // Query/Mutation fields that must remain reachable without a session.
 const PUBLIC_FIELDS = new Set(["Mutation.signIn"])
 
+// Matches the largest row-size option offered anywhere in the UI (every
+// *Table page's rows-per-page dropdown tops out at 500) - clamping here
+// closes off `first: 999999999` without affecting any legitimate request.
+const MAX_PAGE_SIZE = 500
+
 const baseSchema = makeExecutableSchema({ resolvers, typeDefs })
 
 // Require an authenticated session for every Query/Mutation field by default,
@@ -24,7 +29,9 @@ const baseSchema = makeExecutableSchema({ resolvers, typeDefs })
 // each resolver remembering to check `context.session` itself. Mutation
 // fields additionally get their input run through a Zod schema looked up in
 // mutationValidationRegistry - a mutation missing from that registry fails
-// the server at startup instead of silently shipping unvalidated.
+// the server at startup instead of silently shipping unvalidated. Any field
+// with a `first` argument (every *Table pagination query) gets it clamped to
+// MAX_PAGE_SIZE, since none of the resolvers cap it themselves.
 export const schema = mapSchema(baseSchema, {
   [MapperKind.OBJECT_FIELD]: (fieldConfig, fieldName, typeName) => {
     if (typeName !== "Query" && typeName !== "Mutation") return fieldConfig
@@ -41,6 +48,15 @@ export const schema = mapSchema(baseSchema, {
         )
       if (validationEntry !== NO_VALIDATION)
         resolve = checkSchema(validationEntry)(resolve)
+    }
+
+    const previousResolve = resolve
+    resolve = (source, args, context, info) => {
+      const clampedArgs =
+        typeof args?.first === "number" && args.first > MAX_PAGE_SIZE
+          ? { ...args, first: MAX_PAGE_SIZE }
+          : args
+      return previousResolve(source, clampedArgs, context, info)
     }
 
     if (PUBLIC_FIELDS.has(`${typeName}.${fieldName}`))

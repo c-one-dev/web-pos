@@ -29,9 +29,45 @@ import {
   SelectValue,
 } from "../ui/select"
 import { Calendar } from "../ui/calendar"
-import { format } from "date-fns"
+import {
+  startOfToday,
+  startOfWeek,
+  endOfWeek,
+  startOfMonth,
+  endOfMonth,
+  subDays,
+} from "date-fns"
 import { DateRange } from "react-day-picker"
 import { formatDateRange } from "little-date"
+
+const DATE_RANGE_PRESETS: { label: string; getRange: () => DateRange }[] = [
+  {
+    label: "Today",
+    getRange: () => ({ from: startOfToday(), to: startOfToday() }),
+  },
+  {
+    label: "This Week",
+    getRange: () => ({
+      from: startOfWeek(new Date()),
+      to: endOfWeek(new Date()),
+    }),
+  },
+  {
+    label: "Last 7 Days",
+    getRange: () => ({ from: subDays(new Date(), 6), to: new Date() }),
+  },
+  {
+    label: "This Month",
+    getRange: () => ({
+      from: startOfMonth(new Date()),
+      to: endOfMonth(new Date()),
+    }),
+  },
+  {
+    label: "Last 30 Days",
+    getRange: () => ({ from: subDays(new Date(), 29), to: new Date() }),
+  },
+]
 
 type Props = {
   label: string
@@ -60,6 +96,26 @@ export default function ColumnFilter({
     from: undefined,
     to: undefined,
   })
+  const [openDateRange, setOpenDateRange] = useState<boolean>(false)
+
+  const applyDateRange = (range: DateRange) => {
+    if (!range.from || !range.to) return
+    setDateRange(range)
+    const dateRangeISO = `${range.from.toISOString()}_${range.to.toISOString()}`
+    onFilterChange((prev: Filter[]) => [
+      ...prev.filter((f: Filter) => f.key != filterKey),
+      { key: filterKey, value: dateRangeISO, type: FilterType.DATE },
+    ])
+    setOpenDateRange(false)
+  }
+
+  const resetDateRange = () => {
+    setDateRange({ from: undefined, to: undefined })
+    onFilterChange((prev: Filter[]) =>
+      prev.filter((f: Filter) => f.key != filterKey)
+    )
+    setOpenDateRange(false)
+  }
 
   useEffect(() => {
     if (filterType === "DATE" && filter.find((f: any) => f.key === filterKey)) {
@@ -249,7 +305,7 @@ export default function ColumnFilter({
       )
     case FilterType.DATE:
       return (
-        <Popover>
+        <Popover open={openDateRange} onOpenChange={setOpenDateRange}>
           <PopoverTrigger asChild>
             <Button
               variant="outline"
@@ -267,44 +323,44 @@ export default function ColumnFilter({
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0 pt-4 px-1">
-            <Calendar
-              mode="range"
-              defaultMonth={dateRange?.from}
-              selected={dateRange}
-              onSelect={setDateRange}
-              required
-              numberOfMonths={2}
-            />
-            <div className="flex justify-end px-4 pb-4">
-              <ButtonGroup className="space-x-2">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setDateRange({ from: undefined, to: undefined })
-                    onFilterChange((prev: Filter[]) =>
-                      prev.filter((f: Filter) => f.key != filterKey)
-                    )
-                  }}
-                >
-                  Reset
-                </Button>
-                <Button
-                  onClick={() => {
-                    if (!dateRange?.from || !dateRange?.to) return
-                    const dateRangeISO = `${dateRange.from.toISOString()}_${dateRange.to.toISOString()}`
-                    onFilterChange((prev: Filter[]) => [
-                      ...prev.filter((f: Filter) => f.key != filterKey),
-                      {
-                        key: filterKey,
-                        value: dateRangeISO,
-                        type: FilterType.DATE,
-                      },
-                    ])
-                  }}
-                >
-                  Apply
-                </Button>
-              </ButtonGroup>
+            <div className="flex">
+              <div className="flex flex-col gap-1 border-r p-2 pr-3">
+                {DATE_RANGE_PRESETS.map((preset) => (
+                  <Button
+                    key={preset.label}
+                    variant="ghost"
+                    size="sm"
+                    className="justify-start font-normal"
+                    onClick={() => applyDateRange(preset.getRange())}
+                  >
+                    {preset.label}
+                  </Button>
+                ))}
+              </div>
+              <div>
+                <Calendar
+                  mode="range"
+                  defaultMonth={dateRange?.from}
+                  selected={dateRange}
+                  onSelect={setDateRange}
+                  required
+                  numberOfMonths={2}
+                />
+                <div className="flex justify-end px-4 pb-4">
+                  <ButtonGroup className="space-x-2">
+                    <Button variant="outline" onClick={resetDateRange}>
+                      Reset
+                    </Button>
+                    <Button
+                      onClick={() =>
+                        dateRange && applyDateRange(dateRange)
+                      }
+                    >
+                      Apply
+                    </Button>
+                  </ButtonGroup>
+                </div>
+              </div>
             </div>
           </PopoverContent>
         </Popover>

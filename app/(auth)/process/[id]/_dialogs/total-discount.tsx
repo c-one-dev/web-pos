@@ -72,7 +72,10 @@ function TotalDiscount({
                   min={0}
                   max={100}
                   onChange={(e) => {
-                    const percentDiscount = parseFloat(e.target.value || "0")
+                    const percentDiscount = Math.min(
+                      100,
+                      Math.max(0, parseFloat(e.target.value || "0"))
+                    )
                     const originalTotal = state.total + state.discount
                     const discountAmount = parseFloat(
                       ((percentDiscount / 100) * originalTotal).toFixed(2)
@@ -94,9 +97,12 @@ function TotalDiscount({
                 max={state.total + state.discount}
                 readOnly={discountType === "%"}
                 onChange={(e) => {
-                  const discount = parseFloat(e.target.value || "0")
                   const originalTotal = parseFloat(
                     (state.total + state.discount).toFixed(2)
+                  )
+                  const discount = Math.min(
+                    originalTotal,
+                    Math.max(0, parseFloat(e.target.value || "0"))
                   )
                   form.setFieldValue("discount", discount)
                   form.setFieldValue("total", originalTotal - discount)
