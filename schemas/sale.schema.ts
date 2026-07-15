@@ -163,5 +163,6 @@ export const saleSchema = gql`
 
   type Mutation {
     generateSale(input: SaleInput): Response
+    voidSale(_id: ID!): Response
   }
 `

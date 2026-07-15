@@ -99,7 +99,7 @@ function PerItem({
               min={1}
               onChange={(e) => {
                 {
-                  const quantity = parseInt(e.target.value)
+                  const quantity = Math.max(1, parseInt(e.target.value) || 1)
                   form.setFieldValue(`items`, () => {
                     const itemPrice = item.snapshotPrice - item.discount
                     const itemTotal = quantity * itemPrice
@@ -145,13 +145,15 @@ function PerItem({
                   max={100}
                   onChange={(e) => {
                     {
-                      const discount = parseFloat(e.target.value || "0")
+                      const discount = Math.min(
+                        100,
+                        Math.max(0, parseFloat(e.target.value || "0"))
+                      )
                       form.setFieldValue(`items`, () => {
-                        const discountAmount = (
-                          (discount / 100) *
-                          item.snapshotPrice
-                        ).toFixed(2)
-                        const itemPrice = item.snapshotPrice - +discountAmount
+                        const discountAmount = parseFloat(
+                          ((discount / 100) * item.snapshotPrice).toFixed(2)
+                        )
+                        const itemPrice = item.snapshotPrice - discountAmount
                         const itemTotal = item.quantity * itemPrice
                         return state.items.map((i: any, idx: number) => {
                           if (idx === index) {
@@ -179,7 +181,10 @@ function PerItem({
                 readOnly={discountType === "%"}
                 onChange={(e) => {
                   {
-                    const discount = parseFloat(e.target.value)
+                    const discount = Math.min(
+                      item.snapshotPrice,
+                      Math.max(0, parseFloat(e.target.value || "0"))
+                    )
                     form.setFieldValue(`items`, () => {
                       const itemPrice = item.snapshotPrice - discount
                       const itemTotal = item.quantity * itemPrice

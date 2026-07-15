@@ -2,15 +2,26 @@ import { GraphQLError } from "graphql"
 import User from "../models/user.model"
 import { startOfDay, endOfDay } from "date-fns"
 import { Types, type PipelineStage } from "mongoose"
+import { randomBytes } from "crypto"
 import type { IDataTableArgs } from "../types/shared.type"
 import { fromCursor, toCursor } from "../helpers/cursor"
 import { flatten } from "../helpers/flatten"
 import { checkSchema, validate } from "../helpers/validate"
-import { userSchema } from "../validators/user.validator"
+import { userSchema, changePasswordSchema } from "../validators/user.validator"
 import bcrypt from "bcryptjs"
 import { isISOString } from "../helpers/isoString"
 
 const CURSOR_TYPE = "user"
+
+// Excludes visually ambiguous characters (0/O, 1/l/I) since an admin has to
+// read this out loud or hand-type it for the employee.
+const TEMP_PASSWORD_CHARS =
+  "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"
+
+const generateTempPassword = (length = 12) =>
+  Array.from(randomBytes(length))
+    .map((byte) => TEMP_PASSWORD_CHARS[byte % TEMP_PASSWORD_CHARS.length])
+    .join("")
 
 const generateNode = (user: any) => ({
   _id: user._id,
@@ -174,10 +185,12 @@ export const userResolver = {
     createUser: validate(checkSchema(userSchema))(
       async (_: any, { input }: any) => {
         try {
+          const temporaryPassword = generateTempPassword()
           const result = await User.create({
             ...input,
             image: "",
-            password: await bcrypt.hash(input.username, 10),
+            password: await bcrypt.hash(temporaryPassword, 10),
+            mustChangePassword: true,
           })
 
           return {
@@ -190,6 +203,7 @@ export const userResolver = {
                 value: result!._id.toString(),
               }),
               node: generateNode(result),
+              temporaryPassword,
             },
           }
         } catch (error) {
@@ -217,15 +231,12 @@ export const userResolver = {
     ),
     changeUserStatus: async (_: any, { _id }: any) => {
       try {
-        const user = await User.findById(_id).select("isActive").lean()
-        if (!user) throw new GraphQLError("User not found")
         const result = await User.findByIdAndUpdate(
           _id,
-          {
-            isActive: !user.isActive,
-          },
+          [{ $set: { isActive: { $not: "$isActive" } } }],
           {
             returnDocument: "after",
+            updatePipeline: true,
           }
         ).lean()
         if (!result) throw new GraphQLError("User not found")
@@ -239,5 +250,30 @@ export const userResolver = {
         throw error
       }
     },
+    changePassword: validate(checkSchema(changePasswordSchema))(
+      async (_: any, { oldPassword, newPassword }: any, ctx: any) => {
+        try {
+          const user = await User.findById(ctx.session._id).select("+password")
+          if (!user) throw new GraphQLError("User not found")
+          const passwordMatches = await bcrypt.compare(
+            oldPassword,
+            user.password
+          )
+          if (!passwordMatches)
+            throw new GraphQLError("Current password is incorrect.")
+          user.password = await bcrypt.hash(newPassword, 10)
+          user.mustChangePassword = false
+          await user.save()
+
+          return {
+            ok: true,
+            message: "Password updated successfully.",
+            data: null,
+          }
+        } catch (error) {
+          throw error
+        }
+      }
+    ),
   },
 }

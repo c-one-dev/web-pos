@@ -37,6 +37,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import RowViewDialog from "./_dialogs/row-view"
+import { StatusBadge } from "@/components/custom/status-badge"
+import { CustomerBadge } from "@/components/custom/customer-badge"
 import {
   ISaleHistoryNode,
   SalePaymentStatus,
@@ -238,9 +240,7 @@ export default function Page() {
             onSortChange={setSort}
           />
         ),
-        cell: ({ row }) => (
-          <span className="font-medium">{row.original.customerName}</span>
-        ),
+        cell: ({ row }) => <CustomerBadge name={row.original.customerName} />,
         footer: () => (
           <ColumnFilter
             label="Customer"
@@ -262,7 +262,7 @@ export default function Page() {
           />
         ),
         cell: ({ row }) => (
-          <span className="font-medium">{row.original.currentSaleStatus}</span>
+          <StatusBadge status={row.original.currentSaleStatus} />
         ),
         footer: () => (
           <ColumnFilter
@@ -289,9 +289,7 @@ export default function Page() {
           />
         ),
         cell: ({ row }) => (
-          <span className="font-medium">
-            {row.original.currentSalePaymentStatus.replaceAll("_", " ")}
-          </span>
+          <StatusBadge status={row.original.currentSalePaymentStatus} />
         ),
         footer: () => (
           <ColumnFilter

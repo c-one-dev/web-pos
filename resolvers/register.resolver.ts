@@ -263,15 +263,12 @@ export const registerResolver = {
     ),
     changeRegisterStatus: async (_: any, { _id }: any) => {
       try {
-        const register = await Register.findById(_id).select("isActive").lean()
-        if (!register) throw new GraphQLError("Register not found")
         const result = await Register.findByIdAndUpdate(
           _id,
-          {
-            isActive: !register.isActive,
-          },
+          [{ $set: { isActive: { $not: "$isActive" } } }],
           {
             returnDocument: "after",
+            updatePipeline: true,
           }
         )
           .populate({ path: "outlet", select: "name" })

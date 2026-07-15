@@ -18,6 +18,7 @@ const SIGN_IN = gql`
         _id
         name
         role
+        mustChangePassword
       }
     }
   }
@@ -62,8 +63,13 @@ const handler = NextAuth({
         token.name = user.name
         token.role = user.role
         token.accessToken = user.accessToken
+        token.mustChangePassword = user.mustChangePassword
       }
-      if (trigger === "update" && session) token.user = session.user
+      if (trigger === "update" && session) {
+        if (session.user) token.user = session.user
+        if (typeof session.mustChangePassword === "boolean")
+          token.mustChangePassword = session.mustChangePassword
+      }
       return token
     },
     session: async ({ session, token }: any) => {
@@ -72,6 +78,7 @@ const handler = NextAuth({
         _id: token._id,
         name: token.name,
         role: token.role,
+        mustChangePassword: token.mustChangePassword,
       }
       session.accessToken = token.accessToken
       return session

@@ -6,6 +6,7 @@ import { useForm } from "@tanstack/react-form"
 import { z } from "zod"
 import { Field, FieldError, FieldGroup, FieldLabel } from "../ui/field"
 import { InputGroup, InputGroupInput } from "../ui/input-group"
+import { PasswordInput } from "../ui/password-input"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { useTransition } from "react"
@@ -95,18 +96,15 @@ function LoginForm() {
                 return (
                   <Field data-invalid={isInvalid}>
                     <FieldLabel htmlFor={field.name}>Password</FieldLabel>
-                    <InputGroup>
-                      <InputGroupInput
-                        id={field.name}
-                        name={field.name}
-                        value={field.state.value}
-                        onBlur={field.handleBlur}
-                        onChange={(e) => field.handleChange(e.target.value)}
-                        aria-invalid={isInvalid}
-                        placeholder="Enter your password"
-                        type="password"
-                      />
-                    </InputGroup>
+                    <PasswordInput
+                      id={field.name}
+                      name={field.name}
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      aria-invalid={isInvalid}
+                      placeholder="Enter your password"
+                    />
                     {isInvalid && (
                       <FieldError errors={field.state.meta.errors} />
                     )}
@@ -117,8 +115,13 @@ function LoginForm() {
           </FieldGroup>
         </form>
         <Separator className="my-2" />
-        <Button form="sign-in-form" type="submit" className="w-full" disabled={isPending}>
-         Sign In
+        <Button
+          form="sign-in-form"
+          type="submit"
+          className="w-full"
+          disabled={isPending}
+        >
+          Sign In
         </Button>
         <Button variant="link" className="w-full">
           Forgot your password?

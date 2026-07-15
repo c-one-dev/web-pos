@@ -17,6 +17,7 @@ export interface IUser {
   password: string
   role: Role
   pin: string
+  mustChangePassword: boolean
   isActive: boolean
 }
 

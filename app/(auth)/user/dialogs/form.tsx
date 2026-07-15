@@ -26,6 +26,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 const CREATE_USER = gql`
   mutation CreateUser($input: UserInput!) {
@@ -71,6 +80,7 @@ export default function FormDialog({ _id, onClose }: Props) {
   const isUpdate = Boolean(_id)
   const [open, setOpen] = useState<boolean>(false)
   const [isPending, startTransition] = useTransition()
+  const [tempPassword, setTempPassword] = useState<string | null>(null)
   const [createUser] = useMutation(CREATE_USER, {
     updateQueries: {
       UserTable: (prev, { mutationResult }: any) => {
@@ -179,6 +189,9 @@ export default function FormDialog({ _id, onClose }: Props) {
             )
             onClose?.()
             form.reset()
+            const generatedPassword =
+              result.data.createUser?.data?.temporaryPassword
+            if (generatedPassword) setTempPassword(generatedPassword)
           }
         } catch (error: any) {
           toast.error(error.graphQLErrors?.[0]?.message ?? error.message)
@@ -422,6 +435,39 @@ export default function FormDialog({ _id, onClose }: Props) {
           </SheetClose>
         </SheetFooter>
       </SheetContent>
+      <AlertDialog
+        open={!!tempPassword}
+        onOpenChange={(next) => !next && setTempPassword(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Temporary Password</AlertDialogTitle>
+            <AlertDialogDescription>
+              Share this password with the new user. It will not be shown again,
+              and they&apos;ll be required to set their own on first login.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex items-center justify-between gap-2 border p-2 font-mono text-lg">
+            <span>{tempPassword}</span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                navigator.clipboard.writeText(tempPassword || "")
+                toast.success("Copied to clipboard.")
+              }}
+            >
+              Copy
+            </Button>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setTempPassword(null)}>
+              Done
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Sheet>
   )
 }

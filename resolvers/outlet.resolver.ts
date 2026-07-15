@@ -228,15 +228,12 @@ export const outletResolver = {
     ),
     changeOutletStatus: async (_: any, { _id }: any) => {
       try {
-        const outlet = await Outlet.findById(_id).select("isActive").lean()
-        if (!outlet) throw new GraphQLError("Outlet not found")
         const result = await Outlet.findByIdAndUpdate(
           _id,
-          {
-            isActive: !outlet.isActive,
-          },
+          [{ $set: { isActive: { $not: "$isActive" } } }],
           {
             returnDocument: "after",
+            updatePipeline: true,
           }
         ).lean()
         const registers = await Register.find({ outlet: _id })

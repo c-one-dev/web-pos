@@ -1,7 +1,7 @@
 import { GraphQLError } from "graphql"
 import Sale from "../models/sale.model"
 import { startOfDay, endOfDay } from "date-fns"
-import { Types, type PipelineStage } from "mongoose"
+import mongoose, { Types, type PipelineStage } from "mongoose"
 import type { IDataTableArgs } from "../types/shared.type"
 import { fromCursor, toCursor } from "../helpers/cursor"
 import { flatten } from "../helpers/flatten"
@@ -240,6 +240,7 @@ export const saleResolver = {
   Mutation: {
     generateSale: validate(checkSchema(saleSchema))(
       async (_: any, { input }: any, ctx: any) => {
+        const session = await mongoose.startSession()
         try {
           if (!ctx.session)
             throw new GraphQLError("Unauthorized", {
@@ -254,66 +255,76 @@ export const saleResolver = {
             .sort({ createdAt: -1 })
             .select("saleNumber")
             .lean()
-          // Generate Multiple Payments
-          const payments = await Payment.insertMany(
-            input.payments.map((payment: any) => ({
-              ...payment,
-              by: ctx.session._id,
-              sale: [], // Will be updated after sale creation
-            }))
-          )
-          const count = sales.length
-          const paymentStatus = checkSalesPaymentStatus(payments, input.total)
-          const newSale = flatten({
-            ...input,
-            payments: payments.map((payment) => ({
-              method: payment.method,
-              amount: payment.amount,
-              change: payment.change,
-              note: payment.note,
-              date: payment.date,
-              payment: payment._id,
-            })),
-            saleNumber: `${register?.prefix || "REG"}-${String(count + 1).padStart(5, "0")}`,
-            currentSalePaymentStatus: paymentStatus,
-            salePaymentStatusHistory: payments.map((payment, index, array) => ({
-              status: checkSalesPaymentStatus(
-                array.slice(0, index + 1),
-                input.total
-              ),
-              paymentRef: payment._id,
-              date: new Date(),
-              by: ctx.session._id,
-            })),
-            currentSaleStatus: "COMPLETED",
-            saleStatusHistory: [
-              {
-                status: "COMPLETED",
-                date: new Date(),
+
+          let populatedResult
+          await session.withTransaction(async () => {
+            // Generate Multiple Payments
+            const payments = await Payment.insertMany(
+              input.payments.map((payment: any) => ({
+                ...payment,
                 by: ctx.session._id,
-              },
-            ],
-            by: ctx.session._id,
+                sale: [], // Will be updated after sale creation
+              })),
+              { session }
+            )
+            const count = sales.length
+            const paymentStatus = checkSalesPaymentStatus(payments, input.total)
+            const newSale = flatten({
+              ...input,
+              payments: payments.map((payment) => ({
+                method: payment.method,
+                amount: payment.amount,
+                change: payment.change,
+                note: payment.note,
+                date: payment.date,
+                payment: payment._id,
+              })),
+              saleNumber: `${register?.prefix || "REG"}-${String(count + 1).padStart(5, "0")}`,
+              currentSalePaymentStatus: paymentStatus,
+              salePaymentStatusHistory: payments.map(
+                (payment, index, array) => ({
+                  status: checkSalesPaymentStatus(
+                    array.slice(0, index + 1),
+                    input.total
+                  ),
+                  paymentRef: payment._id,
+                  date: new Date(),
+                  by: ctx.session._id,
+                })
+              ),
+              currentSaleStatus: "COMPLETED",
+              saleStatusHistory: [
+                {
+                  status: "COMPLETED",
+                  date: new Date(),
+                  by: ctx.session._id,
+                },
+              ],
+              by: ctx.session._id,
+            })
+            const [result] = await Sale.create([newSale], { session })
+            // Update payments with the sale ID
+            await Payment.updateMany(
+              { _id: { $in: payments.map((payment) => payment._id) } },
+              { $set: { sale: result._id } },
+              { session }
+            )
+            populatedResult = await Sale.findById(result._id)
+              .session(session)
+              .populate([
+                { path: "customer" },
+                { path: "items.product" },
+                { path: "payments.payment", populate: { path: "by" } },
+                { path: "payments.method" },
+                { path: "salePaymentStatusHistory.paymentRef" },
+                { path: "salePaymentStatusHistory.by" },
+                { path: "saleStatusHistory.by" },
+                { path: "by" },
+                { path: "register" },
+              ])
+              .lean()
           })
-          const result = await Sale.create(newSale)
-          // Update payments with the sale ID
-          await Payment.updateMany(
-            { _id: { $in: payments.map((payment) => payment._id) } },
-            { $set: { sale: result._id } }
-          )
-          const populatedResult = await Sale.findById(result._id)
-            .populate([
-              { path: "customer" },
-              { path: "items.product" },
-              { path: "payments.payment", populate: { path: "by" } },
-              { path: "payments.method" },
-              { path: "salePaymentStatusHistory.paymentRef" },
-              { path: "salePaymentStatusHistory.by" },
-              { path: "saleStatusHistory.by" },
-              { path: "by" },
-              { path: "register" },
-            ])
-            .lean()
+
           return {
             ok: true,
             message: "Sale created successfully.",
@@ -321,8 +332,47 @@ export const saleResolver = {
           }
         } catch (error) {
           throw error
+        } finally {
+          await session.endSession()
         }
       }
     ),
+    voidSale: async (_: any, { _id }: any, ctx: any) => {
+      try {
+        const result = await Sale.findOneAndUpdate(
+          { _id, currentSaleStatus: { $ne: "VOIDED" } },
+          {
+            $set: { currentSaleStatus: "VOIDED" },
+            $push: {
+              saleStatusHistory: {
+                status: "VOIDED",
+                date: new Date(),
+                by: ctx.session._id,
+              },
+            },
+          },
+          { returnDocument: "after" }
+        )
+          .select("_id saleNumber currentSaleStatus")
+          .lean()
+        if (!result) {
+          const existing = await Sale.findById(_id)
+            .select("currentSaleStatus")
+            .lean()
+          if (!existing) throw new GraphQLError("Sale not found")
+          throw new GraphQLError("Sale is already voided.")
+        }
+        return {
+          ok: true,
+          message: `Sale ${result.saleNumber} voided successfully.`,
+          data: {
+            _id: result._id,
+            currentSaleStatus: result.currentSaleStatus,
+          },
+        }
+      } catch (error) {
+        throw error
+      }
+    },
   },
 }

@@ -6,7 +6,11 @@ import type { IDataTableArgs } from "../types/shared.type"
 import { fromCursor, toCursor } from "../helpers/cursor"
 import { flatten } from "../helpers/flatten"
 import { checkSchema, validate } from "../helpers/validate"
-import { customerSchema } from "../validators/customer.validator"
+import {
+  customerSchema,
+  adjustAccountLimitSchema,
+  adjustStoreCreditSchema,
+} from "../validators/customer.validator"
 import { isISOString } from "../helpers/isoString"
 import { IStoreCreditHistoryItem } from "@/types/customer.type"
 
@@ -489,70 +493,74 @@ export const customerResolver = {
         }
       }
     ),
-    adjustAccountLimit: async (_: any, { _id, amount }: any) => {
-      try {
-        const customer = await Customer.findById(_id)
-          .select("accountLimit")
-          .lean()
-        if (!customer) throw new GraphQLError("Customer not found")
-        const result = await Customer.findByIdAndUpdate(
-          _id,
-          {
-            $inc: {
-              "accountLimit.current": amount,
-              "accountLimit.max": amount,
-            },
-            $push: {
-              "accountLimit.history": {
-                remaining: customer.accountLimit.current + amount,
-                transacted: amount,
-                date: new Date(),
+    adjustAccountLimit: validate(checkSchema(adjustAccountLimitSchema))(
+      async (_: any, { _id, amount }: any) => {
+        try {
+          const customer = await Customer.findById(_id)
+            .select("accountLimit")
+            .lean()
+          if (!customer) throw new GraphQLError("Customer not found")
+          const result = await Customer.findByIdAndUpdate(
+            _id,
+            {
+              $inc: {
+                "accountLimit.current": amount,
+                "accountLimit.max": amount,
+              },
+              $push: {
+                "accountLimit.history": {
+                  remaining: customer.accountLimit.current + amount,
+                  transacted: amount,
+                  date: new Date(),
+                },
               },
             },
-          },
-          { returnDocument: "after" }
-        ).lean()
-        if (!result) throw new GraphQLError("Customer not found")
-        return {
-          ok: true,
-          message: "Account limit adjusted successfully.",
-          data: generateCustomerNode(result),
+            { returnDocument: "after" }
+          ).lean()
+          if (!result) throw new GraphQLError("Customer not found")
+          return {
+            ok: true,
+            message: "Account limit adjusted successfully.",
+            data: generateCustomerNode(result),
+          }
+        } catch (error) {
+          throw error
         }
-      } catch (error) {
-        throw error
       }
-    },
-    adjustStoreCredit: async (_: any, { _id, amount, description }: any) => {
-      try {
-        const customer = await Customer.findById(_id)
-          .select("storeCredit")
-          .lean()
-        if (!customer) throw new GraphQLError("Customer not found")
-        const result = await Customer.findByIdAndUpdate(
-          _id,
-          {
-            $inc: { "storeCredit.current": amount },
-            $push: {
-              "storeCredit.history": {
-                remaining: customer.storeCredit.current + amount,
-                transacted: amount,
-                date: new Date(),
-                description: description || "",
+    ),
+    adjustStoreCredit: validate(checkSchema(adjustStoreCreditSchema))(
+      async (_: any, { _id, amount, description }: any) => {
+        try {
+          const customer = await Customer.findById(_id)
+            .select("storeCredit")
+            .lean()
+          if (!customer) throw new GraphQLError("Customer not found")
+          const result = await Customer.findByIdAndUpdate(
+            _id,
+            {
+              $inc: { "storeCredit.current": amount },
+              $push: {
+                "storeCredit.history": {
+                  remaining: customer.storeCredit.current + amount,
+                  transacted: amount,
+                  date: new Date(),
+                  description: description || "",
+                },
               },
             },
-          },
-          { returnDocument: "after" }
-        ).lean()
-        if (!result) throw new GraphQLError("Customer not found")
-        return {
-          ok: true,
-          message: "Store credit adjusted successfully.",
-          data: generateCustomerNode(result),
+            { returnDocument: "after" }
+          ).lean()
+          if (!result) throw new GraphQLError("Customer not found")
+          return {
+            ok: true,
+            message: "Store credit adjusted successfully.",
+            data: generateCustomerNode(result),
+          }
+        } catch (error) {
+          throw error
         }
-      } catch (error) {
-        throw error
       }
-    },
+    ),
     updateCustomer: validate(checkSchema(customerSchema))(
       async (_: any, { _id, input }: any) => {
         try {
@@ -572,15 +580,12 @@ export const customerResolver = {
     ),
     changeCustomerStatus: async (_: any, { _id }: any) => {
       try {
-        const customer = await Customer.findById(_id).select("isActive").lean()
-        if (!customer) throw new GraphQLError("Customer not found")
         const result = await Customer.findByIdAndUpdate(
           _id,
-          {
-            isActive: !customer.isActive,
-          },
+          [{ $set: { isActive: { $not: "$isActive" } } }],
           {
             returnDocument: "after",
+            updatePipeline: true,
           }
         ).lean()
         if (!result) throw new GraphQLError("Customer not found")

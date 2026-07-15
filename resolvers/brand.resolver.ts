@@ -195,15 +195,12 @@ export const brandResolver = {
     ),
     changeBrandStatus: async (_: any, { _id }: any) => {
       try {
-        const brand = await Brand.findById(_id).select("isActive").lean()
-        if (!brand) throw new GraphQLError("Brand not found")
         const result = await Brand.findByIdAndUpdate(
           _id,
-          {
-            isActive: !brand.isActive,
-          },
+          [{ $set: { isActive: { $not: "$isActive" } } }],
           {
             returnDocument: "after",
+            updatePipeline: true,
           }
         ).lean()
         if (!result) throw new GraphQLError("Brand not found")

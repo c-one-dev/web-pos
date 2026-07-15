@@ -12,16 +12,18 @@ export const signInSchema = z
       username: args.username,
     }).select("password")
 
-    if (!userExists)
+    if (!userExists) {
       ctx.addIssue({
         code: "custom",
         path: ["username"],
         message: "User does not exist.",
       })
+      return
+    }
 
     const passwordMatches = await bcrypt.compare(
       args.password,
-      (userExists as any).password,
+      userExists.password,
     )
 
     if (!passwordMatches)

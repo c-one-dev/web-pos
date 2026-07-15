@@ -200,17 +200,12 @@ export const paymentMethodResolver = {
     ),
     changePaymentMethodStatus: async (_: any, { _id }: any) => {
       try {
-        const paymentMethod = await PaymentMethod.findById(_id)
-          .select("isActive")
-          .lean()
-        if (!paymentMethod) throw new GraphQLError("PaymentMethod not found")
         const result = await PaymentMethod.findByIdAndUpdate(
           _id,
-          {
-            isActive: !paymentMethod.isActive,
-          },
+          [{ $set: { isActive: { $not: "$isActive" } } }],
           {
             returnDocument: "after",
+            updatePipeline: true,
           }
         ).lean()
         if (!result) throw new GraphQLError("PaymentMethod not found")
