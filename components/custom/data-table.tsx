@@ -20,7 +20,9 @@ import {
   TableRow,
 } from "../ui/table"
 import { cn } from "@/lib/utils"
-import { Spinner } from "../ui/spinner"
+import { Skeleton } from "../ui/skeleton"
+
+const SKELETON_WIDTHS = ["w-3/4", "w-1/2", "w-full", "w-2/3", "w-1/3"]
 
 type Props<TData, TValue> = {
   loading?: boolean
@@ -106,14 +108,27 @@ export default function DataTable<TData, TValue>({
         </TableHeader>
         <TableBody>
           {loading ? (
-            <TableRow>
-              <TableCell
-                colSpan={columns.length}
-                className="h-full text-center"
-              >
-                <Spinner className="mx-auto size-10" />
-              </TableCell>
-            </TableRow>
+            Array.from({ length: 8 }).map((_, rowIndex) => (
+              <TableRow key={`skeleton-${rowIndex}`}>
+                {columns.map((column, colIndex) => (
+                  <TableCell key={column.id || colIndex}>
+                    <Skeleton
+                      className={cn(
+                        "h-4",
+                        SKELETON_WIDTHS[
+                          (rowIndex + colIndex) % SKELETON_WIDTHS.length
+                        ]
+                      )}
+                    />
+                  </TableCell>
+                ))}
+                {actionsColumn ? (
+                  <TableCell className="w-1 whitespace-nowrap">
+                    <Skeleton className="size-7" />
+                  </TableCell>
+                ) : undefined}
+              </TableRow>
+            ))
           ) : table.getRowModel().rows?.length ? (
             table.getRowModel().rows.map((row) => (
               <TableRow

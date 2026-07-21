@@ -24,6 +24,7 @@ const SIGN_IN = gql`
   }
 `
 
+
 const handler = NextAuth({
   providers: [
     CredentialsProvider({
@@ -40,6 +41,7 @@ const handler = NextAuth({
               username: cred?.username,
               password: cred?.password,
             },
+
           })
           if (!result) throw new Error("Invalid sign in.")
           const user = (result as any).data?.signIn.user

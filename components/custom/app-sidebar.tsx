@@ -22,6 +22,7 @@ import {
   BooksIcon,
   CashRegisterIcon,
   DotIcon,
+  SquaresFourIcon,
   StorefrontIcon,
   TagIcon,
 } from "@phosphor-icons/react"
@@ -112,6 +113,18 @@ export default function AppSidebar() {
     <Sidebar>
       <SidebarHeader className="mx-auto">C-ONE POS System</SidebarHeader>
       <SidebarContent>
+        <div className="not-last:border-b">
+          <Link
+            href="/dashboard"
+            className={cn(
+              "relative flex flex-1 items-center gap-2 rounded-none border border-transparent px-2.5 pt-2.5 pb-1.75 text-left text-xs font-medium outline-none transition-all hover:cursor-pointer hover:underline focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50",
+              currentPath === "/dashboard" && "text-primary"
+            )}
+          >
+            <SquaresFourIcon size={18} />
+            <span className="text-sm">Dashboard</span>
+          </Link>
+        </div>
         <Accordion
           type="multiple"
           value={openItems}
