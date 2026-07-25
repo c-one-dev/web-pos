@@ -15,11 +15,173 @@ import { Separator } from "@/components/ui/separator"
 import { ButtonGroup } from "@/components/ui/button-group"
 import { IRegister } from "@/types/register.type"
 import { IPaymentMethod } from "@/types/paymentMethod.type"
-import { ArrowElbowDownRightIcon, XIcon } from "@phosphor-icons/react"
+import {
+  ArrowElbowDownRightIcon,
+  CheckIcon,
+  PencilSimpleIcon,
+  PlusCircleIcon,
+  XIcon,
+} from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { Textarea } from "@/components/ui/textarea"
+import { gql } from "@apollo/client"
+import { useQuery } from "@apollo/client/react"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
+import { IOption } from "@/types/shared.type"
 
 const amountShortcuts = [20, 50, 100, 200, 500, 1000]
+
+const GET_CUSTOMER_OPTIONS = gql`
+  query CustomerOptionsForPay {
+    customerOptions {
+      label
+      value
+    }
+  }
+`
+
+const GET_CUSTOMER_REPORT = gql`
+  query CustomerReportForPay($_id: ID!) {
+    customerReport(_id: $_id) {
+      _id
+      name
+      accountLimit {
+        max
+        current
+      }
+      storeCredit {
+        current
+      }
+    }
+  }
+`
+
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat("en-PH", {
+    style: "currency",
+    currency: "PHP",
+  }).format(value)
+
+function CustomerSummary({ form, customerId }: { form: any; customerId: string }) {
+  const [openCustomerCommand, setOpenCustomerCommand] = useState(false)
+  const { data: optionsData } = useQuery(GET_CUSTOMER_OPTIONS, {
+    fetchPolicy: "cache-and-network",
+    nextFetchPolicy: "cache-first",
+  })
+  const customerOptions = (optionsData as any)?.customerOptions || []
+  const { data } = useQuery(GET_CUSTOMER_REPORT, {
+    variables: { _id: customerId },
+    skip: !customerId,
+    fetchPolicy: "cache-and-network",
+    nextFetchPolicy: "cache-first",
+  })
+  const customer = (data as any)?.customerReport
+  const outstanding =
+    (customer?.accountLimit?.max || 0) - (customer?.accountLimit?.current || 0)
+
+  const picker = (
+    <PopoverContent className="w-full p-0">
+      <Command>
+        <CommandInput placeholder="Filter customer" />
+        <CommandList>
+          <CommandEmpty>No option/s found.</CommandEmpty>
+          <CommandGroup>
+            {customerOptions.map((o: IOption) => (
+              <CommandItem
+                key={o.value}
+                value={o.value}
+                onSelect={(val) => {
+                  if (val === customerId) form.setFieldValue("customer", "")
+                  else form.setFieldValue("customer", val.trim())
+                  setOpenCustomerCommand(false)
+                }}
+              >
+                <span className="block">{o.label}</span>
+                {customerId === o.value && <CheckIcon className="block" />}
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        </CommandList>
+      </Command>
+    </PopoverContent>
+  )
+
+  if (!customerId) {
+    return (
+      <Popover open={openCustomerCommand} onOpenChange={setOpenCustomerCommand}>
+        <div className="flex items-center justify-between border bg-white p-3">
+          <span className="font-medium">Walk In</span>
+          <PopoverTrigger asChild>
+            <Button variant="link" size="sm" type="button" className="h-auto p-0">
+              <PlusCircleIcon /> Add customer
+            </Button>
+          </PopoverTrigger>
+        </div>
+        {picker}
+      </Popover>
+    )
+  }
+
+  return (
+    <Popover open={openCustomerCommand} onOpenChange={setOpenCustomerCommand}>
+      <div className="border bg-white p-3">
+        <div className="flex items-center justify-between">
+          <span className="font-medium">{customer?.name}</span>
+          <div className="flex items-center gap-1">
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="icon-sm" type="button">
+                <PencilSimpleIcon />
+              </Button>
+            </PopoverTrigger>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              type="button"
+              onClick={() => form.setFieldValue("customer", "")}
+            >
+              <XIcon />
+            </Button>
+          </div>
+        </div>
+        <Separator className="my-2" />
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <span className="block text-xs text-muted-foreground">
+              Store credit
+            </span>
+            <span className="block font-medium text-green-600">
+              {formatCurrency(customer?.storeCredit?.current || 0)}
+            </span>
+          </div>
+          <div>
+            <span className="block text-xs text-muted-foreground">
+              Outstanding
+            </span>
+            <span className="block font-medium text-destructive">
+              {formatCurrency(outstanding)}
+            </span>
+            <span className="block text-xs text-muted-foreground">
+              Limit: {formatCurrency(customer?.accountLimit?.max || 0)}
+            </span>
+          </div>
+        </div>
+      </div>
+      {picker}
+    </Popover>
+  )
+}
 
 function Pay({
   children,
@@ -52,13 +214,42 @@ function Pay({
   }, [total])
 
   const paymentMethods = useMemo(
-    () =>
-      register?.paymentMethods.map((r: IRegister) => ({
+    () => [
+      ...(register?.paymentMethods.map((r: IRegister) => ({
         _id: r._id,
         name: r.name,
-      })),
+      })) || []),
+      { _id: process.env.NEXT_PUBLIC_STORE_CREDIT_ID, name: "Store Credit" },
+      { _id: process.env.NEXT_PUBLIC_ON_ACCOUNT_ID, name: "On Account" },
+    ],
     [register]
   )
+
+  const addPayment = (methodId: string | undefined) => {
+    if (!methodId) return
+    if (amountTendered <= 0) {
+      toast.error("Amount must be greater than zero.")
+      return
+    }
+    const receivedAmount = state.receivedAmount + amountTendered
+    const changeAmount = receivedAmount - state.total
+    const netAmount = receivedAmount - changeAmount
+    form.setFieldValue("payments", [
+      ...state.payments,
+      {
+        method: methodId,
+        amount: amountTendered,
+        change: receivedAmount - state.total > 0 ? changeAmount : 0,
+        date: new Date(),
+        note,
+      },
+    ])
+    form.setFieldValue("receivedAmount", receivedAmount)
+    form.setFieldValue("changeAmount", changeAmount)
+    form.setFieldValue("netAmount", netAmount)
+    setAmountTendered(0)
+    setNote("")
+  }
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -224,38 +415,29 @@ function Pay({
                       size="lg"
                       key={method._id}
                       className="p-3 text-xl"
-                      onClick={() => {
-                        if (amountTendered <= 0) {
-                          toast.error("Amount must be greater than zero.")
-                          return
-                        }
-                        const receivedAmount =
-                          state.receivedAmount + amountTendered
-                        const changeAmount = receivedAmount - state.total
-                        const netAmount = receivedAmount - changeAmount
-                        form.setFieldValue("payments", [
-                          ...state.payments,
-                          {
-                            method: method._id,
-                            amount: amountTendered,
-                            change:
-                              receivedAmount - state.total > 0
-                                ? changeAmount
-                                : 0,
-                            date: new Date(),
-                            note,
-                          },
-                        ])
-                        form.setFieldValue("receivedAmount", receivedAmount)
-                        form.setFieldValue("changeAmount", changeAmount)
-                        form.setFieldValue("netAmount", netAmount)
-                        setAmountTendered(0)
-                        setNote("")
-                      }}
+                      onClick={() => addPayment(method._id)}
                     >
                       {method.name}
                     </Button>
                   ))}
+                </ButtonGroup>
+                <ButtonGroup>
+                  <Button
+                    size="lg"
+                    className="p-3 text-xl"
+                    disabled={!state.customer}
+                    onClick={() => addPayment(process.env.NEXT_PUBLIC_STORE_CREDIT_ID)}
+                  >
+                    Store Credit
+                  </Button>
+                  <Button
+                    size="lg"
+                    className="p-3 text-xl"
+                    disabled={!state.customer}
+                    onClick={() => addPayment(process.env.NEXT_PUBLIC_ON_ACCOUNT_ID)}
+                  >
+                    On Account
+                  </Button>
                 </ButtonGroup>
                 <div className="space-y-2">
                   <Label>Note (optional)</Label>
@@ -268,6 +450,7 @@ function Pay({
                 </div>
               </>
             )}
+            <CustomerSummary form={form} customerId={state.customer} />
           </div>
         </div>
         <SheetFooter>

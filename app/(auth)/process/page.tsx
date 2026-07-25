@@ -1,11 +1,13 @@
 "use client"
 import { Button } from "@/components/ui/button"
+import { InputGroup, InputGroupInput, InputGroupAddon } from "@/components/ui/input-group"
 import { Spinner } from "@/components/ui/spinner"
 import { useRegisterStore } from "@/hooks/use-register"
 import { gql } from "@apollo/client"
 import { useQuery } from "@apollo/client/react"
+import { MagnifyingGlassIcon } from "@phosphor-icons/react"
 import { useRouter } from "next/navigation"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 
 const GET_REGISTERS = gql`
   query Registers {
@@ -24,10 +26,15 @@ export default function Page() {
   const registers = (data as any)?.registers || []
   const router = useRouter()
   const { register, setRegister } = useRegisterStore()
+  const [searchTerm, setSearchTerm] = useState("")
 
   useEffect(() => {
     if (register) router.push(`/process/${register}`)
   }, [register, router])
+
+  const filteredRegisters = registers.filter((r: any) =>
+    r.name?.toLowerCase().includes(searchTerm.toLowerCase())
+  )
 
   return (
     <div className="grid h-full w-full grid-cols-2 place-content-start gap-1.5 p-2.5">
@@ -35,11 +42,28 @@ export default function Page() {
         <Spinner />
       ) : (
         <>
-          <span className="col-span-2 text-center text-sm text-muted-foreground">
+          {/* <span className="col-span-2 text-center text-sm text-muted-foreground">
             Select a register to start the process.{" "}
             {register && `(Selected Register ID: ${register})`}
-          </span>
-          {registers.map((register: any) => (
+          </span> */}
+          <div className="col-span-2">
+            <InputGroup>
+              <InputGroupInput
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.currentTarget.value)}
+                placeholder="Search registers..."
+              />
+              <InputGroupAddon>
+                <MagnifyingGlassIcon />
+              </InputGroupAddon>
+            </InputGroup>
+          </div>
+          {filteredRegisters.length === 0 && (
+            <span className="col-span-2 text-center text-sm text-muted-foreground">
+              No registers found.
+            </span>
+          )}
+          {filteredRegisters.map((register: any) => (
             <Button
               onClick={() => {
                 setRegister(register._id)

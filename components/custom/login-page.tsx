@@ -52,7 +52,7 @@ function LoginIllustration() {
         alt=""
         width={220}
         height={220}
-        className="absolute top-[14%] left-[8%] w-[22%] max-w-40"
+        className="absolute top-[14%] left-[5%] w-[22%] max-w-40"
       />
 
       <Image
@@ -60,11 +60,11 @@ function LoginIllustration() {
         alt=""
         width={280}
         height={260}
-        className="absolute top-[16%] right-[6%] w-[30%] max-w-72"
+        className="absolute top-[10%] right-[3%] w-[24%] max-w-72"
       />
 
       <div
-        className="absolute top-[28%] left-1/2 aspect-square w-[54%] max-w-[26rem] -translate-x-1/2 rounded-full bg-gray-500/20"
+        className="absolute top-[28%] left-1/2 aspect-square w-[50%] max-w-[26rem] -translate-x-1/2 rounded-full bg-gray-500/20"
       />
 
       <Image
@@ -72,7 +72,7 @@ function LoginIllustration() {
         alt=""
         width={320}
         height={300}
-        className="absolute top-[30%] left-1/2 w-[46%] max-w-[26rem] -translate-x-1/2"
+        className="absolute top-[30%] left-1/2 w-[42%] max-w-[26rem] -translate-x-1/2"
       />
 
       <div className="absolute top-[74%] left-1/2 mt-4 -translate-x-1/2 text-center">
@@ -133,12 +133,12 @@ function LoginForm() {
   })
 
   return (
-    <div className="w-full max-w-sm space-y-6">
+    <div className="w-full max-w-xs space-y-4">
       <COneLogo />
 
       <div className="space-y-1">
-        <h1 className="font-heading text-2xl font-bold">Welcome Back</h1>
-        <p className="text-sm text-muted-foreground">
+        <h1 className="font-heading text-xl font-bold">Welcome Back</h1>
+        <p className="text-xs text-muted-foreground">
           Enter Your POS Email Account and Password to access your account.
         </p>
       </div>
@@ -150,7 +150,7 @@ function LoginForm() {
           form.handleSubmit()
         }}
       >
-        <FieldGroup>
+        <FieldGroup className="gap-3">
           <form.Field name="username">
             {(field) => {
               const isInvalid =
@@ -202,7 +202,7 @@ function LoginForm() {
         <Checkbox id={rememberId} />
         <label
           htmlFor={rememberId}
-          className="text-sm text-muted-foreground select-none"
+          className="text-xs text-muted-foreground select-none"
         >
           Remember Me
         </label>
@@ -211,6 +211,7 @@ function LoginForm() {
       <Button
         form="sign-in-form"
         type="submit"
+        size="sm"
         className="w-full bg-[#22C55E] hover:bg-[#1EAF52]"
       >
         Login
@@ -228,9 +229,9 @@ export default function LoginPage() {
         alt=""
         width={260}
         height={220}
-        className="absolute -top-16 right-[300px] z-10 hidden w-[440px] max-w-none lg:block"
+        className="absolute -top-16 right-[220px] z-10 hidden w-[440px] max-w-none lg:block"
       />
-      <div className="relative z-20 flex w-full flex-col items-center justify-center bg-background px-8 lg:w-[520px]">
+      <div className="relative z-20 flex w-full flex-col items-center justify-center bg-background px-8 lg:w-[440px]">
         <LoginForm />
         <div className="absolute bottom-4">
           <span className="text-xs text-muted-foreground">
