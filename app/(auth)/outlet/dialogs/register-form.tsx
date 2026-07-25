@@ -53,6 +53,12 @@ import {
 } from "@/components/ui/select"
 import timeOptions from "./timeOptions"
 
+const timeSelectItems = timeOptions.map((option) => (
+  <SelectItem key={option.value} value={option.value}>
+    {option.label}
+  </SelectItem>
+))
+
 const CREATE_REGISTER = gql`
   mutation CreateRegister($input: RegisterInput!) {
     createRegister(input: $input) {
@@ -129,12 +135,12 @@ export default function RegisterFormDialog({ _id, outlet }: Props) {
     variables: {
       _id,
     },
-    fetchPolicy: "network-only",
+    fetchPolicy: "cache-and-network",
     nextFetchPolicy: "cache-first",
     skip: !isUpdate || !open,
   })
   const { data: optionsData }: any = useQuery(FETCH_OPTIONS, {
-    fetchPolicy: "network-only",
+    fetchPolicy: "cache-and-network",
     nextFetchPolicy: "cache-first",
     skip: !open,
   })
@@ -213,15 +219,17 @@ export default function RegisterFormDialog({ _id, outlet }: Props) {
 
   useEffect(() => {
     if (data?.register) {
-      form.setFieldValue("name", data.register.name)
-      form.setFieldValue("prefix", data.register.prefix)
-      form.setFieldValue("outlet", data.register.outlet._id)
-      form.setFieldValue("schedule", data.register.schedule || [])
-      form.setFieldValue(
-        "paymentMethods",
-        data.register.paymentMethods
-          ? data.register.paymentMethods.map((method: any) => method._id)
-          : []
+      form.reset(
+        {
+          name: data.register.name,
+          prefix: data.register.prefix,
+          outlet: data.register.outlet._id,
+          schedule: data.register.schedule || [],
+          paymentMethods: data.register.paymentMethods
+            ? data.register.paymentMethods.map((method: any) => method._id)
+            : [],
+        },
+        { keepDefaultValues: true }
       )
     }
   }, [data, form, outlet])
@@ -472,17 +480,11 @@ export default function RegisterFormDialog({ _id, outlet }: Props) {
                               >
                                 <SelectValue placeholder="Time Slot" />
                               </SelectTrigger>
-                              <SelectContent>
-                                <SelectGroup>
-                                  {timeOptions.map((option) => (
-                                    <SelectItem
-                                      key={option.value}
-                                      value={option.value}
-                                    >
-                                      {option.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectGroup>
+                              <SelectContent
+                                position="popper"
+                                className="max-h-60"
+                              >
+                                <SelectGroup>{timeSelectItems}</SelectGroup>
                               </SelectContent>
                             </Select>
                             <Select
@@ -512,17 +514,11 @@ export default function RegisterFormDialog({ _id, outlet }: Props) {
                               >
                                 <SelectValue placeholder="Time Slot" />
                               </SelectTrigger>
-                              <SelectContent>
-                                <SelectGroup>
-                                  {timeOptions.map((option) => (
-                                    <SelectItem
-                                      key={option.value}
-                                      value={option.value}
-                                    >
-                                      {option.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectGroup>
+                              <SelectContent
+                                position="popper"
+                                className="max-h-60"
+                              >
+                                <SelectGroup>{timeSelectItems}</SelectGroup>
                               </SelectContent>
                             </Select>
                           </div>
