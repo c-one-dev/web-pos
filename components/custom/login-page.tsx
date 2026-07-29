@@ -145,6 +145,7 @@ function LoginForm() {
 
       <form
         id="sign-in-form"
+        method="post"
         onSubmit={(e) => {
           e.preventDefault()
           form.handleSubmit()

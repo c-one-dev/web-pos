@@ -5,6 +5,7 @@ export interface IAccountLimitHistoryItem {
   remaining: number
   transacted: number
   date: Date
+  description?: string
 }
 
 export interface IAccountLimit {
@@ -39,6 +40,7 @@ export interface IAccountLimitHistoryItemInput {
   remaining: number
   transacted: number
   date: Date
+  description?: string
 }
 
 export interface IAccountLimitInput {

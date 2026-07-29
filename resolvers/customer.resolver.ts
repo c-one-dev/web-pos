@@ -11,6 +11,7 @@ import {
   adjustAccountLimitSchema,
   adjustStoreCreditSchema,
 } from "../validators/customer.validator"
+import { settleAccountBalanceSchema } from "../validators/customer.server.validator"
 import { isISOString } from "../helpers/isoString"
 import { IStoreCreditHistoryItem } from "@/types/customer.type"
 
@@ -414,6 +415,7 @@ export const customerResolver = {
               remaining: "$accountLimit.history.remaining",
               transacted: "$accountLimit.history.transacted",
               date: "$accountLimit.history.date",
+              description: "$accountLimit.history.description",
             },
           },
         ]
@@ -521,6 +523,42 @@ export const customerResolver = {
           return {
             ok: true,
             message: "Account limit adjusted successfully.",
+            data: generateCustomerNode(result),
+          }
+        } catch (error) {
+          throw error
+        }
+      }
+    ),
+    settleAccountBalance: validate(checkSchema(settleAccountBalanceSchema))(
+      async (_: any, { _id, amount }: any) => {
+        try {
+          const customer = await Customer.findById(_id)
+            .select("accountLimit")
+            .lean()
+          if (!customer) throw new GraphQLError("Customer not found")
+          const result = await Customer.findByIdAndUpdate(
+            _id,
+            {
+              // Only restores available credit — unlike adjustAccountLimit,
+              // this never touches accountLimit.max, since a repayment
+              // doesn't raise the customer's credit ceiling.
+              $inc: { "accountLimit.current": amount },
+              $push: {
+                "accountLimit.history": {
+                  remaining: customer.accountLimit.current + amount,
+                  transacted: amount,
+                  date: new Date(),
+                  description: "Account settlement",
+                },
+              },
+            },
+            { returnDocument: "after" }
+          ).lean()
+          if (!result) throw new GraphQLError("Customer not found")
+          return {
+            ok: true,
+            message: "Account balance settled successfully.",
             data: generateCustomerNode(result),
           }
         } catch (error) {

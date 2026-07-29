@@ -8,6 +8,7 @@ import { flatten } from "../helpers/flatten"
 import { checkSchema, validate } from "../helpers/validate"
 import { isISOString } from "../helpers/isoString"
 import Sale from "../models/sale.model"
+import PaymentMethod from "../models/paymentMethod.model"
 
 const CURSOR_TYPE = "payment"
 
@@ -207,6 +208,101 @@ export const paymentResolver = {
             hasNextPage: result.length > first,
           },
         }
+      } catch (error) {
+        throw error
+      }
+    },
+    paymentSummary: async (
+      _: any,
+      { start, end }: { start: string; end: string }
+    ) => {
+      try {
+        const rangeStart = startOfDay(new Date(start))
+        const rangeEnd = endOfDay(new Date(end))
+
+        const [totals] = await Sale.aggregate([
+          {
+            $match: {
+              currentSaleStatus: { $ne: "VOIDED" },
+              createdAt: { $gte: rangeStart, $lte: rangeEnd },
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              salesEx: { $sum: "$subTotal" },
+              discounts: { $sum: "$discount" },
+            },
+          },
+        ])
+
+        const salesEx = totals?.salesEx || 0
+        const discounts = totals?.discounts || 0
+        const refunds = 0 // No refund logic exists in this app.
+
+        return {
+          salesInc: salesEx, // No tax concept, so Inc/Ex are equal.
+          salesEx,
+          refunds,
+          discounts,
+          netSales: salesEx - discounts - refunds,
+        }
+      } catch (error) {
+        throw error
+      }
+    },
+    paymentTypeSummary: async (
+      _: any,
+      { start, end }: { start: string; end: string }
+    ) => {
+      try {
+        const rangeStart = startOfDay(new Date(start))
+        const rangeEnd = endOfDay(new Date(end))
+
+        const [methods, totals] = await Promise.all([
+          PaymentMethod.find().select("_id name").sort({ name: 1 }).lean(),
+          Sale.aggregate([
+            {
+              $match: {
+                currentSaleStatus: { $ne: "VOIDED" },
+                createdAt: { $gte: rangeStart, $lte: rangeEnd },
+              },
+            },
+            { $unwind: "$payments" },
+            {
+              $group: {
+                _id: "$payments.method",
+                totalCollected: {
+                  $sum: {
+                    $subtract: [
+                      "$payments.amount",
+                      { $ifNull: ["$payments.change", 0] },
+                    ],
+                  },
+                },
+              },
+            },
+          ]),
+        ])
+
+        const totalsByMethod = new Map(
+          totals.map((total: any) => [
+            total._id.toString(),
+            total.totalCollected,
+          ])
+        )
+
+        return methods.map((method: any) => {
+          const totalCollected = totalsByMethod.get(method._id.toString()) || 0
+          const refunds = 0 // No refund logic exists in this app.
+          return {
+            _id: method._id,
+            name: method.name,
+            totalCollected,
+            refunds,
+            net: totalCollected - refunds,
+          }
+        })
       } catch (error) {
         throw error
       }

@@ -10,6 +10,7 @@ import { saleSchema } from "../validators/sale.validator"
 import { isISOString } from "../helpers/isoString"
 import Register from "@/models/register.model"
 import Payment from "@/models/payment.model"
+import Customer from "@/models/customer.model"
 import { checkSalesPaymentStatus } from "@/helpers/salesFn"
 
 const CURSOR_TYPE = "sale"
@@ -39,7 +40,7 @@ export const saleResolver = {
             { path: "salePaymentStatusHistory.by" },
             { path: "saleStatusHistory.by" },
             { path: "by" },
-            { path: "register" },
+            { path: "register", populate: { path: "outlet" } },
           ])
           .lean()
         if (!sale) throw new GraphQLError("Sale not found")
@@ -221,6 +222,308 @@ export const saleResolver = {
         throw error
       }
     },
+    customerSalesTable: async (
+      _: any,
+      {
+        customer,
+        first = 10,
+        after,
+      }: { customer: string; first?: number; after?: string }
+    ) => {
+      try {
+        const CUSTOMER_SALE_CURSOR_TYPE = "customerSale"
+        const customerObjectId = new Types.ObjectId(customer)
+        const matchStage: Record<string, any> = { customer: customerObjectId }
+
+        const total = await Sale.countDocuments({ customer: customerObjectId })
+
+        if (after) {
+          const { id, type } = fromCursor(after)
+          if (type !== CUSTOMER_SALE_CURSOR_TYPE)
+            throw new Error("Invalid cursor")
+          matchStage._id = { $lt: new Types.ObjectId(id) }
+        }
+
+        const pipeline: PipelineStage[] = [
+          { $match: matchStage },
+          { $sort: { _id: -1 } },
+          { $limit: first + 1 },
+          {
+            $lookup: {
+              from: "registers",
+              localField: "register",
+              foreignField: "_id",
+              as: "register",
+            },
+          },
+          { $unwind: { path: "$register", preserveNullAndEmptyArrays: true } },
+          {
+            $lookup: {
+              from: "outlets",
+              localField: "register.outlet",
+              foreignField: "_id",
+              as: "outlet",
+            },
+          },
+          { $unwind: { path: "$outlet", preserveNullAndEmptyArrays: true } },
+          {
+            $addFields: {
+              date: "$createdAt",
+              outletName: { $ifNull: ["$outlet.name", "-"] },
+              paid: {
+                $reduce: {
+                  input: "$payments",
+                  initialValue: 0,
+                  in: {
+                    $add: [
+                      "$$value",
+                      {
+                        $subtract: [
+                          "$$this.amount",
+                          { $ifNull: ["$$this.change", 0] },
+                        ],
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+          {
+            $addFields: {
+              outstanding: { $max: [{ $subtract: ["$total", "$paid"] }, 0] },
+            },
+          },
+          {
+            $project: {
+              saleNumber: 1,
+              date: 1,
+              outletName: 1,
+              total: 1,
+              paid: 1,
+              outstanding: 1,
+              currentSaleStatus: 1,
+              currentSalePaymentStatus: 1,
+            },
+          },
+        ]
+
+        const result = await Sale.aggregate(pipeline)
+        const sliced = result.slice(0, first)
+        const edges = sliced.map((edge) => ({
+          node: edge,
+          cursor: toCursor({
+            type: CUSTOMER_SALE_CURSOR_TYPE,
+            id: edge._id.toString(),
+            value: edge._id.toString(),
+          }),
+        }))
+
+        return {
+          total,
+          pages: Math.ceil(total / first),
+          edges,
+          pageInfo: {
+            endCursor: sliced.length
+              ? toCursor({
+                  type: CUSTOMER_SALE_CURSOR_TYPE,
+                  id: sliced[sliced.length - 1]._id.toString(),
+                  value: sliced[sliced.length - 1]._id.toString(),
+                })
+              : null,
+            hasNextPage: result.length > first,
+          },
+        }
+      } catch (error) {
+        throw error
+      }
+    },
+    voidedSaleTable: async (
+      _: any,
+      {
+        first = 8,
+        after,
+        search,
+        start,
+        end,
+        sort,
+      }: {
+        first?: number
+        after?: string
+        search?: string
+        start?: string
+        end?: string
+        sort?: { key: string; order: "ASC" | "DESC" }
+      }
+    ) => {
+      try {
+        const VOIDED_SALE_CURSOR_TYPE = "voidedSale"
+        const sortKey = sort?.key || "voidedAt"
+        const sortOrder = sort?.order === "ASC" ? 1 : -1
+
+        const baseStages: PipelineStage[] = [
+          { $match: { currentSaleStatus: "VOIDED" } },
+          {
+            $addFields: {
+              voidEntry: { $arrayElemAt: ["$saleStatusHistory", -1] },
+            },
+          },
+          {
+            $lookup: {
+              from: "users",
+              localField: "voidEntry.by",
+              foreignField: "_id",
+              as: "voidedByUser",
+            },
+          },
+          {
+            $unwind: {
+              path: "$voidedByUser",
+              preserveNullAndEmptyArrays: true,
+            },
+          },
+          {
+            $lookup: {
+              from: "registers",
+              localField: "register",
+              foreignField: "_id",
+              as: "register",
+            },
+          },
+          { $unwind: { path: "$register", preserveNullAndEmptyArrays: true } },
+          {
+            $lookup: {
+              from: "outlets",
+              localField: "register.outlet",
+              foreignField: "_id",
+              as: "outlet",
+            },
+          },
+          { $unwind: { path: "$outlet", preserveNullAndEmptyArrays: true } },
+          {
+            $addFields: {
+              registerName: { $ifNull: ["$register.name", "-"] },
+              outletName: { $ifNull: ["$outlet.name", "-"] },
+              amount: "$total",
+              voidedAt: "$voidEntry.date",
+              voidedByName: {
+                $trim: {
+                  input: {
+                    $concat: [
+                      { $ifNull: ["$voidedByUser.name", ""] },
+                      " ",
+                      { $ifNull: ["$voidedByUser.surname", ""] },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+          ...(search
+            ? [
+                {
+                  $match: {
+                    $or: [
+                      { saleNumber: { $regex: search, $options: "i" } },
+                      { registerName: { $regex: search, $options: "i" } },
+                      { outletName: { $regex: search, $options: "i" } },
+                      { voidedByName: { $regex: search, $options: "i" } },
+                    ],
+                  },
+                },
+              ]
+            : []),
+          ...(start && end
+            ? [
+                {
+                  $match: {
+                    voidedAt: {
+                      $gte: startOfDay(new Date(start)),
+                      $lte: endOfDay(new Date(end)),
+                    },
+                  },
+                },
+              ]
+            : []),
+        ]
+
+        const [countResult] = await Sale.aggregate([
+          ...baseStages,
+          { $count: "total" },
+        ])
+        const total = countResult?.total || 0
+
+        const paginationStages: PipelineStage[] = []
+        if (after) {
+          const { id, type, value } = fromCursor(after)
+          if (type !== VOIDED_SALE_CURSOR_TYPE)
+            throw new Error("Invalid cursor")
+          const cursorId = new Types.ObjectId(id)
+          const cursorValue = sortKey === "voidedAt" ? new Date(value) : value
+          paginationStages.push({
+            $match: {
+              $or: [
+                {
+                  [sortKey]:
+                    sortOrder === 1
+                      ? { $gt: cursorValue }
+                      : { $lt: cursorValue },
+                },
+                {
+                  [sortKey]: cursorValue,
+                  _id: sortOrder === 1 ? { $gt: cursorId } : { $lt: cursorId },
+                },
+              ],
+            },
+          })
+        }
+
+        const result = await Sale.aggregate([
+          ...baseStages,
+          ...paginationStages,
+          { $sort: { [sortKey]: sortOrder, _id: sortOrder } },
+          { $limit: first + 1 },
+          {
+            $project: {
+              saleNumber: 1,
+              registerName: 1,
+              outletName: 1,
+              amount: 1,
+              voidedAt: 1,
+              voidedByName: 1,
+            },
+          },
+        ])
+
+        const sliced = result.slice(0, first)
+        const edges = sliced.map((edge: any) => ({
+          node: edge,
+          cursor: toCursor({
+            type: VOIDED_SALE_CURSOR_TYPE,
+            id: edge._id.toString(),
+            value: edge[sortKey],
+          }),
+        }))
+
+        return {
+          total,
+          pages: Math.ceil(total / first),
+          edges,
+          pageInfo: {
+            endCursor: sliced.length
+              ? toCursor({
+                  type: VOIDED_SALE_CURSOR_TYPE,
+                  id: sliced[sliced.length - 1]._id.toString(),
+                  value: sliced[sliced.length - 1][sortKey],
+                })
+              : null,
+            hasNextPage: result.length > first,
+          },
+        }
+      } catch (error) {
+        throw error
+      }
+    },
     saleOptions: async () => {
       try {
         const sales = await Sale.find({ isActive: true })
@@ -247,8 +550,14 @@ export const saleResolver = {
               extensions: { code: "UNAUTHORIZED" },
             })
           const register = await Register.findById(input.register)
-            .select("prefix")
+            .select("prefix isOpen")
             .lean()
+          if (!register) throw new GraphQLError("Register not found")
+          if (!register.isOpen)
+            throw new GraphQLError(
+              "Register is closed. Open the register before processing sales.",
+              { extensions: { code: "REGISTER_CLOSED" } }
+            )
           const sales = await Sale.find({
             register: input.register,
           })
@@ -256,8 +565,49 @@ export const saleResolver = {
             .select("saleNumber")
             .lean()
 
+          const onAccountId = process.env.NEXT_PUBLIC_ON_ACCOUNT_ID
+          const storeCreditId = process.env.NEXT_PUBLIC_STORE_CREDIT_ID
+          const netPaymentAmount = (payment: any) =>
+            payment.amount - (payment.change || 0)
+          const onAccountTotal = input.payments
+            .filter((payment: any) => payment.method === onAccountId)
+            .reduce(
+              (sum: number, payment: any) => sum + netPaymentAmount(payment),
+              0
+            )
+          const storeCreditTotal = input.payments
+            .filter((payment: any) => payment.method === storeCreditId)
+            .reduce(
+              (sum: number, payment: any) => sum + netPaymentAmount(payment),
+              0
+            )
+
           let populatedResult
           await session.withTransaction(async () => {
+            let customer: any = null
+            if (onAccountTotal > 0 || storeCreditTotal > 0) {
+              if (!input.customer)
+                throw new GraphQLError(
+                  "A customer must be selected to use On Account or Store Credit.",
+                  { extensions: { code: "CUSTOMER_REQUIRED" } }
+                )
+              customer = await Customer.findById(input.customer)
+                .select("accountLimit storeCredit")
+                .session(session)
+                .lean()
+              if (!customer) throw new GraphQLError("Customer not found.")
+              if (onAccountTotal > customer.accountLimit.current)
+                throw new GraphQLError(
+                  "On Account amount exceeds the customer's available account limit.",
+                  { extensions: { code: "INSUFFICIENT_BALANCE" } }
+                )
+              if (storeCreditTotal > customer.storeCredit.current)
+                throw new GraphQLError(
+                  "Store Credit amount exceeds the customer's available store credit.",
+                  { extensions: { code: "INSUFFICIENT_BALANCE" } }
+                )
+            }
+
             // Generate Multiple Payments
             const payments = await Payment.insertMany(
               input.payments.map((payment: any) => ({
@@ -280,6 +630,7 @@ export const saleResolver = {
                 payment: payment._id,
               })),
               saleNumber: `${register?.prefix || "REG"}-${String(count + 1).padStart(5, "0")}`,
+              isOnAccount: onAccountTotal > 0,
               currentSalePaymentStatus: paymentStatus,
               salePaymentStatusHistory: payments.map(
                 (payment, index, array) => ({
@@ -309,6 +660,42 @@ export const saleResolver = {
               { $set: { sale: result._id } },
               { session }
             )
+
+            if (customer && onAccountTotal > 0) {
+              await Customer.updateOne(
+                { _id: customer._id },
+                {
+                  $inc: { "accountLimit.current": -onAccountTotal },
+                  $push: {
+                    "accountLimit.history": {
+                      remaining: customer.accountLimit.current - onAccountTotal,
+                      transacted: -onAccountTotal,
+                      date: new Date(),
+                    },
+                  },
+                },
+                { session }
+              )
+            }
+            if (customer && storeCreditTotal > 0) {
+              await Customer.updateOne(
+                { _id: customer._id },
+                {
+                  $inc: { "storeCredit.current": -storeCreditTotal },
+                  $push: {
+                    "storeCredit.history": {
+                      remaining:
+                        customer.storeCredit.current - storeCreditTotal,
+                      transacted: -storeCreditTotal,
+                      date: new Date(),
+                      description: `Applied to sale ${newSale.saleNumber}`,
+                    },
+                  },
+                },
+                { session }
+              )
+            }
+
             populatedResult = await Sale.findById(result._id)
               .session(session)
               .populate([

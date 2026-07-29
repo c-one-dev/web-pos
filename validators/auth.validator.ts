@@ -23,7 +23,7 @@ export const signInSchema = z
 
     const passwordMatches = await bcrypt.compare(
       args.password,
-      userExists.password,
+      userExists.password
     )
 
     if (!passwordMatches)
@@ -31,5 +31,41 @@ export const signInSchema = z
         code: "custom",
         path: ["password"],
         message: "Incorrect password.",
+      })
+  })
+
+export const switchUserSchema = z
+  .object({
+    _id: z.string().nonempty("User must be selected."),
+    pin: z.string().nonempty("PIN must not be empty."),
+  })
+  .superRefine(async (args, ctx) => {
+    const targetUser = await User.findById(args._id).select("+pin isActive")
+
+    if (!targetUser) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["_id"],
+        message: "User does not exist.",
+      })
+      return
+    }
+
+    if (!targetUser.isActive) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["_id"],
+        message: "This user is inactive.",
+      })
+      return
+    }
+
+    const pinMatches = await bcrypt.compare(args.pin, targetUser.pin)
+
+    if (!pinMatches)
+      ctx.addIssue({
+        code: "custom",
+        path: ["pin"],
+        message: "Incorrect PIN.",
       })
   })

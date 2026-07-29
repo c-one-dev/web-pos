@@ -17,6 +17,7 @@ const generateNode = (register: any) => ({
   name: register.name,
   outletName: register.outlet.name,
   prefix: register.prefix,
+  isOpen: register.isOpen,
   isActive: register.isActive,
 })
 
@@ -155,6 +156,7 @@ export const registerResolver = {
               name: 1,
               outletName: 1,
               prefix: 1,
+              isOpen: 1,
               isActive: 1,
             },
           },
@@ -278,6 +280,29 @@ export const registerResolver = {
         return {
           ok: true,
           message: "Register status updated successfully.",
+          data: generateNode(result),
+        }
+      } catch (error) {
+        throw error
+      }
+    },
+    changeRegisterOpenStatus: async (_: any, { _id }: any) => {
+      try {
+        const result = await Register.findByIdAndUpdate(
+          _id,
+          [{ $set: { isOpen: { $not: "$isOpen" } } }],
+          {
+            returnDocument: "after",
+            updatePipeline: true,
+          }
+        )
+          .populate({ path: "outlet", select: "name" })
+          .lean()
+        if (!result) throw new GraphQLError("Register not found")
+
+        return {
+          ok: true,
+          message: `Register ${result.isOpen ? "opened" : "closed"} successfully.`,
           data: generateNode(result),
         }
       } catch (error) {

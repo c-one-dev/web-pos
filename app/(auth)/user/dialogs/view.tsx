@@ -33,7 +33,6 @@ const GET_USER = gql`
       email
       username
       role
-      pin
       isActive
       createdAt
       updatedAt
@@ -69,9 +68,11 @@ export default function ViewDialog({ _id, onClose }: Props) {
           <DialogDescription>Details of the user.</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-1.5 md:grid md:grid-cols-2">
-          <div className="col-span-2 flex items-center justify-center mb-4">
-            <Avatar className="w-25 h-25">
-              <AvatarFallback className="text-5xl">{data?.user?.name?.[0]}</AvatarFallback>
+          <div className="col-span-2 mb-4 flex items-center justify-center">
+            <Avatar className="h-25 w-25">
+              <AvatarFallback className="text-5xl">
+                {data?.user?.name?.[0]}
+              </AvatarFallback>
             </Avatar>
           </div>
           <div>

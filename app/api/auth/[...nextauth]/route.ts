@@ -24,7 +24,6 @@ const SIGN_IN = gql`
   }
 `
 
-
 const handler = NextAuth({
   providers: [
     CredentialsProvider({
@@ -41,7 +40,6 @@ const handler = NextAuth({
               username: cred?.username,
               password: cred?.password,
             },
-
           })
           if (!result) throw new Error("Invalid sign in.")
           const user = (result as any).data?.signIn.user
@@ -68,9 +66,16 @@ const handler = NextAuth({
         token.mustChangePassword = user.mustChangePassword
       }
       if (trigger === "update" && session) {
-        if (session.user) token.user = session.user
         if (typeof session.mustChangePassword === "boolean")
           token.mustChangePassword = session.mustChangePassword
+        if (typeof session.name === "string") token.name = session.name
+        if (session.switchUser) {
+          token._id = session.switchUser._id
+          token.name = session.switchUser.name
+          token.role = session.switchUser.role
+          token.accessToken = session.switchUser.accessToken
+          token.mustChangePassword = session.switchUser.mustChangePassword
+        }
       }
       return token
     },

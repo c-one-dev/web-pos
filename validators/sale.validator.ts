@@ -16,10 +16,24 @@ const saleItemSchema = z
     path: ["discount"],
   })
 
+const salePaymentSchema = z
+  .object({
+    method: z.string(),
+    amount: z.number().nonnegative(),
+    change: z.number().nonnegative(),
+    note: z.string().optional().nullable(),
+    date: z.string().optional().nullable(),
+  })
+  .refine((payment) => payment.change <= payment.amount, {
+    message: "Change cannot exceed the amount tendered",
+    path: ["change"],
+  })
+
 export const saleSchema = z
   .object({
     customer: z.string().optional().nullable(),
     items: z.array(saleItemSchema),
+    payments: z.array(salePaymentSchema),
     notes: z.string().optional().nullable(),
     subTotal: z.number().nonnegative(),
     discount: z.number().nonnegative(),

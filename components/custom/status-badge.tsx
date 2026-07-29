@@ -19,6 +19,9 @@ const STATUS_VARIANTS: Record<string, BadgeVariant> = {
   // Generic active/inactive
   ACTIVE: "success",
   INACTIVE: "secondary",
+  // Register open/closed
+  OPEN: "success",
+  CLOSED: "destructive",
 }
 
 function StatusBadge({

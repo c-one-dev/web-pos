@@ -74,7 +74,13 @@ const formatCurrency = (value: number) =>
     currency: "PHP",
   }).format(value)
 
-function CustomerSummary({ form, customerId }: { form: any; customerId: string }) {
+function CustomerSummary({
+  form,
+  customerId,
+}: {
+  form: any
+  customerId: string
+}) {
   const [openCustomerCommand, setOpenCustomerCommand] = useState(false)
   const { data: optionsData } = useQuery(GET_CUSTOMER_OPTIONS, {
     fetchPolicy: "cache-and-network",
@@ -124,7 +130,12 @@ function CustomerSummary({ form, customerId }: { form: any; customerId: string }
         <div className="flex items-center justify-between border bg-white p-3">
           <span className="font-medium">Walk In</span>
           <PopoverTrigger asChild>
-            <Button variant="link" size="sm" type="button" className="h-auto p-0">
+            <Button
+              variant="link"
+              size="sm"
+              type="button"
+              className="h-auto p-0"
+            >
               <PlusCircleIcon /> Add customer
             </Button>
           </PopoverTrigger>
@@ -232,14 +243,14 @@ function Pay({
       return
     }
     const receivedAmount = state.receivedAmount + amountTendered
-    const changeAmount = receivedAmount - state.total
+    const changeAmount = Math.max(receivedAmount - state.total, 0)
     const netAmount = receivedAmount - changeAmount
     form.setFieldValue("payments", [
       ...state.payments,
       {
         method: methodId,
         amount: amountTendered,
-        change: receivedAmount - state.total > 0 ? changeAmount : 0,
+        change: changeAmount - state.changeAmount,
         date: new Date(),
         note,
       },
@@ -308,18 +319,37 @@ function Pay({
                           <XIcon
                             className="-mr-1 text-destructive hover:cursor-pointer hover:underline hover:underline-offset-2"
                             onClick={() => {
-                              const newReceivedAmount =
-                                state.receivedAmount - payment.amount
-                              const changeAmount =
-                                newReceivedAmount - state.changeAmount > 0
-                                  ? 0
-                                  : state.changeAmount - payment.amount
+                              const remainingPayments = state.payments.filter(
+                                (_: any, i: number) => i !== index
+                              )
+                              // Recompute every remaining payment's own
+                              // `change` from scratch (not just the
+                              // aggregate totals) — removing an earlier
+                              // payment can shift which payment is the one
+                              // that crosses the total, so a stale `change`
+                              // left on a remaining payment would submit
+                              // the wrong net amount to generateSale.
+                              let cumulative = 0
+                              let previousChangeAmount = 0
+                              const recalculatedPayments =
+                                remainingPayments.map((p: any) => {
+                                  cumulative += p.amount
+                                  const cumulativeChange = Math.max(
+                                    cumulative - state.total,
+                                    0
+                                  )
+                                  const paymentChange =
+                                    cumulativeChange - previousChangeAmount
+                                  previousChangeAmount = cumulativeChange
+                                  return { ...p, change: paymentChange }
+                                })
+                              const newReceivedAmount = cumulative
+                              const changeAmount = previousChangeAmount
                               const netAmount = newReceivedAmount - changeAmount
+
                               form.setFieldValue(
                                 "payments",
-                                state.payments.filter(
-                                  (_: any, i: number) => i !== index
-                                )
+                                recalculatedPayments
                               )
                               form.setFieldValue(
                                 "receivedAmount",
@@ -426,7 +456,9 @@ function Pay({
                     size="lg"
                     className="p-3 text-xl"
                     disabled={!state.customer}
-                    onClick={() => addPayment(process.env.NEXT_PUBLIC_STORE_CREDIT_ID)}
+                    onClick={() =>
+                      addPayment(process.env.NEXT_PUBLIC_STORE_CREDIT_ID)
+                    }
                   >
                     Store Credit
                   </Button>
@@ -434,7 +466,9 @@ function Pay({
                     size="lg"
                     className="p-3 text-xl"
                     disabled={!state.customer}
-                    onClick={() => addPayment(process.env.NEXT_PUBLIC_ON_ACCOUNT_ID)}
+                    onClick={() =>
+                      addPayment(process.env.NEXT_PUBLIC_ON_ACCOUNT_ID)
+                    }
                   >
                     On Account
                   </Button>

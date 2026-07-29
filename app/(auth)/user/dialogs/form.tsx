@@ -17,6 +17,7 @@ import { userSchema } from "@/validators/user.validator"
 import { toast } from "sonner"
 import { Field, FieldError, FieldLabel, FieldSet } from "@/components/ui/field"
 import { InputGroup, InputGroupInput } from "@/components/ui/input-group"
+import { PasswordInput } from "@/components/ui/password-input"
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import { Role } from "@/types/user.type"
 import {
@@ -66,7 +67,6 @@ const FETCH_USER = gql`
       email
       username
       role
-      pin
     }
   }
 `
@@ -207,7 +207,6 @@ export default function FormDialog({ _id, onClose }: Props) {
       form.setFieldValue("email", data.user.email)
       form.setFieldValue("username", data.user.username)
       form.setFieldValue("role", data.user.role)
-      form.setFieldValue("pin", data.user.pin)
     }
   }, [data, form])
 
@@ -403,19 +402,29 @@ export default function FormDialog({ _id, onClose }: Props) {
                     field.state.meta.isTouched && !field.state.meta.isValid
                   return (
                     <Field data-invalid={isInvalid}>
-                      <FieldLabel htmlFor={field.name}>Pin</FieldLabel>
-                      <InputGroup className="-my-1">
-                        <InputGroupInput
-                          placeholder="Pin"
-                          disabled={isPending}
-                          id={field.name}
-                          name={field.name}
-                          value={field.state.value}
-                          onBlur={field.handleBlur}
-                          onChange={(e) => field.handleChange(e.target.value)}
-                          aria-invalid={isInvalid}
-                        />
-                      </InputGroup>
+                      <FieldLabel htmlFor={field.name}>
+                        {isUpdate ? "New PIN" : "PIN"}
+                      </FieldLabel>
+                      <PasswordInput
+                        toggleLabel="PIN"
+                        groupClassName="-my-1"
+                        placeholder={
+                          isUpdate ? "Leave blank to keep current PIN" : "PIN"
+                        }
+                        disabled={isPending}
+                        id={field.name}
+                        name={field.name}
+                        inputMode="numeric"
+                        maxLength={4}
+                        value={field.state.value}
+                        onBlur={field.handleBlur}
+                        onChange={(e) =>
+                          field.handleChange(
+                            e.target.value.replace(/\D/g, "").slice(0, 4)
+                          )
+                        }
+                        aria-invalid={isInvalid}
+                      />
                       {isInvalid && (
                         <FieldError errors={field.state.meta.errors} />
                       )}

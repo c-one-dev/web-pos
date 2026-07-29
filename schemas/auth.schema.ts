@@ -11,5 +11,6 @@ export const authSchema = gql`
   type Mutation {
     signIn(username: String, password: String): AuthResponse
     signOut: Response
+    switchUser(_id: ID!, pin: String!): AuthResponse
   }
 `

@@ -1,7 +1,12 @@
 "use client"
 import { Button } from "@/components/ui/button"
-import { InputGroup, InputGroupInput, InputGroupAddon } from "@/components/ui/input-group"
+import {
+  InputGroup,
+  InputGroupInput,
+  InputGroupAddon,
+} from "@/components/ui/input-group"
 import { Spinner } from "@/components/ui/spinner"
+import { StatusBadge } from "@/components/custom/status-badge"
 import { useRegisterStore } from "@/hooks/use-register"
 import { gql } from "@apollo/client"
 import { useQuery } from "@apollo/client/react"
@@ -14,6 +19,7 @@ const GET_REGISTERS = gql`
     registers {
       _id
       name
+      isOpen
     }
   }
 `
@@ -29,8 +35,10 @@ export default function Page() {
   const [searchTerm, setSearchTerm] = useState("")
 
   useEffect(() => {
-    if (register) router.push(`/process/${register}`)
-  }, [register, router])
+    if (!register || loading) return
+    const remembered = registers.find((r: any) => r._id === register)
+    if (remembered?.isOpen) router.push(`/process/${register}`)
+  }, [register, registers, loading, router])
 
   const filteredRegisters = registers.filter((r: any) =>
     r.name?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -71,9 +79,11 @@ export default function Page() {
               }}
               variant="outline"
               size="lg"
+              className="justify-between"
               key={register._id}
             >
               {register.name}
+              <StatusBadge status={register.isOpen ? "OPEN" : "CLOSED"} />
             </Button>
           ))}
         </>

@@ -149,7 +149,7 @@ Eye/eye-closed toggle built on `InputGroup`. Use for all password fields — nev
 - **Responses**: all mutations return `{ ok: Boolean!, message: String!, data: ... }`.
 - **Discounts**: always stored as numbers (`Float`), never strings. `.toFixed(2)` returns a string — always wrap in `parseFloat()`.
 - **Void only**: there is no refund mutation and none should be added. `voidSale` sets `currentSaleStatus: "VOIDED"` and appends to `saleStatusHistory`.
-- **PARTIALLY_PAID**: only applicable to `ON_ACCOUNT` and `STORE_CREDIT` payment types. Implementation is pending user specification.
+- **PARTIALLY_PAID**: only applicable to `ON_ACCOUNT` and `STORE_CREDIT` payment types. `currentSalePaymentStatus` is computed the same way for every method (`checkSalesPaymentStatus` in `helpers/salesFn.ts`) — On Account/Store Credit tenders count toward "paid" immediately, same as Cash. `generateSale` deducts the net tendered amount (`amount - change`) from the customer's `accountLimit.current` / `storeCredit.current` in the same transaction as the sale, and rejects the sale (`INSUFFICIENT_BALANCE`) if it would exceed the available balance. See `TASKS.md` for what's still open (a dedicated settlement/repayment mutation).
 - **No stock management**: products have no quantity/stock fields. Do not add them.
 
 ---

@@ -5,6 +5,7 @@ export const customerSchema = gql`
     remaining: Float
     transacted: Float
     date: String
+    description: String
   }
 
   type AccountLimit {
@@ -118,6 +119,7 @@ export const customerSchema = gql`
     remaining: Float
     transacted: Float
     date: String
+    description: String
   }
 
   type CustomerLimitHistoryEdge {
@@ -168,6 +170,7 @@ export const customerSchema = gql`
   type Mutation {
     createCustomer(input: CustomerInput): Response
     adjustAccountLimit(_id: ID!, amount: Float!): Response
+    settleAccountBalance(_id: ID!, amount: Float!): Response
     adjustStoreCredit(_id: ID!, amount: Float!, description: String): Response
     updateCustomer(_id: ID!, input: CustomerInput): Response
     changeCustomerStatus(_id: ID!): Response

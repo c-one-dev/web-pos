@@ -180,6 +180,14 @@ export const userResolver = {
         throw error
       }
     },
+    activeUsers: async () => {
+      try {
+        const users = await User.find({ isActive: true }).lean()
+        return users.map(generateNode)
+      } catch (error) {
+        throw error
+      }
+    },
   },
   Mutation: {
     createUser: validate(checkSchema(userSchema))(
@@ -190,6 +198,7 @@ export const userResolver = {
             ...input,
             image: "",
             password: await bcrypt.hash(temporaryPassword, 10),
+            pin: await bcrypt.hash(input.pin, 10),
             mustChangePassword: true,
           })
 
@@ -214,9 +223,19 @@ export const userResolver = {
     updateUser: validate(checkSchema(userSchema))(
       async (_: any, { _id, input }: any) => {
         try {
-          const result = await User.findByIdAndUpdate(_id, flatten(input), {
-            returnDocument: "after",
-          }).lean()
+          const updateInput = { ...input }
+          if (updateInput.pin) {
+            updateInput.pin = await bcrypt.hash(updateInput.pin, 10)
+          } else {
+            delete updateInput.pin
+          }
+          const result = await User.findByIdAndUpdate(
+            _id,
+            flatten(updateInput),
+            {
+              returnDocument: "after",
+            }
+          ).lean()
           if (!result) throw new GraphQLError("User not found")
 
           return {

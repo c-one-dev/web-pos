@@ -67,6 +67,10 @@ const reportItems = [
     label: "Payments",
     url: "/reports/payments",
   },
+  {
+    label: "Register",
+    url: "/reports/register",
+  },
 ]
 
 const storeItems = [
@@ -117,7 +121,7 @@ export default function AppSidebar() {
           <Link
             href="/dashboard"
             className={cn(
-              "relative flex flex-1 items-center gap-2 rounded-none border border-transparent px-2.5 pt-2.5 pb-1.75 text-left text-xs font-medium outline-none transition-all hover:cursor-pointer hover:underline focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50",
+              "relative flex flex-1 items-center gap-2 rounded-none border border-transparent px-2.5 pt-2.5 pb-1.75 text-left text-xs font-medium transition-all outline-none hover:cursor-pointer hover:underline focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50",
               currentPath === "/dashboard" && "text-primary"
             )}
           >

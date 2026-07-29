@@ -31,7 +31,6 @@ const GET_USER = gql`
       email
       username
       role
-      pin
       isActive
       createdAt
       updatedAt
@@ -100,12 +99,6 @@ export default function RowViewDialog({ _id, open, setOpen, onClose }: Props) {
             <Label>Role</Label>
             <span className="block text-muted-foreground">
               {data?.user?.role}
-            </span>
-          </div>
-          <div>
-            <Label>PIN</Label>
-            <span className="block text-muted-foreground">
-              {data?.user?.pin}
             </span>
           </div>
           <div>

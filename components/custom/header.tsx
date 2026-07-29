@@ -17,6 +17,9 @@ import {
 import { Button } from "../ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar"
 import { SidebarTrigger } from "../ui/sidebar"
+import SwitchUserSheet from "./switch-user-sheet"
+import MyProfileSheet from "./my-profile-sheet"
+import ChangePasswordDialog from "./change-password-dialog"
 
 function ProfileMenu() {
   const { data: session }: any = useSession()
@@ -44,17 +47,28 @@ function ProfileMenu() {
       <DropdownMenuContent className="w-40" align="start">
         <DropdownMenuGroup>
           <DropdownMenuLabel>My Account</DropdownMenuLabel>
-          <DropdownMenuItem>Profile</DropdownMenuItem>
+          <MyProfileSheet>
+            <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+              Profile
+            </DropdownMenuItem>
+          </MyProfileSheet>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem>Switch User</DropdownMenuItem>
+          <SwitchUserSheet>
+            <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+              Switch User
+            </DropdownMenuItem>
+          </SwitchUserSheet>
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>Security</DropdownMenuSubTrigger>
             <DropdownMenuPortal>
               <DropdownMenuSubContent>
-                <DropdownMenuItem>Change Password</DropdownMenuItem>
-                <DropdownMenuItem>Change Profile</DropdownMenuItem>
+                <ChangePasswordDialog>
+                  <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                    Change Password
+                  </DropdownMenuItem>
+                </ChangePasswordDialog>
               </DropdownMenuSubContent>
             </DropdownMenuPortal>
           </DropdownMenuSub>

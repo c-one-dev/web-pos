@@ -149,6 +149,54 @@ export const saleSchema = gql`
     cursor: String
   }
 
+  # Customer Sales Table
+  type CustomerSaleConnection {
+    total: Int
+    pages: Int
+    edges: [CustomerSaleEdge]
+    pageInfo: PageInfo
+  }
+
+  type CustomerSaleNode {
+    _id: ID!
+    saleNumber: String
+    date: String
+    outletName: String
+    total: Float
+    paid: Float
+    outstanding: Float
+    currentSaleStatus: SaleStatus
+    currentSalePaymentStatus: SalePaymentStatus
+  }
+
+  type CustomerSaleEdge {
+    node: CustomerSaleNode
+    cursor: String
+  }
+
+  # Voided Sale Table (Register report -> Voided Transactions)
+  type VoidedSaleConnection {
+    total: Int
+    pages: Int
+    edges: [VoidedSaleEdge]
+    pageInfo: PageInfo
+  }
+
+  type VoidedSaleNode {
+    _id: ID!
+    saleNumber: String
+    registerName: String
+    outletName: String
+    amount: Float
+    voidedAt: String
+    voidedByName: String
+  }
+
+  type VoidedSaleEdge {
+    node: VoidedSaleNode
+    cursor: String
+  }
+
   type Query {
     sale(_id: ID!): Sale
     saleHistoryTable(
@@ -158,6 +206,19 @@ export const saleSchema = gql`
       filter: [Filter]
       sort: Sort
     ): SaleHistoryConnection
+    customerSalesTable(
+      customer: ID!
+      first: Int
+      after: String
+    ): CustomerSaleConnection
+    voidedSaleTable(
+      first: Int
+      after: String
+      search: String
+      start: String
+      end: String
+      sort: Sort
+    ): VoidedSaleConnection
     saleOptions: [Option]
   }
 

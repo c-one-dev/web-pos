@@ -16,7 +16,6 @@ export const userSchema = gql`
     email: String
     username: String
     role: Role
-    pin: String
     mustChangePassword: Boolean
     isActive: Boolean
     createdAt: String
@@ -64,6 +63,7 @@ export const userSchema = gql`
       sort: Sort
     ): UserConnection
     userOptions: [Option]
+    activeUsers: [UserNode]
   }
 
   type Mutation {

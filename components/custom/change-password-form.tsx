@@ -38,7 +38,17 @@ const changePasswordSchema = z
     path: ["confirmPassword"],
   })
 
-export default function ChangePasswordForm() {
+type Props = {
+  heading?: string
+  description?: string
+  onSuccess?: () => void
+}
+
+export default function ChangePasswordForm({
+  heading = "Set a new password",
+  description = "You're signed in with a temporary password. Choose a new one to continue.",
+  onSuccess,
+}: Props) {
   const [isPending, startTransition] = useTransition()
   const { update } = useSession()
   const [changePassword] = useMutation(CHANGE_PASSWORD)
@@ -64,6 +74,8 @@ export default function ChangePasswordForm() {
           if (result.data.changePassword.ok) {
             toast.success(result.data.changePassword.message)
             await update({ mustChangePassword: false })
+            form.reset()
+            onSuccess?.()
           }
         } catch (error: any) {
           toast.error(error.graphQLErrors?.[0]?.message ?? error.message)
@@ -74,12 +86,9 @@ export default function ChangePasswordForm() {
   return (
     <div className="w-full max-w-sm space-y-2">
       <div className="flex flex-col">
-        <span className="font-heading text-sm font-medium">
-          Set a new password
-        </span>
+        <span className="font-heading text-sm font-medium">{heading}</span>
         <span className="text-xs/relaxed text-muted-foreground">
-          You&apos;re signed in with a temporary password. Choose a new one to
-          continue.
+          {description}
         </span>
       </div>
       <form
@@ -96,9 +105,7 @@ export default function ChangePasswordForm() {
                 field.state.meta.isTouched && !field.state.meta.isValid
               return (
                 <Field data-invalid={isInvalid}>
-                  <FieldLabel htmlFor={field.name}>
-                    Current (temporary) password
-                  </FieldLabel>
+                  <FieldLabel htmlFor={field.name}>Current password</FieldLabel>
                   <PasswordInput
                     id={field.name}
                     name={field.name}

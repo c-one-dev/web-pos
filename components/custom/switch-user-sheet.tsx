@@ -1,0 +1,193 @@
+"use client"
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Button } from "@/components/ui/button"
+import PinPad from "./pin-pad"
+import { useQuery } from "@apollo/client/react"
+import gql from "graphql-tag"
+import { useSession } from "next-auth/react"
+import { ReactNode, useState } from "react"
+import { toast } from "sonner"
+import { useSwitchUser } from "@/hooks/use-switch-user"
+
+const GET_CURRENT_USER = gql`
+  query CurrentUserProfile($_id: ID!) {
+    user(_id: $_id) {
+      _id
+      image
+      name
+      surname
+      displayName
+      email
+      username
+      role
+    }
+  }
+`
+
+const GET_ACTIVE_USERS = gql`
+  query ActiveUsersForSwitch {
+    activeUsers {
+      _id
+      image
+      fullName
+      role
+    }
+  }
+`
+
+type Props = {
+  children: ReactNode
+}
+
+export default function SwitchUserSheet({ children }: Props) {
+  const [open, setOpen] = useState(false)
+  const [selected, setSelected] = useState<{
+    _id: string
+    fullName: string
+  } | null>(null)
+  const [pin, setPin] = useState("")
+  const { data: session }: any = useSession()
+  const currentUserId = session?.user?._id
+  const { switchToUser, loading: switching } = useSwitchUser()
+
+  const { data: profileData } = useQuery(GET_CURRENT_USER, {
+    variables: { _id: currentUserId },
+    fetchPolicy: "cache-and-network",
+    skip: !currentUserId || !open,
+  })
+  const { data: usersData, loading: usersLoading } = useQuery(
+    GET_ACTIVE_USERS,
+    {
+      fetchPolicy: "cache-and-network",
+      skip: !open,
+    }
+  )
+
+  const currentUser = (profileData as any)?.user
+  const otherUsers = ((usersData as any)?.activeUsers || []).filter(
+    (u: any) => u._id !== currentUserId
+  )
+
+  const reset = () => {
+    setSelected(null)
+    setPin("")
+  }
+
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next)
+    if (!next) reset()
+  }
+
+  const handleComplete = async (enteredPin: string) => {
+    if (!selected) return
+    const result = await switchToUser(selected._id, enteredPin)
+    if (result.ok) {
+      toast.success(result.message)
+      setOpen(false)
+      reset()
+    } else {
+      toast.error(result.message)
+      setPin("")
+    }
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={handleOpenChange}>
+      <SheetTrigger asChild>{children}</SheetTrigger>
+      <SheetContent className="w-full sm:max-w-none lg:min-w-275">
+        <SheetHeader>
+          <SheetTitle className="text-left text-xl font-bold">
+            Switch User
+          </SheetTitle>
+        </SheetHeader>
+        <div className="grid grid-cols-1 gap-6 px-4 sm:grid-cols-[260px_1fr]">
+          <div className="flex flex-col items-center gap-4 text-center">
+            <div>
+              <span className="block font-heading text-lg font-bold text-primary">
+                {currentUser
+                  ? `${currentUser.name} ${currentUser.surname}`
+                  : session?.user?.name}
+              </span>
+              <span className="text-xs text-muted-foreground capitalize">
+                {(currentUser?.role || session?.user?.role || "").toLowerCase()}
+              </span>
+            </div>
+            <Avatar className="size-40">
+              <AvatarImage src={currentUser?.image || undefined} />
+              <AvatarFallback className="text-4xl">
+                {currentUser?.name?.[0]}
+                {currentUser?.surname?.[0]}
+              </AvatarFallback>
+            </Avatar>
+            <div className="space-y-0.5 text-xs text-muted-foreground">
+              {currentUser?.username && <div>@{currentUser.username}</div>}
+              {currentUser?.email && <div>{currentUser.email}</div>}
+            </div>
+          </div>
+
+          <div>
+            {!selected ? (
+              usersLoading ? (
+                <span className="text-sm text-muted-foreground">Loading…</span>
+              ) : otherUsers.length === 0 ? (
+                <span className="text-sm text-muted-foreground">
+                  No other active users found.
+                </span>
+              ) : (
+                <div className="grid grid-cols-3 gap-x-6 gap-y-8 sm:grid-cols-4">
+                  {otherUsers.map((user: any) => (
+                    <button
+                      key={user._id}
+                      type="button"
+                      onClick={() =>
+                        setSelected({ _id: user._id, fullName: user.fullName })
+                      }
+                      className="flex flex-col items-center gap-2 transition-opacity hover:opacity-75"
+                    >
+                      <Avatar className="size-16">
+                        <AvatarImage src={user.image || undefined} />
+                        <AvatarFallback>{user.fullName?.[0]}</AvatarFallback>
+                      </Avatar>
+                      <span className="text-center text-sm font-medium">
+                        {user.fullName}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )
+            ) : (
+              <div className="flex flex-col items-center gap-4 py-6">
+                <div className="flex w-full items-center justify-between">
+                  <span className="font-medium">
+                    Enter PIN for {selected.fullName}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={reset}
+                    disabled={switching}
+                  >
+                    Back to list
+                  </Button>
+                </div>
+                <PinPad
+                  value={pin}
+                  onChange={setPin}
+                  onComplete={handleComplete}
+                  disabled={switching}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  )
+}

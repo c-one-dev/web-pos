@@ -4,90 +4,43 @@ This file tracks known pending work, incomplete features, and deferred decisions
 
 ---
 
-## Priority: High
-
-### 1. Void sale — wire up the UI button
-
-**What's done:** `voidSale` mutation exists in the schema and resolver. It atomically sets `currentSaleStatus: "VOIDED"` and appends to `saleStatusHistory`.
-
-**What's missing:** No button exists yet in the sale history row view. The file to edit is:
-
-`app/(auth)/sale-history/_dialogs/row-view.tsx`
-
-The mutation to call:
-```graphql
-mutation VoidSale($_id: ID!) {
-  voidSale(_id: $_id) {
-    ok
-    message
-    data { _id saleNumber currentSaleStatus }
-  }
-}
-```
-
-Guard the button: only show it when `currentSaleStatus !== "VOIDED"`. Confirm with a dialog before firing (a voided sale cannot be un-voided). Refetch the sale history table after success.
-
----
-
-### 2. Account limit & store credit checkout logic
-
-**Context from the owner:** `PARTIALLY_PAID` is only applicable for `ON_ACCOUNT` and `STORE_CREDIT` payment types. Full checkout logic for these two payment methods has not yet been specified by the owner. Do not implement anything here until the owner elaborates on:
-
-- When a sale becomes `PARTIALLY_PAID` vs `UNPAID`
-- How partial payments reduce the customer's account limit or store credit balance
-- Whether multiple payment methods can be mixed (e.g., part cash + part account)
-- How the remaining balance is tracked and later settled
-
-Current env vars for payment method IDs:
-- `NEXT_PUBLIC_ON_ACCOUNT_ID`
-- `NEXT_PUBLIC_STORE_CREDIT_ID`
-
----
-
 ## Priority: Medium
 
-### 3. Dashboard — implement actual content
+### 1. `updateUser` has no ownership/role check
 
-`app/(auth)/dashboard/page.tsx` is currently a stub. Suggested content: today's sales total, transaction count, top products, recent sales. All data is available via existing resolvers.
-
-### 4. Register open/close flow
-
-The register model (`models/register.model.ts`) and resolver (`resolvers/register.resolver.ts`) exist but the open/close flow has not been validated end-to-end. The register must be open for a cashier to process sales. Verify that:
-- A cashier cannot generate a sale against a closed register
-- The open/close mutations update state correctly
-- The process page (`app/(auth)/process/page.tsx`) shows an appropriate state when the register is closed
-
-### 5. Payment removal formula
-
-When a payment is removed from a sale during checkout, verify the subtotal/total recalculation formula is correct. This was flagged during the business logic audit but not yet investigated.
+`updateUser` (`resolvers/user.resolver.ts`) will update **any** user by `_id` as long as the caller has a valid session — there's no check that the caller is either an admin or updating their own record. This was newly exercised by the "My Profile" self-service editor (`components/custom/my-profile-sheet.tsx`), which relies on the caller only ever passing their own `_id` from the client — nothing stops a modified request from passing someone else's `_id`, or (more importantly) a non-admin escalating their own `role` if a client ever sent that field. The client-side profile editor deliberately never exposes `role` as editable and always re-sends the caller's existing role unchanged, but that's a client-side convention, not a server-side guarantee. Worth a proper fix: either a separate `updateMyProfile(input)` mutation that derives `_id` from `ctx.session` server-side and strips `role`/`pin` escalation risk, or a role check in `updateUser` itself.
 
 ---
 
 ## Priority: Low / Backlog
 
-### 6. Test coverage
+### 2. Test coverage
 
 There are zero automated tests in this project. If you add tests, prefer integration tests hitting a real MongoDB instance (not mocks) — the owner's past experience showed mock/prod divergence masked a real migration failure.
 
-### 7. Database indexes
+### 3. Database indexes
 
 Frequently-queried fields (e.g., `saleNumber`, `customerName`, `currentSaleStatus`, `date` on the Sale collection) should have MongoDB indexes. Add them in the model files using Mongoose's `schema.index()`.
 
-### 8. Pagination edge case — `filteredEdges` deduplication bug
+### 4. Pagination edge case — `filteredEdges` deduplication bug
 
 In `app/(auth)/sale-history/page.tsx` (and likely other table pages), the `fetchMore` `updateQuery` builds a `cursorSet` from both old and new edges, then filters against that set. This logic always keeps all edges — the filter is a no-op since every cursor in both arrays is in the union set. The intent was deduplication; fix by filtering edges whose cursor appears more than once.
 
-### 9. `eslint-disable` comments audit
+### 5. `eslint-disable` comments audit
 
 Several files have `// eslint-disable-next-line react-hooks/set-state-in-render` and similar suppression comments left from when the linter rules were first applied. Review whether those usages are actually safe or should be refactored.
 
----
+### 6. Payment method buttons default to `type="submit"`
 
-## Deferred / On hold
+In `app/(auth)/process/[id]/_dialogs/pay.tsx`, the Cash/On Account/Store Credit tender buttons don't set `type="button"`, so they're native submit buttons. If one of them is ever rendered inside `<form id="sale-form">`'s own DOM subtree (rather than the portalled Sheet), clicking it would submit the sale prematurely instead of just calling `addPayment`. Add `type="button"` defensively.
 
-### Account limit & store credit payment handling
+### 7. Recommendation — Open Register modal hidden, and opening float always 0
 
-See item #2 above. Do not implement until the owner provides full specification.
+Per the owner's request, opening a register now happens directly from Process Sale (`app/(auth)/process/[id]/page.tsx`'s closed-register screen): clicking "Open Register" there calls `openRegisterSession` immediately with `openingFloat: 0` — **no modal, no float input**. `app/(auth)/cash-register/[id]/page.tsx` no longer offers an Open action at all; it just shows "this register is currently closed" when there's no active session.
+
+The `OpenRegisterDialog` component (`components/custom/open-register-dialog.tsx`, opening-float input in a confirm dialog) is currently **unused** by any page — kept only in case this decision is revisited.
+
+**Recommendation:** if it turns out the opening float needs to be a real, entered value again (e.g. for cash-drawer accuracy — right now every session starts with `openingFloat: 0` and whatever cash movements happen have to be added manually via Cash In on the Cash Register page), re-wire `OpenRegisterDialog` into either page instead of the direct-call `handleOpenRegister` in `process/[id]/page.tsx`.
 
 ---
 
@@ -103,7 +56,7 @@ See item #2 above. Do not implement until the owner provides full specification.
 - [x] Discount > price guard — Zod `.refine()` cross-field check
 - [x] Status toggle race condition — atomic MongoDB pipeline update with `updatePipeline: true`
 - [x] `generateSale` wrapped in MongoDB transaction (`resolvers/sale.resolver.ts`)
-- [x] `voidSale` mutation — schema + resolver
+- [x] `voidSale` mutation — schema + resolver, wired to a confirm-gated Void button in the sale history row view, with the sale history table refetched on success
 - [x] Forced password change on first login (`mustChangePassword` flag)
 - [x] `PasswordInput` component with show/hide toggle
 - [x] `StatusBadge` reusable component with semantic color variants
@@ -111,3 +64,65 @@ See item #2 above. Do not implement until the owner provides full specification.
 - [x] Date range presets in `ColumnFilter` (Today / This Week / Last 7 Days / This Month / Last 30 Days)
 - [x] Payment status filter with `SELECT` type in sale history table
 - [x] `.env.example` updated with generation instructions
+- [x] Account limit & store credit checkout logic (`resolvers/sale.resolver.ts`, `validators/sale.validator.ts`) — decisions confirmed with the owner:
+  - On Account / Store Credit tenders count toward `currentSalePaymentStatus` the same as Cash (no special-casing)
+  - `generateSale` deducts the net tendered amount (`amount - change`) from `accountLimit.current` / `storeCredit.current` in the same MongoDB transaction as the sale, with a history entry pushed to each
+  - The sale is rejected (`INSUFFICIENT_BALANCE`) if a payment would exceed the customer's available account limit or store credit; rejected (`CUSTOMER_REQUIRED`) if no customer is selected
+  - Mixed payment methods in one sale remain allowed, unchanged
+  - `payments` array is now validated by `saleSchema` (nonnegative amounts, change cannot exceed amount tendered)
+  - Not covered at the time: a dedicated settlement/repayment mutation for paying down an On Account balance — since built, see the completed `settleAccountBalance` entry below
+- [x] Dashboard content (`app/(auth)/dashboard/page.tsx`, `resolvers/dashboard.resolver.ts`, `schemas/dashboard.schema.ts`) — turned out to already be fully built (this list item was stale). Verified end-to-end: stat cards (sales, transactions, avg. sale value, new customers), date range picker with presets, and Sales/Product types/Days/Time/Team tabs all render correct data and correctly exclude voided sales from totals.
+- [x] Sign-in form leaking credentials into the URL on a native-fallback submission (`components/custom/login-page.tsx`) — added explicit `method="post"` so a native form submit (e.g. during a slow first Turbopack compile, before React hydrates) posts credentials in the body instead of the URL/query string/server logs.
+- [x] Register open/close flow — first pass built a simple `isOpen` toggle; the owner then shared a reference POS screenshot and asked for the full cash-reconciliation version, which replaced it. Turned out `isOpen` existed on the model/schema but nothing read or wrote it, and `app/(auth)/cash-register/page.tsx` was a bare stub. Now a full register-session feature:
+  - New `RegisterSession` model/schema/resolver (`models/registerSession.model.ts`, `schemas/registerSession.schema.ts`, `resolvers/registerSession.resolver.ts`) — a register can have at most one `OPEN` session; opening requires an opening cash float, closing requires counted amounts per tender and produces a permanent frozen `tally` snapshot (`expected`/`counted`/`difference`)
+  - Payment Tally deliberately excludes On Account (a receivable, never physically counted) — it's reported separately as "On account sales" in the summary; includes the register's configured tenders plus Store Credit
+  - No Refunds/Net receipts/Tax Summary panels from the reference screenshot — this app has no refund or tax concept, so those would've been fake zeros
+  - `changeRegisterOpenStatus` (simple toggle) mutation from the first pass is superseded but left in place (harmless, unused by the UI now)
+  - `generateSale` still rejects (`REGISTER_CLOSED`) if the register's `isOpen` is false, kept in sync by `openRegisterSession`/`closeRegisterSession`
+  - `app/(auth)/cash-register/page.tsx` is now a register list that links to `app/(auth)/cash-register/[id]/page.tsx`, the full reconciliation screen (open float entry, live Payment Tally with editable Counted column, Cash In/Out log with an IN/OUT dialog, Sales Summary, Close Register confirmation)
+  - Bundled fix: `isOnAccount` on `Sale` was documented (`docs/resolvers.md`) as never being set by `generateSale` — now set correctly (`onAccountTotal > 0`), since the on-account aggregation was already available from the earlier checkout-logic work
+  - Verified end-to-end in the browser: opened a register with a float, processed a Cash + an On Account sale and confirmed the live tally/summary reflected both correctly (On Account excluded from tally rows), added a cash-in and cash-out movement, closed with an intentionally-wrong Cash count and confirmed the frozen tally recorded the correct difference, confirmed `generateSale` is rejected again post-close
+  - Found and fixed two real bugs while verifying: (1) the Payment Tally initially included On Account because it happened to be in this test register's configured `paymentMethods` — now explicitly filtered out regardless; (2) a GraphQL query for `cashMovements.by` was missing the `_id` field, which made Apollo Client's cache normalization throw and silently kill the whole query (rendered as "register closed" even when open) — same root-cause class as a missing key field, worth remembering when adding new nested-object queries
+  - Not covered: a "past sessions" browsing/history UI (data is saved and queryable via `registerSession(_id)`, just no list page yet); full register CRUD (create/edit name, outlet, prefix, payment methods, schedule) still has no UI form despite the resolver mutations existing
+  - **Follow-up UX pivot (same session):** opening a register moved from the Cash Register page to Process Sale — the register picker (`app/(auth)/process/page.tsx`) no longer disables closed registers, and `app/(auth)/process/[id]/page.tsx`'s closed-register screen shows "Your Cash Register is Currently Closed" with an Open Register button that calls `openRegisterSession` directly with `openingFloat: 0` — no modal, no float input, per the owner's explicit ask. `app/(auth)/cash-register/[id]/page.tsx` no longer offers opening at all (see backlog item #8, including the now-unused `OpenRegisterDialog` component kept for a possible future revert). The Cash Register list page (`app/(auth)/cash-register/page.tsx`) now auto-redirects to whichever register is active in `useRegisterStore` (the same store Process Sale already used to remember the picked register), skipping the list entirely when one is active — mirroring the existing auto-redirect pattern already in `process/page.tsx`.
+  - **Second follow-up (same session):** a slide-in register picker (`app/(auth)/process/[id]/_dialogs/select-register.tsx`, a `Sheet` triggered by clicking the outlet/register breadcrumb) lets a cashier switch registers without leaving Process Sale — shows all registers grouped by outlet with OPEN/CLOSED badges, matching a reference POS screenshot the owner shared. This surfaced a gap: `app/(auth)/process/page.tsx`'s pre-existing auto-redirect (jump straight to the last-used register from `useRegisterStore`, skipping the list) fired unconditionally, even when that remembered register had since been closed — hiding the existence of _other_ registers from the user. Fixed: the auto-redirect now only fires if the remembered register is still `isOpen`; if it's closed (or gone), the full list renders instead so the user sees every register's status. A _deliberate_ click on a closed register (from the list or the new slide-in picker) is unaffected — it still goes to that register's page and shows the direct Open Register action.
+- [x] Switch User (PIN-based) + PIN storage security fix — the owner shared a reference POS "Switch user" panel and asked for the equivalent. Investigating what "switching" should require turned up a real, pre-existing security issue: `User.pin` (`models/user.model.ts`) was stored in **plaintext**, had no `select: false`, and `app/(auth)/user/dialogs/form.tsx` actually fetched and pre-filled a user's existing plaintext PIN into the edit form. Fixed alongside the new feature, per the owner's confirmation:
+  - `models/user.model.ts`: `pin` now `select: false`, mirroring `password`
+  - `resolvers/user.resolver.ts`: `createUser`/`updateUser` now bcrypt-hash `pin` (update leaves it untouched if left blank, matching how passwords are never silently overwritten); added `activeUsers` query (reuses the existing `UserNode` shape) for the switch grid
+  - `schemas/user.schema.ts`: removed `pin` from the readable `User` type entirely (still settable via `UserInput`)
+  - `app/(auth)/user/dialogs/form.tsx`: no longer fetches or pre-fills the existing PIN; relabeled "New PIN" / "Leave blank to keep current PIN" on update, required on create
+  - Ran a one-time migration (ad hoc script, not checked in) to bcrypt-hash the plaintext PINs already in the database, preserving their existing values so nobody's PIN silently changed
+  - New `switchUser(_id, pin)` mutation (`resolvers/auth.resolver.ts`, `schemas/auth.schema.ts`) mirrors `signIn`'s `AuthResponse` shape; `validators/auth.validator.ts`'s `switchUserSchema` mirrors `signInSchema`'s existing `.superRefine` pattern (looks up the target user, checks `isActive`, bcrypt-compares the PIN)
+  - `app/api/auth/[...nextauth]/route.ts`'s `jwt` callback gained a `session.switchUser` branch (alongside the existing `mustChangePassword` update branch) that overwrites `token._id/name/role/accessToken/mustChangePassword` — same `session.update()` mechanism `change-password-form.tsx` already used, new payload shape. Replaced a dead `if (session.user) token.user = session.user` branch that never actually projected anywhere.
+  - New `components/custom/switch-user-sheet.tsx`: a right-side `Sheet` with the current user (avatar, name, role, username/email) on the left and a grid of other active users on the right; clicking one shows an inline 4-digit `InputOTP` PIN step, then calls `switchUser`, `session.update(...)`, and `useApolloClient().resetStore()` (so no stale per-user cached query results survive the switch) — wired into the previously-dead "Switch User" item in `components/custom/header.tsx`
+  - Verified end-to-end: wrong PIN rejected with a clear error and stays on that user's PIN step; correct PIN switches instantly (header updates with no page reload); confirmed via a fresh mutation (`openRegisterSession`) that server-side actions now genuinely attribute to the switched-to user, not just the client display
+  - Found and fixed a real bug while verifying: `.select("+pin isActive")` only behaves correctly once the schema actually has `select: false` on `pin` — the long-running dev server had the old (pre-fix) `User` model cached in Mongoose's process-wide model registry, so the fix silently didn't take effect until the dev server was restarted. Same root cause as this project's earlier `.next` cache incidents — Mongoose model _schema option_ changes on an already-loaded model don't hot-reload; a full process restart is required.
+- [x] Switch User visual restyle + numeric PIN keypad + idle auto-lock — the owner shared three more reference POS screenshots: a wider "Switch user" panel layout, a centered "who's there?" idle-lock modal, and a visual on-screen numeric keypad for PIN entry (replacing the `InputOTP` box-input approach from the previous item).
+  - `components/custom/pin-pad.tsx`: new reusable numeric keypad (4 square digit slots showing filled/empty + active-slot ring, circular 1-9/0 buttons, Clear, `onComplete` callback fired the instant the last digit is entered) — used everywhere PIN entry happens instead of `InputOTP`
+  - `hooks/use-switch-user.ts`: extracted the `switchUser` mutation + `session.update()` + `resetStore()` sequence out of `switch-user-sheet.tsx` into a shared hook, so it can be reused by the new idle lock screen without duplicating logic
+  - `components/custom/switch-user-sheet.tsx`: restyled to match the reference more closely (wider sheet, 4-column user grid, larger avatar) and rewired to use `PinPad` + `useSwitchUser`
+  - `hooks/use-idle-timer.ts`: new hook tracking `mousemove`/`mousedown`/`keydown`/`touchstart`/`scroll` activity; flips `idle` true after 10 minutes of no activity, resettable
+  - `components/custom/layouts/idle-lock-screen.tsx`: new full-screen dimmed overlay (`fixed inset-0`) shown when idle — a "Who's there?" grid of all active users (via the existing `activeUsers` query, this grid _does_ include the current user, unlike the Switch User sheet's grid) leading to the same `PinPad` PIN step; on success calls `onUnlock` (resets the idle timer) so the overlay disappears. The underlying page stays mounted the whole time (children render behind the overlay, never unmounted), so in-progress work like an unsaved sale in Process Sale survives a lock/unlock cycle.
+  - `app/(auth)/layout.tsx`: wraps everything in `IdleLockScreen`, outside `RequirePasswordChange`, so idle-lock applies session-wide
+  - Verified end-to-end in the browser with the timeout temporarily shortened to 5s for testing (reverted to the real 10-minute value before finishing): confirmed the lock screen auto-appears after inactivity with the page correctly dimmed/preserved behind it, PinPad's per-digit visual state is correct, and a full 4-digit PIN entry successfully calls `switchUser` and unlocks (header updates to the newly-selected user, overlay disappears)
+- [x] Wired up "Profile", "Change Password", and "Change Profile" in the header's account dropdown — the owner reported clicking any of the three did nothing; they turned out to be placeholder `<DropdownMenuItem>`s with no handler at all, left over from an earlier pass.
+  - Merged "Profile" and "Change Profile" into a single "My Profile" sheet (`components/custom/my-profile-sheet.tsx`) — view + edit your own `name`/`surname`/`displayName`/`email`/`username`, plus an optional "New PIN" field (leave blank to keep current). Reuses the existing `user(_id)` query and `updateUser` mutation; `role` is fetched and sent back unchanged rather than exposed as an editable field, since self-service role escalation would be a real security hole (`updateUser` has no server-side role check today — worth hardening separately, see below).
+  - `components/custom/change-password-dialog.tsx`: thin `Dialog` wrapper around the existing `change-password-form.tsx`, which was previously only reachable via the forced first-login gate. Extracted `heading`/`description`/`onSuccess` as props (defaults unchanged, so the forced-flow usage in `require-password-change.tsx` is untouched) so the same form/mutation can be reused for a voluntary password change. Also fixed a label that only made sense in the forced-flow context ("Current (temporary) password" → "Current password").
+  - `app/api/auth/[...nextauth]/route.ts`'s `jwt` callback gained a plain `session.name` branch (alongside the existing `mustChangePassword`/`switchUser` branches) so editing your own name in "My Profile" updates the header immediately via `session.update({ name })`, without needing a full re-login.
+  - Not covered / flagged for later: `updateUser` has no authorization check tying the mutated `_id` to the caller's own session — any logged-in user could technically call it with someone else's `_id` today. Out of scope for this pass (would need a broader look at mutation-level authorization), but worth a dedicated fix.
+- [x] New "Register" report (`app/(auth)/reports/register/page.tsx`, added to the Reporting sidebar accordion) — the owner shared a reference POS screenshot showing a Register report with 4 tabs (Shift Report, Drawer Opened Without Sale, Voided Transactions, Float In/Out). Scoped down to 2 tabs per the owner's choice; the other 2 remain unbuilt.
+  - **Shift Report tab**: new `registerSessionTable(first, after, search, start, end, includeDeleted, sort)` query (`schemas/registerSession.schema.ts`, `resolvers/registerSession.resolver.ts`) — lists **closed** register sessions only (tally/expected/actual/difference are only meaningful once a shift is closed), joined through `register → outlet` for display, with a global date-range picker (same presets as the Payments report), a register/outlet text search, and an "Include deleted" checkbox that toggles whether sessions from deactivated (`isActive: false`) registers are included. Expected/Actual/Difference are summed across each session's per-payment-method `tally` array (the same frozen snapshot already written by `closeRegisterSession`) — no new calculation logic, just aggregation of existing data.
+  - Clicking a row opens a new read-only `ShiftDetailDrawer` (`app/(auth)/reports/register/_dialogs/shift-detail.tsx`) built on the pre-existing `registerSession(_id)` query — shows opened/closed by + timestamps, opening float, the full per-payment-type tally table, and the cash-in/cash-out log. No edit capability (shift is already closed and immutable).
+  - **Voided Transactions tab**: new `voidedSaleTable(first, after, search, start, end, sort)` query (`schemas/sale.schema.ts`, `resolvers/sale.resolver.ts`) — lists sales with `currentSaleStatus: VOIDED`, joined through `register → outlet`, with the voiding user/timestamp pulled from the last entry of `saleStatusHistory` (void is always terminal, so the last entry is always the void action). Row click reuses the existing sale-history detail dialog (`SaleRowViewDialog`) exactly like the earlier customer-sales drill-down — no new detail UI needed.
+  - Not covered (owner's explicit choice, not an oversight): "Drawer Opened Without Sale" (would need new logic to detect a closed shift with zero linked sales) and "Float In/Out" (a flat cash-movement log across all registers) — both left for a future pass if wanted.
+  - Verified end-to-end in the browser: both tabs render real data (11 closed shifts, 8 voided sales in the last 7 days), pagination/search/date-range all wired correctly, and both row-click drawers (`ShiftDetailDrawer`, reused `SaleRowViewDialog`) open with correct data.
+- [x] Payment removal formula (`app/(auth)/process/[id]/_dialogs/pay.tsx`) — investigated and found genuinely broken, in two places:
+  - `addPayment`'s `changeAmount` was `receivedAmount - state.total`, unfloored — while a sale is only partially tendered (e.g. ₱60 of a ₱100 total), this goes negative (`-40`), which then made `netAmount = receivedAmount - changeAmount` compute to `100` (the full total) instead of the actual `60` received so far. Fixed by flooring at zero: `Math.max(receivedAmount - state.total, 0)`.
+  - The payment-removal `onClick` handler only recomputed the three aggregate fields (`receivedAmount`/`changeAmount`/`netAmount`), reusing the possibly-already-wrong `state.changeAmount`, and never touched the `change` value stored on each _remaining_ payment. Since only one payment is ever supposed to carry the "change" (whichever one crosses the total), removing an earlier payment in a multi-tender sale could leave a stale nonzero `change` on a payment that no longer causes an overpayment — and that `change` is what feeds `netPaymentAmount` (`resolvers/sale.resolver.ts`) for on-account/store-credit deduction math. Fixed by fully recomputing the remaining payments array from scratch on every removal: walk the remaining payments in order, track cumulative total, and assign each payment only the incremental `change` delta at the point it crosses the total (mirroring exactly how `addPayment` would have assigned it).
+  - Verified with a standalone script (not the browser — the dev session's login had expired and no credentials were available) that directly reimplemented both formulas and asserted against 5 scenarios: partial payment, exact two-payment completion, overpayment then removing the only payment, removing a non-last payment from a 3-payment overpaid sale (the specific stale-change bug), and removing a payment that leaves the sale still overpaid. All 20 assertions passed.
+- [x] Account settlement mutation — added a dedicated `settleAccountBalance(_id, amount)` mutation for recording an On Account repayment, separate from `adjustAccountLimit` (which raises `max`). `settleAccountBalance` only `$inc`s `accountLimit.current`, never touches `max`.
+  - `validators/customer.validator.ts`'s `settleAccountBalanceSchema` uses the same async `.superRefine` DB-lookup pattern as `signInSchema`: fetches the customer, computes `outstanding = max - current`, and rejects (`"Settlement amount cannot exceed the outstanding balance."`) if the submitted amount would overpay it.
+  - `resolvers/customer.resolver.ts`: `$inc`s `accountLimit.current` and `$push`es a history entry tagged with a new `description: "Account settlement"` field (added to `AccountLimitHistoryItem` on both the Mongoose schema and GraphQL type, alongside the pre-existing untagged entries from `adjustAccountLimit`, which still push `description: null`).
+  - New `app/(auth)/reports/customers/dialogs/settle-balance.tsx` dialog, added next to the existing `AdjustLimitDialog` in the Account Limit drawer's footer (`view-limit.tsx`) — shows the customer's current outstanding balance and a single amount field. The history table there also gained a "Note" column showing each entry's `description` (or `-` if none).
+  - Verified end-to-end in the browser: temporarily set a test customer's `accountLimit.current` below `max` via direct DB update to create an outstanding balance, confirmed the mutation rejects an amount exceeding it (`Settlement amount cannot exceed the outstanding balance.`), then confirmed a valid settlement succeeds — `current` increases by the settled amount, `max` is unchanged, the history table shows the new entry with the "Account settlement" note, and the drawer's displayed "Remaining" updates immediately via Apollo's `refetchQueries`. Reverted the test customer's data back to its original state afterward.
+  - Hit and fixed an unrelated environment issue while verifying: the dev server's Turbopack cache had been corrupted by an earlier Windows file-lock crash (`TurbopackInternalError: ... os error 32`), which made every page (including this one) 404 at the router level even though the routes existed on disk. Same root-cause class as this project's other `.next`-cache incidents — clearing `.next` and restarting the dev server resolved it; not a bug in this feature's code.

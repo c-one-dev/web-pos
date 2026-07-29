@@ -14,7 +14,7 @@ const CURSOR_TYPE = "product_type"
 const generateNode = (productType: any) => ({
   _id: productType._id,
   name: productType.name,
-  parentName: productType.parent.name,
+  parentName: productType.parent?.name || null,
   isActive: productType.isActive,
 })
 

@@ -15,7 +15,7 @@ const User = new Schema<IUser>(
       enum: Object.values(Role),
       required: true,
     },
-    pin: { type: String, required: true },
+    pin: { type: String, required: true, select: false },
     mustChangePassword: { type: Boolean, default: true },
     isActive: { type: Boolean, default: true },
   },

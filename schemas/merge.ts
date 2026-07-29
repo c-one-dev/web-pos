@@ -4,6 +4,7 @@ import { sharedSchema } from "./shared.schema"
 import { userSchema } from "./user.schema"
 import { outletSchema } from "./outlet.schema"
 import { registerSchema } from "./register.schema"
+import { registerSessionSchema } from "./registerSession.schema"
 import { brandSchema } from "./brand.schema"
 import { productTypeSchema } from "./productType.schema"
 import { productSchema } from "./product.schema"
@@ -20,6 +21,7 @@ export default mergeTypeDefs([
   userSchema,
   outletSchema,
   registerSchema,
+  registerSessionSchema,
   brandSchema,
   productTypeSchema,
   productSchema,

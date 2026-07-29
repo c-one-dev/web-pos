@@ -36,6 +36,22 @@ export const paymentSchema = gql`
     cursor: String
   }
 
+  type PaymentSummary {
+    salesInc: Float
+    salesEx: Float
+    refunds: Float
+    discounts: Float
+    netSales: Float
+  }
+
+  type PaymentTypeSummaryNode {
+    _id: ID!
+    name: String
+    totalCollected: Float
+    refunds: Float
+    net: Float
+  }
+
   type Query {
     payment(_id: ID!): Payment
     paymentTable(
@@ -45,6 +61,8 @@ export const paymentSchema = gql`
       filter: [Filter]
       sort: Sort
     ): PaymentConnection
+    paymentSummary(start: String!, end: String!): PaymentSummary
+    paymentTypeSummary(start: String!, end: String!): [PaymentTypeSummaryNode]
   }
 
   type Mutation {

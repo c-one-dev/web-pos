@@ -37,6 +37,7 @@ export const registerSchema = gql`
     prefix: String
     paymentMethods: [PaymentMethod]
     schedule: [ScheduleItem]
+    isOpen: Boolean
     productTypes: [ProductType]
     products: [Product]
   }
@@ -94,5 +95,6 @@ export const registerSchema = gql`
     createRegister(input: RegisterInput): Response
     updateRegister(_id: ID!, input: RegisterInput): Response
     changeRegisterStatus(_id: ID!): Response
+    changeRegisterOpenStatus(_id: ID!): Response
   }
 `

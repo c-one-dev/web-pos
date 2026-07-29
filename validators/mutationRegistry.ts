@@ -1,5 +1,5 @@
 import type { z } from "zod"
-import { signInSchema } from "./auth.validator"
+import { signInSchema, switchUserSchema } from "./auth.validator"
 import { userSchema, changePasswordSchema } from "./user.validator"
 import { productTypeSchema } from "./productType.validator"
 import { updatePaymentNoteSchema } from "./payment.validator"
@@ -8,10 +8,16 @@ import { paymentMethodSchema } from "./paymentMethod.validator"
 import { brandSchema } from "./brand.validator"
 import { registerSchema } from "./register.validator"
 import {
+  openRegisterSessionSchema,
+  cashMovementSchema,
+  closeRegisterSessionSchema,
+} from "./registerSession.validator"
+import {
   customerSchema,
   adjustAccountLimitSchema,
   adjustStoreCreditSchema,
 } from "./customer.validator"
+import { settleAccountBalanceSchema } from "./customer.server.validator"
 import { outletSchema } from "./outlet.validator"
 import { saleSchema } from "./sale.validator"
 
@@ -33,6 +39,7 @@ export const mutationValidationRegistry: Record<
 > = {
   signIn: signInSchema,
   signOut: NO_VALIDATION,
+  switchUser: switchUserSchema,
 
   createUser: userSchema,
   updateUser: userSchema,
@@ -60,9 +67,15 @@ export const mutationValidationRegistry: Record<
   createRegister: registerSchema,
   updateRegister: registerSchema,
   changeRegisterStatus: NO_VALIDATION,
+  changeRegisterOpenStatus: NO_VALIDATION,
+
+  openRegisterSession: openRegisterSessionSchema,
+  addCashMovement: cashMovementSchema,
+  closeRegisterSession: closeRegisterSessionSchema,
 
   createCustomer: customerSchema,
   adjustAccountLimit: adjustAccountLimitSchema,
+  settleAccountBalance: settleAccountBalanceSchema,
   adjustStoreCredit: adjustStoreCreditSchema,
   updateCustomer: customerSchema,
   changeCustomerStatus: NO_VALIDATION,

@@ -183,11 +183,11 @@ function StatCard({
   loading: boolean
 }) {
   return (
-    <Card size="sm">
+    <Card size="sm" className="rounded-lg">
       <CardContent className="flex items-center justify-between gap-3">
         <div className="flex flex-col gap-1.5">
           {loading ? (
-            <Skeleton className="h-6 w-24" />
+            <Skeleton className="h-6 w-24 rounded-lg" />
           ) : (
             <span className="text-xl font-semibold text-primary">{value}</span>
           )}
@@ -267,7 +267,7 @@ function CategoryDonut({
   data?: CategoryPoint[]
   loading: boolean
 }) {
-  if (loading) return <Skeleton className="h-72 w-full" />
+  if (loading) return <Skeleton className="h-72 w-full rounded-lg" />
   const points = (data || []).filter((point) => point.total > 0)
   if (!points.length) return <EmptyChartState />
   const total = points.reduce((sum, point) => sum + point.total, 0)
@@ -506,7 +506,10 @@ export default function Page() {
               <CaretDownIcon />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-auto p-0 pt-4 px-1" align="end">
+          <PopoverContent
+            className="w-auto rounded-lg p-0 pt-4 px-1"
+            align="end"
+          >
             <div className="flex">
               <div className="flex flex-col gap-1 border-r p-2 pr-3">
                 {DATE_PRESETS.map((preset) => (
@@ -579,7 +582,7 @@ export default function Page() {
         />
       </div>
 
-      <Card className="flex-1">
+      <Card className="flex-1 rounded-lg">
         <CardContent>
           <Tabs defaultValue="sales">
             <TabsList variant="line">
@@ -592,7 +595,7 @@ export default function Page() {
 
             <TabsContent value="sales" className="pt-4">
               {loading ? (
-                <Skeleton className="h-72 w-full" />
+                <Skeleton className="h-72 w-full rounded-lg" />
               ) : !summary?.salesByDate?.some((p: SalesPoint) => p.total > 0) ? (
                 <EmptyChartState />
               ) : (
@@ -636,7 +639,7 @@ export default function Page() {
 
             <TabsContent value="time" className="pt-4">
               {loading ? (
-                <Skeleton className="h-72 w-full" />
+                <Skeleton className="h-72 w-full rounded-lg" />
               ) : !summary?.salesByHour?.some((p: SalesPoint) => p.total > 0) ? (
                 <EmptyChartState />
               ) : (

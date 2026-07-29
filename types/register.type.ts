@@ -32,5 +32,6 @@ export interface IRegisterNode {
   name: string
   outletName: string
   prefix: string
+  isOpen: boolean
   isActive: boolean
 }

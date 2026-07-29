@@ -15,6 +15,7 @@ import { XIcon } from "@phosphor-icons/react"
 import { format } from "date-fns"
 import gql from "graphql-tag"
 import AdjustLimitDialog from "./adjust-limit"
+import SettleBalanceDialog from "./settle-balance"
 import { Separator } from "@/components/ui/separator"
 import { useMemo, useState } from "react"
 import { cn } from "@/lib/utils"
@@ -60,6 +61,7 @@ const GET_CUSTOMER_LIMIT_HISTORY = gql`
           remaining
           transacted
           date
+          description
         }
       }
       pageInfo {
@@ -166,6 +168,15 @@ export default function AccountLimitDrawer({ _id }: Props) {
             </span>
           )
         },
+      },
+      {
+        id: "description",
+        header: "Note",
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">
+            {row.original.description || "-"}
+          </span>
+        ),
       },
     ],
     []
@@ -326,6 +337,7 @@ export default function AccountLimitDrawer({ _id }: Props) {
           </div>
         </div>
         <DrawerFooter className="flex flex-row">
+          <SettleBalanceDialog _id={_id!} />
           <AdjustLimitDialog _id={_id!} />
         </DrawerFooter>
       </DrawerContent>

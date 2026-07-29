@@ -63,7 +63,28 @@ A register is a physical checkout point (tied to one outlet), with its own prefi
 | `registers` | All registers (no pagination), populated. |
 | `registerOptions` | Active registers for selects. |
 | `createRegister` / `updateRegister` | Standard create/update. |
-| `changeRegisterStatus(_id)` | Atomic `isActive` toggle. |
+| `changeRegisterStatus(_id)` | Atomic `isActive` toggle (enable/disable the register entirely — distinct from open/closed for the day, see below). |
+| `changeRegisterOpenStatus(_id)` | Atomic `isOpen` toggle. Superseded by the `RegisterSession` flow below for actual use, but left in place. |
+
+`isOpen` is enforced in `generateSale` (`REGISTER_CLOSED` if false) and kept in sync by `resolvers/registerSession.resolver.ts`'s `openRegisterSession`/`closeRegisterSession`, not by `changeRegisterOpenStatus` directly.
+
+---
+
+## Register Session ([resolvers/registerSession.resolver.ts](../resolvers/registerSession.resolver.ts))
+
+Cash-drawer reconciliation for a register's shift: a cashier opens a register with a starting float, the system tracks what each tender type *should* have taken in based on actual sales during that window, the cashier logs manual cash in/out, and closing requires entering what was physically counted — producing a permanent variance record. Powers `app/(auth)/cash-register/[id]/page.tsx`.
+
+| Field | What it does |
+|---|---|
+| `activeRegisterSession(register)` | The currently `OPEN` session for a register, if any, with a live-computed `summary` (see below). Returns `null` if the register is closed. |
+| `registerSession(_id)` | Fetch one session by id (open or closed), same `summary` shape, bounded by `closedAt` instead of "now" once closed. |
+| `openRegisterSession(register, openingFloat)` | Throws if the register already has an `OPEN` session. Creates the session with an initial `IN` cash movement for the opening float, sets `Register.isOpen = true`. |
+| `addCashMovement(_id, input)` | Appends an `IN`/`OUT` entry to an `OPEN` session's `cashMovements`; throws if the session is already `CLOSED`. |
+| `closeRegisterSession(_id, input)` | Takes the submitted `counted` amount per payment method, computes `expected` one final time, freezes both plus `difference` into `tally`, sets `status: CLOSED`, and sets `Register.isOpen = false`. |
+
+`summary` (and the frozen `tally`) is computed by aggregating `Sale`s for that register within `[openedAt, closedAt ?? now]`, excluding `VOIDED` sales — mirroring the aggregation style in `resolvers/dashboard.resolver.ts`. The Payment Tally deliberately **excludes On Account** (it's a receivable, never physically counted) — it's reported instead as `summary.totalOnAccountSales`. Store Credit is included alongside whatever tenders the register is configured with.
+
+> **Nested-object queries need their key field.** While building this, a query for `cashMovements { by { name surname } }` (no `_id`) made Apollo Client's cache normalization throw on the client, which silently killed the entire query — the UI showed "register closed" even when it was open, with no console error surfaced to the user. Any GraphQL selection on a type with a cache key field (`_id` here) must include that field, even if the UI doesn't display it directly.
 
 ---
 
@@ -108,7 +129,7 @@ The catalog. **Deliberately has no stock/quantity field** — this app tracks wh
 
 The tender types selectable at checkout (Cash, Card, Gcash, etc.), each typed `PHYSICAL`, `DIGITAL`, or `OTHER`. Standard CRUD (`paymentMethod`, `paymentMethodTable`, `paymentMethodOptions`, `createPaymentMethod`, `updatePaymentMethod`, `changePaymentMethodStatus`) — no domain-specific behavior.
 
-> **Relevant to the account/store-credit feature (not yet wired up):** the env vars `NEXT_PUBLIC_ON_ACCOUNT_ID` and `NEXT_PUBLIC_STORE_CREDIT_ID` reference specific `Payment_Method` document IDs, presumably meant to represent "charge to account" and "use store credit" as selectable tender types at checkout. Nothing in `generateSale` currently reads or special-cases those IDs.
+> **Account/store-credit feature — now wired up.** The env vars `NEXT_PUBLIC_ON_ACCOUNT_ID` and `NEXT_PUBLIC_STORE_CREDIT_ID` reference specific `Payment_Method` document IDs representing "charge to account" and "use store credit" as selectable tender types at checkout. `generateSale` special-cases both: it deducts the net tendered amount from the customer's `accountLimit.current`/`storeCredit.current` in the same transaction as the sale, and rejects the sale (`INSUFFICIENT_BALANCE`) if either would go negative. See the Customer and Sale sections below.
 
 ---
 
@@ -135,7 +156,7 @@ Both ledgers keep a full history of every adjustment (`{ remaining, transacted, 
 | `updateCustomer(_id, input)` | Standard field update — name/email only, doesn't touch either ledger. |
 | `changeCustomerStatus(_id)` | Atomic `isActive` toggle. |
 
-> **The gap that matters most for this app's stated purpose:** nothing in `generateSale` (below) currently debits `accountLimit` or `storeCredit` when a sale is made, or credits them back on a refund. The ledger system is fully built and independently correct, but it's not yet connected to checkout — a sale marked "on account" today doesn't actually touch the customer's limit.
+> **Now connected to checkout:** `generateSale` (below) debits `accountLimit.current`/`storeCredit.current` when a sale uses those tender types, in the same transaction as the sale. There is still no repayment/settlement mutation — paying down an `accountLimit` balance has to go through `adjustAccountLimit`, which (per its description above) raises `max` right along with `current`, so it's not a clean "record a repayment" operation. See TASKS.md's "Account settlement mutation" item.
 
 ---
 
@@ -148,8 +169,8 @@ Both ledgers keep a full history of every adjustment (`{ remaining, transacted, 
 | `saleOptions` | Active sales for selects. **Likely dead/broken**: it filters on `Sale.isActive`, a field that doesn't exist anywhere on the `Sale` model (the model has `currentSaleStatus`/`isOnAccount`, no `isActive`) — this query will always return an empty result and throw `"No sales found."` |
 | `generateSale(input)` | **The core checkout mutation.** Runs inside a MongoDB transaction (all-or-nothing — see the commit history around the "sale creation isn't atomic" fix for why): creates the `Payment` documents for however many tenders were used, computes `currentSalePaymentStatus` (`PAID`/`PARTIALLY_PAID`/`UNPAID`) by comparing total paid to the sale total, generates `saleNumber` as `{register.prefix}-{zero-padded sequence}` (sequence = count of existing sales on that register + 1 — see the note below), creates the `Sale`, then backfills each `Payment.sale` with the new sale's ID. All four writes commit together or not at all. |
 
-> **Two things worth knowing about `generateSale`:**
-> 1. **`isOnAccount` is never set.** The field exists on the model and schema but `generateSale`'s Zod schema doesn't even accept it as input — every sale is created with the model default (`false`), regardless of how it was actually paid. This is the other half of the account/store-credit gap noted above.
+> **Also worth knowing about `generateSale`:**
+> 1. It requires the target register's `isOpen` to be `true` (throws `REGISTER_CLOSED` otherwise) — see the Register section above and `resolvers/registerSession.resolver.ts`, which keeps `isOpen` in sync with whether that register has an open `RegisterSession`.
 > 2. **`saleNumber` generation has a race condition**, separate from the atomicity fix: the sequence number is computed by counting existing sales for the register *before* the transaction starts. Two sales hitting the same register at nearly the same moment could compute the same count and collide on `saleNumber` (which has a `unique` index) — the second one would fail with a duplicate-key error rather than silently corrupting data, but the customer's second attempt would need to be retried. Not fixed as part of the atomicity work since it's a different problem (numbering scheme, not write atomicity).
 
 ---
@@ -166,8 +187,9 @@ Both ledgers keep a full history of every adjustment (`{ remaining, transacted, 
 
 ## Known gaps summary (for quick reference)
 
-- Credit/account-limit ledgers (Customer) are correct in isolation but **not wired into checkout** — `generateSale` never debits them, `isOnAccount` is never set.
 - `saleOptions` filters on a field (`isActive`) that doesn't exist on `Sale` — always returns empty.
 - `productType`'s response formatting (`generateNode`) crashes on any product type without a `parent`, even though the underlying write succeeds.
 - `Mutation.signOut` is declared but has no resolver — sign-out actually happens through NextAuth's own endpoint instead.
 - `generateSale`'s `saleNumber` sequence has a narrow race window under concurrent sales on the same register (mitigated, not eliminated, by the `unique` index).
+- No repayment/settlement mutation for paying down an `accountLimit` balance without also raising `max` (see TASKS.md).
+- No "past sessions" browsing UI for `RegisterSession` — data is saved and queryable (`registerSession(_id)`), just no list page yet.

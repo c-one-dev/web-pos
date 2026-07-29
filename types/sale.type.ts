@@ -84,3 +84,25 @@ export interface ISaleHistoryNode {
   notes: string
   paymentNotes: string
 }
+
+export interface ICustomerSaleNode {
+  _id: Types.ObjectId
+  saleNumber: string
+  date: string
+  outletName: string
+  total: number
+  paid: number
+  outstanding: number
+  currentSaleStatus: SaleStatus
+  currentSalePaymentStatus: SalePaymentStatus
+}
+
+export interface IVoidedSaleNode {
+  _id: Types.ObjectId
+  saleNumber: string
+  registerName: string
+  outletName: string
+  amount: number
+  voidedAt: string
+  voidedByName: string
+}

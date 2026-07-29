@@ -13,9 +13,11 @@ import {
 function PasswordInput({
   className,
   groupClassName,
+  toggleLabel = "password",
   ...props
 }: Omit<React.ComponentProps<typeof InputGroupInput>, "type"> & {
   groupClassName?: string
+  toggleLabel?: string
 }) {
   const [visible, setVisible] = React.useState(false)
 
@@ -30,7 +32,7 @@ function PasswordInput({
         <InputGroupButton
           type="button"
           size="icon-xs"
-          aria-label={visible ? "Hide password" : "Show password"}
+          aria-label={visible ? `Hide ${toggleLabel}` : `Show ${toggleLabel}`}
           onClick={() => setVisible((prev) => !prev)}
         >
           {visible ? <EyeSlashIcon /> : <EyeIcon />}
