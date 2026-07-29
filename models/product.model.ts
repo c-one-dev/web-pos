@@ -15,7 +15,7 @@ const Product = new Schema<IProduct>(
   {
     image: { type: String, required: false },
     name: { type: String, required: true, unique: true },
-    sku: { type: String, required: false, unique: true },
+    sku: { type: String, required: false, unique: true, sparse: true },
     barcode: { type: String, required: false },
     description: { type: String, required: false },
     type: {

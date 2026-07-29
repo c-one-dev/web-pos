@@ -2,7 +2,7 @@
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { signIn } from "next-auth/react"
+import { signIn, useSession } from "next-auth/react"
 import { useForm } from "@tanstack/react-form"
 import { z } from "zod"
 import { Field, FieldError, FieldGroup, FieldLabel } from "../ui/field"
@@ -10,7 +10,8 @@ import { InputGroup, InputGroupInput } from "../ui/input-group"
 import { PasswordInput } from "../ui/password-input"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { useId } from "react"
+import { useEffect, useId } from "react"
+import { Spinner } from "@/components/ui/spinner"
 
 const signInSchema = z.object({
   username: z.string().nonempty("Email must not be empty."),
@@ -222,6 +223,21 @@ function LoginForm() {
 }
 
 export default function LoginPage() {
+  const { status } = useSession()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (status === "authenticated") router.replace("/dashboard")
+  }, [status, router])
+
+  if (status === "loading" || status === "authenticated") {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <Spinner className="size-10 text-primary" />
+      </div>
+    )
+  }
+
   return (
     <div className="relative flex h-screen w-full">
       <LoginIllustration />

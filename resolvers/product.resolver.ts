@@ -144,10 +144,10 @@ export const productResolver = {
           pageInfo: {
             endCursor: sliced.length
               ? toCursor({
-                  id: sliced[sliced.length - 1]._id.toString(),
-                  type: CURSOR_TYPE,
-                  value: sliced[sliced.length - 1][sortKey],
-                })
+                id: sliced[sliced.length - 1]._id.toString(),
+                type: CURSOR_TYPE,
+                value: sliced[sliced.length - 1][sortKey],
+              })
               : null,
             hasNextPage: result.length > first,
           },
@@ -178,6 +178,7 @@ export const productResolver = {
         try {
           const result = await Product.create({
             ...input,
+            sku: input.sku?.trim() || undefined,
             priceHistory: [{ price: input.currentPrice, date: new Date() }],
           })
 
@@ -207,14 +208,15 @@ export const productResolver = {
             _id,
             flatten({
               ...input,
+              sku: input.sku?.trim() || undefined,
               // If price is updated, add a new entry to price history
               priceHistory:
                 input.currentPrice &&
-                input.currentPrice !== oldData.currentPrice
+                  input.currentPrice !== oldData.currentPrice
                   ? [
-                      ...(oldData.priceHistory || []),
-                      { price: input.currentPrice, date: new Date() },
-                    ]
+                    ...(oldData.priceHistory || []),
+                    { price: input.currentPrice, date: new Date() },
+                  ]
                   : oldData.priceHistory,
             }),
             {
