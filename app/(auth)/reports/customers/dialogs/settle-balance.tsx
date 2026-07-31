@@ -142,7 +142,7 @@ export default function SettleBalanceDialog({ _id }: Props) {
       }}
     >
       <DialogTrigger asChild>
-        <Button className="bg-green-700 hover:bg-green-700/80">
+        <Button className="cursor-pointer rounded-[10px] bg-green-700 hover:bg-green-700/80">
           Settle Balance
         </Button>
       </DialogTrigger>
@@ -219,9 +219,16 @@ export default function SettleBalanceDialog({ _id }: Props) {
         </div>
         <DialogFooter>
           <DialogClose asChild>
-            <Button variant="outline">Close</Button>
+            <Button variant="outline" className="cursor-pointer rounded-[10px]">
+              Close
+            </Button>
           </DialogClose>
-          <Button type="submit" form="settle-balance-form" disabled={isPending}>
+          <Button
+            type="submit"
+            form="settle-balance-form"
+            disabled={isPending}
+            className="cursor-pointer rounded-[10px]"
+          >
             Settle
           </Button>
         </DialogFooter>

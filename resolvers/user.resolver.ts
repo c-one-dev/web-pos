@@ -4,6 +4,7 @@ import { startOfDay, endOfDay } from "date-fns"
 import { Types, type PipelineStage } from "mongoose"
 import { randomBytes } from "crypto"
 import type { IDataTableArgs } from "../types/shared.type"
+import { Role } from "../types/user.type"
 import { fromCursor, toCursor } from "../helpers/cursor"
 import { flatten } from "../helpers/flatten"
 import { checkSchema, validate } from "../helpers/validate"
@@ -221,9 +222,21 @@ export const userResolver = {
       }
     ),
     updateUser: validate(checkSchema(userSchema))(
-      async (_: any, { _id, input }: any) => {
+      async (_: any, { _id, input }: any, ctx: any) => {
         try {
+          const isSelf = ctx?.session?._id?.toString() === _id?.toString()
+          const isAdmin = ctx?.session?.role === Role.ADMIN
+          if (!isAdmin && !isSelf)
+            throw new GraphQLError(
+              "You are not allowed to update this user.",
+              { extensions: { code: "FORBIDDEN" } }
+            )
+
           const updateInput = { ...input }
+          // Only an admin may change a user's role — a self-service update
+          // (e.g. "My Profile") must never be able to escalate its own role,
+          // regardless of what the client sends.
+          if (!isAdmin) delete updateInput.role
           if (updateInput.pin) {
             updateInput.pin = await bcrypt.hash(updateInput.pin, 10)
           } else {

@@ -22,6 +22,7 @@ export const productTypeSchema = gql`
     name: String
     parentName: String
     isActive: Boolean
+    productCount: Int
   }
 
   type ProductTypeEdge {
@@ -44,6 +45,7 @@ export const productTypeSchema = gql`
       sort: Sort
     ): ProductTypeConnection
     productTypeOptions: [Option]
+    productTypeAssignedProducts(_id: ID!, search: String): [ProductNode]
   }
 
   type Mutation {

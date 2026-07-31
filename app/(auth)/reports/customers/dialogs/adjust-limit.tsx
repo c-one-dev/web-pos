@@ -131,7 +131,7 @@ export default function AdjustLimitDialog({ _id }: Props) {
   return (
     <Dialog modal open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="bg-blue-700 hover:bg-blue-700/80">
+        <Button className="cursor-pointer rounded-[10px] bg-blue-700 hover:bg-blue-700/80">
           Adjust Account Limit
         </Button>
       </DialogTrigger>
@@ -219,9 +219,16 @@ export default function AdjustLimitDialog({ _id }: Props) {
         </div>
         <DialogFooter>
           <DialogClose asChild>
-            <Button variant="outline">Close</Button>
+            <Button variant="outline" className="cursor-pointer rounded-[10px]">
+              Close
+            </Button>
           </DialogClose>
-          <Button type="submit" form="adjust-credit-form" disabled={isPending}>
+          <Button
+            type="submit"
+            form="adjust-credit-form"
+            disabled={isPending}
+            className="cursor-pointer rounded-[10px]"
+          >
             Adjust
           </Button>
         </DialogFooter>

@@ -10,7 +10,16 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
-import { Label } from "@/components/ui/label"
+import { Separator } from "@/components/ui/separator"
+import { Badge } from "@/components/ui/badge"
+import { StatusBadge } from "@/components/custom/status-badge"
+import {
+  EnvelopeSimpleIcon,
+  CalendarIcon,
+  IdentificationCardIcon,
+  UserIcon,
+  AtIcon,
+} from "@phosphor-icons/react"
 import { useQuery } from "@apollo/client/react"
 import gql from "graphql-tag"
 import React, { useState } from "react"
@@ -62,64 +71,97 @@ export default function ViewDialog({ _id, onClose }: Props) {
         onOpenAutoFocus={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
         showCloseButton={false}
+        className="sm:max-w-lg"
       >
         <DialogHeader>
-          <DialogTitle>View User</DialogTitle>
+          <DialogTitle className="flex items-center gap-1.5">
+            <IdentificationCardIcon size={18} />
+            View User
+          </DialogTitle>
           <DialogDescription>Details of the user.</DialogDescription>
         </DialogHeader>
-        <div className="flex flex-col gap-1.5 md:grid md:grid-cols-2">
-          <div className="col-span-2 mb-4 flex items-center justify-center">
-            <Avatar className="h-25 w-25">
-              <AvatarFallback className="text-5xl">
-                {data?.user?.name?.[0]}
-              </AvatarFallback>
-            </Avatar>
+        <div className="flex flex-col gap-4 pt-1">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Avatar size="lg">
+                {data?.user?.image && <AvatarImage src={data.user.image} />}
+                <AvatarFallback>{data?.user?.name?.[0]}</AvatarFallback>
+              </Avatar>
+              <div>
+                <p className="text-sm font-semibold">
+                  {data?.user?.displayName || "-"}
+                </p>
+                <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <EnvelopeSimpleIcon size={12} />
+                  {data?.user?.email || "No email"}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-col items-end gap-1">
+              <StatusBadge
+                status={data?.user?.isActive ? "ACTIVE" : "INACTIVE"}
+                className="h-4 px-1.5 text-[10px]"
+              />
+              <Badge variant="outline">{data?.user?.role}</Badge>
+            </div>
           </div>
-          <div>
-            <Label>Name</Label>
-            <span className="block text-muted-foreground">
-              {data?.user?.name}
-            </span>
+          <Separator />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-start gap-2">
+              <UserIcon
+                size={16}
+                className="mt-0.5 shrink-0 text-muted-foreground"
+              />
+              <div>
+                <p className="text-xs text-muted-foreground">Full Name</p>
+                <p className="text-sm font-medium">
+                  {data?.user?.name} {data?.user?.surname}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <AtIcon
+                size={16}
+                className="mt-0.5 shrink-0 text-muted-foreground"
+              />
+              <div>
+                <p className="text-xs text-muted-foreground">Username</p>
+                <p className="text-sm font-medium">
+                  {data?.user?.username || "-"}
+                </p>
+              </div>
+            </div>
           </div>
-          <div>
-            <Label>Surname</Label>
-            <span className="block text-muted-foreground">
-              {data?.user?.surname}
-            </span>
-          </div>
-          <div>
-            <Label>Display Name</Label>
-            <span className="block text-muted-foreground">
-              {data?.user?.displayName}
-            </span>
-          </div>
-          <div className="col-span-2">
-            <Label>Email</Label>
-            <span className="block text-muted-foreground">
-              {data?.user?.email}
-            </span>
-          </div>
-          <div>
-            <Label>Role</Label>
-            <span className="block text-muted-foreground">
-              {data?.user?.role}
-            </span>
-          </div>
-          <div>
-            <Label>Created Date</Label>
-            <span className="block text-muted-foreground">
-              {data?.user?.createdAt
-                ? format(Number(data.user.createdAt), "PPpp")
-                : "-"}
-            </span>
-          </div>
-          <div>
-            <Label>Updated Date</Label>
-            <span className="block text-muted-foreground">
-              {data?.user?.updatedAt
-                ? format(Number(data.user.updatedAt), "PPpp")
-                : "-"}
-            </span>
+          <Separator />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-start gap-2">
+              <CalendarIcon
+                size={16}
+                className="mt-0.5 shrink-0 text-muted-foreground"
+              />
+              <div>
+                <p className="text-xs text-muted-foreground">Created</p>
+                <p className="text-xs font-medium">
+                  {data?.user?.createdAt
+                    ? format(Number(data.user.createdAt), "PPp")
+                    : "-"}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <CalendarIcon
+                size={16}
+                className="mt-0.5 shrink-0 text-muted-foreground"
+              />
+              <div>
+                <p className="text-xs text-muted-foreground">Updated</p>
+                <p className="text-xs font-medium">
+                  {data?.user?.updatedAt
+                    ? format(Number(data.user.updatedAt), "PPp")
+                    : "-"}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
         <DialogFooter>

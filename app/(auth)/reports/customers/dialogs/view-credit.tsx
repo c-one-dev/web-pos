@@ -229,7 +229,7 @@ export default function StoreCreditDrawer({ _id }: Props) {
   return (
     <Drawer direction="right" modal open={open} onOpenChange={setOpen}>
       <DrawerTrigger asChild>
-        <Button className="bg-destructive hover:bg-destructive/80">
+        <Button className="cursor-pointer rounded-[10px] bg-destructive hover:bg-destructive/80">
           Store Credit
         </Button>
       </DrawerTrigger>

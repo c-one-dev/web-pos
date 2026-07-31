@@ -70,7 +70,9 @@ export default function OpenRegisterDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size={size}>Open Register</Button>
+        <Button size={size} className="cursor-pointer rounded-[10px]">
+          Open Register
+        </Button>
       </DialogTrigger>
       <DialogContent
         onOpenAutoFocus={(e) => e.preventDefault()}
@@ -102,9 +104,15 @@ export default function OpenRegisterDialog({
         </Field>
         <DialogFooter>
           <DialogClose asChild>
-            <Button variant="outline">Cancel</Button>
+            <Button variant="outline" className="cursor-pointer rounded-[10px]">
+              Cancel
+            </Button>
           </DialogClose>
-          <Button onClick={onConfirm} disabled={loading || openingFloat < 0}>
+          <Button
+            onClick={onConfirm}
+            disabled={loading || openingFloat < 0}
+            className="cursor-pointer rounded-[10px]"
+          >
             Open
           </Button>
         </DialogFooter>

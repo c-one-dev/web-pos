@@ -31,6 +31,8 @@ export const customerSchema = gql`
     _id: ID
     name: String
     email: String
+    accountLimit: AccountLimit
+    storeCredit: StoreCredit
     isActive: Boolean
     createdAt: String
     updatedAt: String

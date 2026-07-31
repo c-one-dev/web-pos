@@ -181,7 +181,9 @@ export default function FormDialog({ _id }: Props) {
             Edit
           </DropdownMenuItem>
         ) : (
-          <Button>Create Customer</Button>
+          <Button className="cursor-pointer rounded-[10px]">
+            Create Customer
+          </Button>
         )}
       </SheetTrigger>
       <SheetContent>

@@ -8,7 +8,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
+import { Separator } from "@/components/ui/separator"
+import { Badge } from "@/components/ui/badge"
+import { StatusBadge } from "@/components/custom/status-badge"
+import {
+  StorefrontIcon,
+  MonitorIcon,
+  CalendarIcon,
+} from "@phosphor-icons/react"
 import { useQuery } from "@apollo/client/react"
 import { format } from "date-fns"
 import gql from "graphql-tag"
@@ -57,41 +64,86 @@ export default function RowViewDialog({ _id, open, setOpen, onClose }: Props) {
         onOpenAutoFocus={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
         showCloseButton={false}
+        className="sm:max-w-lg"
       >
         <DialogHeader>
-          <DialogTitle>View Outlet</DialogTitle>
+          <DialogTitle className="flex items-center gap-1.5">
+            <StorefrontIcon size={18} />
+            View Outlet
+          </DialogTitle>
           <DialogDescription>Details of the outlet.</DialogDescription>
         </DialogHeader>
-        <div className="flex flex-col gap-1.5">
-          <div>
-            <Label>Name</Label>
-            <span className="block text-muted-foreground">
-              {data?.outlet?.name}
-            </span>
-          </div>
-          {data?.outlet?.registers && data.outlet.registers.length > 0 && (
-            <div>
-              <Label>Registers</Label>
-              <div className="list-inside list-disc text-muted-foreground">
-                {data.outlet.registers.map((reg: any) => reg.name).join(", ")}
+        <div className="flex flex-col gap-4 pt-1">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <div className="flex size-9 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                <StorefrontIcon size={18} />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">
+                  {data?.outlet?.name || "-"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {data?.outlet?.registers?.length || 0} register
+                  {data?.outlet?.registers?.length === 1 ? "" : "s"}
+                </p>
               </div>
             </div>
-          )}
-          <div>
-            <Label>Created Date</Label>
-            <span className="block text-muted-foreground">
-              {data?.outlet?.createdAt
-                ? format(Number(data.outlet.createdAt), "PPpp")
-                : "-"}
-            </span>
+            <StatusBadge
+              status={data?.outlet?.isActive ? "ACTIVE" : "INACTIVE"}
+              className="h-4 px-1.5 text-[10px]"
+            />
           </div>
+          <Separator />
           <div>
-            <Label>Updated Date</Label>
-            <span className="block text-muted-foreground">
-              {data?.outlet?.updatedAt
-                ? format(Number(data.outlet.updatedAt), "PPpp")
-                : "-"}
-            </span>
+            <div className="mb-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+              <MonitorIcon size={14} />
+              Registers
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {data?.outlet?.registers?.length ? (
+                data.outlet.registers.map((reg: any) => (
+                  <Badge key={reg._id} variant="outline">
+                    {reg.name}
+                  </Badge>
+                ))
+              ) : (
+                <span className="text-xs text-muted-foreground">
+                  No registers assigned.
+                </span>
+              )}
+            </div>
+          </div>
+          <Separator />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-start gap-2">
+              <CalendarIcon
+                size={16}
+                className="mt-0.5 shrink-0 text-muted-foreground"
+              />
+              <div>
+                <p className="text-xs text-muted-foreground">Created</p>
+                <p className="text-xs font-medium">
+                  {data?.outlet?.createdAt
+                    ? format(Number(data.outlet.createdAt), "PPp")
+                    : "-"}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <CalendarIcon
+                size={16}
+                className="mt-0.5 shrink-0 text-muted-foreground"
+              />
+              <div>
+                <p className="text-xs text-muted-foreground">Updated</p>
+                <p className="text-xs font-medium">
+                  {data?.outlet?.updatedAt
+                    ? format(Number(data.outlet.updatedAt), "PPp")
+                    : "-"}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
         <DialogFooter>

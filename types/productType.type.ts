@@ -17,4 +17,5 @@ export interface IProductTypeNode {
   name: string
   parent: string | null
   isActive: boolean
+  productCount?: number
 }

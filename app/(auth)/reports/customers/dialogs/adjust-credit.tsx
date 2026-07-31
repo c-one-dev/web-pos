@@ -129,7 +129,7 @@ export default function AdjustCreditDialog({ _id }: Props) {
   return (
     <Dialog modal open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="bg-destructive hover:bg-destructive/80">
+        <Button className="cursor-pointer rounded-[10px] bg-destructive hover:bg-destructive/80">
           Issue Store Credit
         </Button>
       </DialogTrigger>
@@ -230,9 +230,16 @@ export default function AdjustCreditDialog({ _id }: Props) {
         </div>
         <DialogFooter>
           <DialogClose asChild>
-            <Button variant="outline">Close</Button>
+            <Button variant="outline" className="cursor-pointer rounded-[10px]">
+              Close
+            </Button>
           </DialogClose>
-          <Button type="submit" form="adjust-credit-form" disabled={isPending}>
+          <Button
+            type="submit"
+            form="adjust-credit-form"
+            disabled={isPending}
+            className="cursor-pointer rounded-[10px]"
+          >
             Adjust
           </Button>
         </DialogFooter>

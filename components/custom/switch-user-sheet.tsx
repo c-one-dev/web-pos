@@ -53,6 +53,7 @@ export default function SwitchUserSheet({ children }: Props) {
     fullName: string
   } | null>(null)
   const [pin, setPin] = useState("")
+  const [pinError, setPinError] = useState<string | null>(null)
   const { data: session }: any = useSession()
   const currentUserId = session?.user?._id
   const { switchToUser, loading: switching } = useSwitchUser()
@@ -78,11 +79,17 @@ export default function SwitchUserSheet({ children }: Props) {
   const reset = () => {
     setSelected(null)
     setPin("")
+    setPinError(null)
   }
 
   const handleOpenChange = (next: boolean) => {
     setOpen(next)
     if (!next) reset()
+  }
+
+  const handlePinChange = (next: string) => {
+    setPin(next)
+    if (pinError) setPinError(null)
   }
 
   const handleComplete = async (enteredPin: string) => {
@@ -93,7 +100,7 @@ export default function SwitchUserSheet({ children }: Props) {
       setOpen(false)
       reset()
     } else {
-      toast.error(result.message)
+      setPinError("Wrong Pin. Enter the Right Pin Again")
       setPin("")
     }
   }
@@ -121,7 +128,7 @@ export default function SwitchUserSheet({ children }: Props) {
             </div>
             <Avatar className="size-40">
               <AvatarImage src={currentUser?.image || undefined} />
-              <AvatarFallback className="text-4xl">
+              <AvatarFallback className="bg-zinc-300 text-4xl">
                 {currentUser?.name?.[0]}
                 {currentUser?.surname?.[0]}
               </AvatarFallback>
@@ -153,7 +160,9 @@ export default function SwitchUserSheet({ children }: Props) {
                     >
                       <Avatar className="size-16">
                         <AvatarImage src={user.image || undefined} />
-                        <AvatarFallback>{user.fullName?.[0]}</AvatarFallback>
+                        <AvatarFallback className="bg-zinc-300">
+                          {user.fullName?.[0]}
+                        </AvatarFallback>
                       </Avatar>
                       <span className="text-center text-sm font-medium">
                         {user.fullName}
@@ -179,9 +188,11 @@ export default function SwitchUserSheet({ children }: Props) {
                 </div>
                 <PinPad
                   value={pin}
-                  onChange={setPin}
+                  onChange={handlePinChange}
                   onComplete={handleComplete}
                   disabled={switching}
+                  error={!!pinError}
+                  errorMessage={pinError || undefined}
                 />
               </div>
             )}

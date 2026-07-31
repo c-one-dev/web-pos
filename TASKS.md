@@ -4,14 +4,6 @@ This file tracks known pending work, incomplete features, and deferred decisions
 
 ---
 
-## Priority: Medium
-
-### 1. `updateUser` has no ownership/role check
-
-`updateUser` (`resolvers/user.resolver.ts`) will update **any** user by `_id` as long as the caller has a valid session — there's no check that the caller is either an admin or updating their own record. This was newly exercised by the "My Profile" self-service editor (`components/custom/my-profile-sheet.tsx`), which relies on the caller only ever passing their own `_id` from the client — nothing stops a modified request from passing someone else's `_id`, or (more importantly) a non-admin escalating their own `role` if a client ever sent that field. The client-side profile editor deliberately never exposes `role` as editable and always re-sends the caller's existing role unchanged, but that's a client-side convention, not a server-side guarantee. Worth a proper fix: either a separate `updateMyProfile(input)` mutation that derives `_id` from `ctx.session` server-side and strips `role`/`pin` escalation risk, or a role check in `updateUser` itself.
-
----
-
 ## Priority: Low / Backlog
 
 ### 2. Test coverage
@@ -126,3 +118,4 @@ The `OpenRegisterDialog` component (`components/custom/open-register-dialog.tsx`
   - New `app/(auth)/reports/customers/dialogs/settle-balance.tsx` dialog, added next to the existing `AdjustLimitDialog` in the Account Limit drawer's footer (`view-limit.tsx`) — shows the customer's current outstanding balance and a single amount field. The history table there also gained a "Note" column showing each entry's `description` (or `-` if none).
   - Verified end-to-end in the browser: temporarily set a test customer's `accountLimit.current` below `max` via direct DB update to create an outstanding balance, confirmed the mutation rejects an amount exceeding it (`Settlement amount cannot exceed the outstanding balance.`), then confirmed a valid settlement succeeds — `current` increases by the settled amount, `max` is unchanged, the history table shows the new entry with the "Account settlement" note, and the drawer's displayed "Remaining" updates immediately via Apollo's `refetchQueries`. Reverted the test customer's data back to its original state afterward.
   - Hit and fixed an unrelated environment issue while verifying: the dev server's Turbopack cache had been corrupted by an earlier Windows file-lock crash (`TurbopackInternalError: ... os error 32`), which made every page (including this one) 404 at the router level even though the routes existed on disk. Same root-cause class as this project's other `.next`-cache incidents — clearing `.next` and restarting the dev server resolved it; not a bug in this feature's code.
+- [x] `updateUser` ownership/role check (`resolvers/user.resolver.ts`) — went with the in-resolver check rather than a separate `updateMyProfile` mutation, to avoid duplicating `createUser`'s validation/shape for a second mutation. `updateUser` now reads `ctx.session` (already available on every resolver via the schema-level auth guard) and rejects with `FORBIDDEN` unless the caller is either an admin (`ctx.session.role === Role.ADMIN`) or updating their own `_id`. Additionally, `input.role` is stripped server-side before the update whenever the caller isn't an admin — so even if a modified client request included a `role` field, a self-service update (e.g. "My Profile") can never escalate its own role. `mutationValidationRegistry`'s existing `userSchema` entry for `updateUser` is unaffected since the role-stripping happens after Zod validation, in the resolver body.

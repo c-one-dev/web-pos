@@ -61,6 +61,7 @@ const GET_PRODUCT_TYPES = gql`
           name
           parentName
           isActive
+          productCount
         }
       }
       pageInfo {
@@ -185,6 +186,13 @@ export default function Page() {
             filter={filter}
             onFilterChange={onFilter}
           />
+        ),
+      },
+      {
+        id: "productCount",
+        header: () => <span className="font-medium">Products</span>,
+        cell: ({ row }) => (
+          <span className="font-medium">{row.original.productCount ?? 0}</span>
         ),
       },
       {

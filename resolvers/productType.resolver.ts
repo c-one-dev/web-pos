@@ -1,5 +1,6 @@
 import { GraphQLError } from "graphql"
 import ProductType from "../models/productType.model"
+import Product from "../models/product.model"
 import { startOfDay, endOfDay } from "date-fns"
 import { Types, type PipelineStage } from "mongoose"
 import type { IDataTableArgs } from "../types/shared.type"
@@ -16,6 +17,7 @@ const generateNode = (productType: any) => ({
   name: productType.name,
   parentName: productType.parent?.name || null,
   isActive: productType.isActive,
+  productCount: productType.productCount ?? 0,
 })
 
 export const productTypeResolver = {
@@ -112,6 +114,15 @@ export const productTypeResolver = {
             },
           },
           { $addFields: { parentName: "$parent.name" } },
+          {
+            $lookup: {
+              from: "products",
+              localField: "_id",
+              foreignField: "type",
+              as: "products",
+            },
+          },
+          { $addFields: { productCount: { $size: "$products" } } },
           { $match: matchStage },
           {
             $sort: { [sortKey]: sortOrder, _id: sortOrder },
@@ -122,6 +133,7 @@ export const productTypeResolver = {
               name: 1,
               parentName: 1,
               isActive: 1,
+              productCount: 1,
             },
           },
         ]
@@ -163,6 +175,21 @@ export const productTypeResolver = {
             hasNextPage: result.length > first,
           },
         }
+      } catch (error) {
+        throw error
+      }
+    },
+    productTypeAssignedProducts: async (_: any, { _id, search }: any) => {
+      try {
+        const match: Record<string, any> = { type: new Types.ObjectId(_id) }
+        if (search) match.name = { $regex: search, $options: "i" }
+
+        const products = await Product.find(match)
+          .select("_id name sku currentPrice isActive")
+          .sort({ name: 1 })
+          .lean()
+
+        return products
       } catch (error) {
         throw error
       }

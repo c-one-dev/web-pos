@@ -1,5 +1,4 @@
 "use client"
-import { Button } from "@/components/ui/button"
 import {
   InputGroup,
   InputGroupInput,
@@ -10,7 +9,7 @@ import { StatusBadge } from "@/components/custom/status-badge"
 import { useRegisterStore } from "@/hooks/use-register"
 import { gql } from "@apollo/client"
 import { useQuery } from "@apollo/client/react"
-import { MagnifyingGlassIcon } from "@phosphor-icons/react"
+import { CashRegisterIcon, MagnifyingGlassIcon } from "@phosphor-icons/react"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 
@@ -45,48 +44,47 @@ export default function Page() {
   )
 
   return (
-    <div className="grid h-full w-full grid-cols-2 place-content-start gap-1.5 p-2.5">
+    <div className="flex h-full w-full flex-col gap-3 p-2.5">
+      <InputGroup>
+        <InputGroupInput
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.currentTarget.value)}
+          placeholder="Search registers..."
+        />
+        <InputGroupAddon>
+          <MagnifyingGlassIcon />
+        </InputGroupAddon>
+      </InputGroup>
       {loading ? (
-        <Spinner />
+        <div className="flex flex-1 items-center justify-center">
+          <Spinner />
+        </div>
+      ) : filteredRegisters.length === 0 ? (
+        <span className="mt-8 text-center text-sm text-muted-foreground">
+          No registers found.
+        </span>
       ) : (
-        <>
-          {/* <span className="col-span-2 text-center text-sm text-muted-foreground">
-            Select a register to start the process.{" "}
-            {register && `(Selected Register ID: ${register})`}
-          </span> */}
-          <div className="col-span-2">
-            <InputGroup>
-              <InputGroupInput
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.currentTarget.value)}
-                placeholder="Search registers..."
-              />
-              <InputGroupAddon>
-                <MagnifyingGlassIcon />
-              </InputGroupAddon>
-            </InputGroup>
-          </div>
-          {filteredRegisters.length === 0 && (
-            <span className="col-span-2 text-center text-sm text-muted-foreground">
-              No registers found.
-            </span>
-          )}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {filteredRegisters.map((register: any) => (
-            <Button
+            <button
+              type="button"
               onClick={() => {
                 setRegister(register._id)
                 router.push(`/process/${register._id}`)
               }}
-              variant="outline"
-              size="lg"
-              className="justify-between"
               key={register._id}
+              className="flex cursor-pointer items-center gap-3 rounded-[10px] border p-3.5 text-left transition-colors hover:bg-muted/50"
             >
-              {register.name}
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                <CashRegisterIcon size={20} />
+              </div>
+              <span className="flex-1 truncate font-medium">
+                {register.name}
+              </span>
               <StatusBadge status={register.isOpen ? "OPEN" : "CLOSED"} />
-            </Button>
+            </button>
           ))}
-        </>
+        </div>
       )}
     </div>
   )

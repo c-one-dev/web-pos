@@ -33,7 +33,9 @@ export const customerResolver = {
     customer: async (_: any, { _id }: any) => {
       try {
         const customer = await Customer.findById(_id)
-          .select("_id name email isActive createdAt updatedAt")
+          .select(
+            "_id name email accountLimit storeCredit isActive createdAt updatedAt"
+          )
           .lean()
         if (!customer) throw new GraphQLError("Customer not found")
         return customer

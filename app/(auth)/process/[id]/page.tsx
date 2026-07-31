@@ -10,6 +10,7 @@ import {
   CaretDownIcon,
   CheckIcon,
   DotIcon,
+  ArrowLeftIcon,
   GraduationCapIcon,
   PlusCircleIcon,
   TrashSimpleIcon,
@@ -260,24 +261,34 @@ export default function Page() {
 
   if (register && !register.isOpen) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3">
-        <CashRegisterIcon className="size-10 text-muted-foreground" />
-        <p className="text-lg font-medium">
+      <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
+        <div className="mb-1 flex size-16 items-center justify-center rounded-full bg-muted text-muted-foreground">
+          <CashRegisterIcon size={28} />
+        </div>
+        <p className="text-lg font-semibold">
           Your Cash Register is Currently Closed
         </p>
-        <p className="text-sm text-muted-foreground">
+        <p className="max-w-sm text-sm text-muted-foreground">
           Open {register.name} to start this shift before processing sales.
         </p>
-        <Button
-          size="lg"
-          onClick={handleOpenRegister}
-          disabled={openingRegister}
-        >
-          Open Register
-        </Button>
-        <Button variant="link" onClick={() => router.push("/process")}>
-          Back to registers
-        </Button>
+        <div className="mt-3 flex flex-col items-center gap-2">
+          <Button
+            size="lg"
+            className="cursor-pointer rounded-[10px]"
+            onClick={handleOpenRegister}
+            disabled={openingRegister}
+          >
+            Open Register
+          </Button>
+          <Button
+            variant="link"
+            className="cursor-pointer text-muted-foreground"
+            onClick={() => router.push("/process")}
+          >
+            <ArrowLeftIcon size={14} />
+            Back to registers
+          </Button>
+        </div>
       </div>
     )
   }

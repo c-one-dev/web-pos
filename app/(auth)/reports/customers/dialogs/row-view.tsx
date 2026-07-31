@@ -102,7 +102,7 @@ export default function RowViewDrawer({ _id, open, setOpen, onClose }: Props) {
   const customer = data?.customerReport
 
   // Sales table pagination state
-  const [rows, setRows] = useState<number>(8)
+  const [rows, setRows] = useState<number>(10)
   const [page, setPage] = useState<{
     current: number
     loaded: number
@@ -334,9 +334,11 @@ export default function RowViewDrawer({ _id, open, setOpen, onClose }: Props) {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      <SelectItem value="8">8</SelectItem>
-                      <SelectItem value="25">25</SelectItem>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
                       <SelectItem value="100">100</SelectItem>
+                      <SelectItem value="300">300</SelectItem>
                     </SelectGroup>
                   </SelectContent>
                 </Select>

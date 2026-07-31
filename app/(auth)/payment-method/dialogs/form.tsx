@@ -205,7 +205,9 @@ export default function FormDialog({ _id }: Props) {
             Edit
           </DropdownMenuItem>
         ) : (
-          <Button>Create Payment Method</Button>
+          <Button className="cursor-pointer rounded-[10px]">
+            Create Payment Method
+          </Button>
         )}
       </SheetTrigger>
       <SheetContent>

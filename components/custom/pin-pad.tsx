@@ -7,6 +7,8 @@ type Props = {
   onComplete?: (value: string) => void
   maxLength?: number
   disabled?: boolean
+  error?: boolean
+  errorMessage?: string
 }
 
 const DIGIT_ROWS = [
@@ -21,6 +23,8 @@ export default function PinPad({
   onComplete,
   maxLength = 4,
   disabled,
+  error,
+  errorMessage = "Incorrect PIN. Try again.",
 }: Props) {
   const press = (digit: string) => {
     if (disabled || value.length >= maxLength) return
@@ -33,20 +37,34 @@ export default function PinPad({
 
   return (
     <div className="flex flex-col items-center gap-6">
-      <div className="flex gap-2">
-        {Array.from({ length: maxLength }).map((_, index) => (
-          <div
-            key={index}
-            className={cn(
-              "flex size-14 items-center justify-center border text-lg",
-              index === value.length && "border-ring ring-1 ring-ring/50"
-            )}
-          >
-            {index < value.length && (
-              <span className="size-2.5 rounded-full bg-foreground" />
-            )}
-          </div>
-        ))}
+      <div className="flex flex-col items-center gap-2">
+        <div className="flex gap-2">
+          {Array.from({ length: maxLength }).map((_, index) => (
+            <div
+              key={index}
+              className={cn(
+                "flex size-14 items-center justify-center border text-lg",
+                error
+                  ? "border-destructive"
+                  : index === value.length && "border-ring ring-1 ring-ring/50"
+              )}
+            >
+              {index < value.length && (
+                <span
+                  className={cn(
+                    "size-2.5 rounded-full",
+                    error ? "bg-destructive" : "bg-foreground"
+                  )}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+        {error && (
+          <span className="text-xs font-medium text-destructive">
+            {errorMessage}
+          </span>
+        )}
       </div>
       <div className="flex flex-col items-center gap-3">
         {DIGIT_ROWS.map((row, rowIndex) => (

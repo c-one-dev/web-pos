@@ -36,11 +36,17 @@ function UnlockCard({
     fullName: string
   } | null>(null)
   const [pin, setPin] = useState("")
+  const [pinError, setPinError] = useState<string | null>(null)
   const { data, loading } = useQuery(GET_ACTIVE_USERS, {
     fetchPolicy: "cache-and-network",
   })
   const { switchToUser, loading: switching } = useSwitchUser()
   const users = (data as any)?.activeUsers || []
+
+  const handlePinChange = (next: string) => {
+    setPin(next)
+    if (pinError) setPinError(null)
+  }
 
   const handleComplete = async (enteredPin: string) => {
     if (!selected) return
@@ -49,7 +55,7 @@ function UnlockCard({
       toast.success(result.message)
       onUnlock()
     } else {
-      toast.error(result.message)
+      setPinError("Wrong Pin. Enter the Right Pin Again")
       setPin("")
     }
   }
@@ -115,6 +121,7 @@ function UnlockCard({
               onClick={() => {
                 setSelected(null)
                 setPin("")
+                setPinError(null)
               }}
               disabled={switching}
             >
@@ -123,9 +130,11 @@ function UnlockCard({
           </div>
           <PinPad
             value={pin}
-            onChange={setPin}
+            onChange={handlePinChange}
             onComplete={handleComplete}
             disabled={switching}
+            error={!!pinError}
+            errorMessage={pinError || undefined}
           />
         </div>
       )}
@@ -145,7 +154,7 @@ export default function IdleLockScreen({
     <>
       {children}
       {status === "authenticated" && idle && (
-        <div className="fixed inset-0 z-100 flex items-start justify-center bg-black/40 p-4 pt-24">
+        <div className="pointer-events-auto fixed inset-0 z-100 flex items-start justify-center bg-black/40 p-4 pt-24">
           <UnlockCard onUnlock={reset} currentUserId={session?.user?._id} />
         </div>
       )}

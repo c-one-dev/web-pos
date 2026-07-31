@@ -218,7 +218,9 @@ export default function FormDialog({ _id, onClose }: Props) {
             Edit
           </DropdownMenuItem>
         ) : (
-          <Button>Create User</Button>
+          <Button className="cursor-pointer rounded-[10px]">
+            Create User
+          </Button>
         )}
       </SheetTrigger>
       <SheetContent>
