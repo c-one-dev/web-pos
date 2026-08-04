@@ -14,10 +14,15 @@ const CURSOR_TYPE = "payment"
 
 const generateNode = (payment: any) => ({
   _id: payment._id,
-  amount: payment.amount - payment.change,
+  amount: payment.amount,
   note: payment.note,
   byName: `${payment.by.name} ${payment.by.surname}`,
   saleList: payment.sale.map((s: any) => s.saleNumber),
+  sales: payment.sale.map((s: any) => ({
+    _id: s._id,
+    saleNumber: s.saleNumber,
+    total: s.total,
+  })),
   methodName: payment.method.name,
   paymentDate: payment.date,
 })
@@ -37,10 +42,24 @@ export const paymentResolver = {
     },
     paymentTable: async (
       _: any,
-      { first = 10, after, search, filter, sort }: IDataTableArgs
+      {
+        first = 10,
+        after,
+        search,
+        filter,
+        sort,
+        start,
+        end,
+      }: IDataTableArgs & { start?: string; end?: string }
     ) => {
       try {
         const matchStage: Record<string, any> = {}
+
+        if (start && end)
+          matchStage.paymentDate = {
+            $gte: startOfDay(new Date(start)),
+            $lte: endOfDay(new Date(end)),
+          }
 
         if (search)
           matchStage.$or = [
@@ -147,9 +166,6 @@ export const paymentResolver = {
           },
           {
             $addFields: {
-              amount: {
-                $subtract: ["$amount", "$change"],
-              },
               paymentDate: "$date",
               methodName: "$method.name",
               byName: {
@@ -160,6 +176,17 @@ export const paymentResolver = {
                   input: "$sale",
                   as: "s",
                   in: "$$s.saleNumber",
+                },
+              },
+              sales: {
+                $map: {
+                  input: "$sale",
+                  as: "s",
+                  in: {
+                    _id: "$$s._id",
+                    saleNumber: "$$s.saleNumber",
+                    total: "$$s.total",
+                  },
                 },
               },
             },
@@ -178,6 +205,7 @@ export const paymentResolver = {
               methodName: 1,
               byName: 1,
               saleList: 1,
+              sales: 1,
             },
           },
         ]

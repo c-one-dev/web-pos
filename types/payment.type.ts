@@ -20,6 +20,7 @@ export interface IPaymentNode {
   note: string
   byName: string
   saleList: string[]
+  sales: { _id: string; saleNumber: string; total: number }[]
   methodName: string
   paymentDate: string
 }

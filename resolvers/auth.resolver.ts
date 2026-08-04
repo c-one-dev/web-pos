@@ -2,6 +2,7 @@ import { GraphQLError } from "graphql"
 import User from "../models/user.model"
 import { validate, checkSchema } from "../helpers/validate"
 import { signInSchema, switchUserSchema } from "../validators/auth.validator"
+import { logActivity } from "../helpers/activityLog"
 import jwt from "jsonwebtoken"
 
 const JWT_SECRET = process.env.JWT_SECRET!
@@ -9,7 +10,11 @@ const JWT_SECRET = process.env.JWT_SECRET!
 export const authResolver = {
   Mutation: {
     signIn: validate(checkSchema(signInSchema))(
-      async (_: any, args: { username: string; password: string }) => {
+      async (
+        _: any,
+        args: { username: string; password: string },
+        ctx: any
+      ) => {
         try {
           const result = await User.findOne({
             username: args.username,
@@ -24,6 +29,14 @@ export const authResolver = {
             JWT_SECRET,
             { expiresIn: "7d" }
           )
+          // signIn is a public field (no session yet), so it never reaches
+          // the generic Mutation-logging wrapper in app/graphql/route.ts -
+          // logged directly here instead.
+          logActivity({
+            req: ctx?.req,
+            user: { _id: result._id, name: `${result.name} ${result.surname}` },
+            activity: "Login",
+          })
           return {
             ok: true,
             message: `Sign in successful! Welcome back, ${result.name}!`,

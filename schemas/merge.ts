@@ -14,6 +14,10 @@ import { customerSchema } from "./customer.schema"
 import { saleSchema } from "./sale.schema"
 import { paymentSchema } from "./payment.schema"
 import { dashboardSchema } from "./dashboard.schema"
+import { salesReportSchema } from "./salesReport.schema"
+import { timecardSchema } from "./timecard.schema"
+import { activityLogSchema } from "./activityLog.schema"
+import { salesTargetSchema } from "./salesTarget.schema"
 
 export default mergeTypeDefs([
   authSchema,
@@ -30,4 +34,8 @@ export default mergeTypeDefs([
   saleSchema,
   paymentSchema,
   dashboardSchema,
+  salesReportSchema,
+  timecardSchema,
+  activityLogSchema,
+  salesTargetSchema,
 ])

@@ -20,6 +20,7 @@ import {
 import { settleAccountBalanceSchema } from "./customer.server.validator"
 import { outletSchema } from "./outlet.validator"
 import { saleSchema } from "./sale.validator"
+import { salesTargetSchema } from "./salesTarget.validator"
 
 // Sentinel for mutations that take no input worth validating beyond what
 // GraphQL's own type system already enforces (e.g. a bare `_id: ID!`).
@@ -86,4 +87,8 @@ export const mutationValidationRegistry: Record<
 
   generateSale: saleSchema,
   voidSale: NO_VALIDATION,
+
+  clockIn: NO_VALIDATION,
+  clockOut: NO_VALIDATION,
+  setSalesTarget: salesTargetSchema,
 }

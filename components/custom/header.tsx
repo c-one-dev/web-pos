@@ -20,6 +20,7 @@ import { SidebarTrigger } from "../ui/sidebar"
 import SwitchUserSheet from "./switch-user-sheet"
 import MyProfileSheet from "./my-profile-sheet"
 import ChangePasswordDialog from "./change-password-dialog"
+import ClockButton from "./clock-button"
 
 function ProfileMenu() {
   const { data: session }: any = useSession()
@@ -86,7 +87,10 @@ export default function Header() {
   return (
     <div className="sticky flex h-12 w-full items-center justify-between border-b bg-sidebar">
       <SidebarTrigger className="h-full" />
-      <ProfileMenu />
+      <div className="flex items-center gap-2 pr-2">
+        <ClockButton />
+        <ProfileMenu />
+      </div>
     </div>
   )
 }

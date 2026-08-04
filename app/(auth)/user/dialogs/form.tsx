@@ -145,7 +145,12 @@ export default function FormDialog({ _id, onClose }: Props) {
     validators: {
       onSubmit: ({ formApi, value }: any) => {
         try {
-          userSchema.parse(value)
+          // userSchema's refine treats a present `_id` as "this is an update,
+          // so an empty PIN is fine" — the form's own value object never
+          // carries `_id` (it's not a field), so it must be added back here
+          // or every update gets misjudged as a create and PIN becomes
+          // wrongly required.
+          userSchema.parse({ ...value, _id })
         } catch (error: any) {
           JSON.parse(error).map(({ path, message }: any) => {
             const pathName = path.join(".")

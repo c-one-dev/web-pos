@@ -2,7 +2,22 @@
 import { Label } from "@/components/ui/label"
 import { useCallback, useMemo, useState } from "react"
 import gql from "graphql-tag"
-import { useQuery } from "@apollo/client/react"
+import { useApolloClient, useQuery } from "@apollo/client/react"
+import ExcelJS from "exceljs"
+import jsPDF from "jspdf"
+import autoTable from "jspdf-autotable"
+import { toast } from "sonner"
+import { useSession } from "next-auth/react"
+import {
+  addExcelTitleRows,
+  styleExcelHeaderRow,
+  downloadExcelWorkbook,
+  addPdfHeader,
+  addPdfFooter,
+  savePdfDocument,
+  pdfTableStyles,
+  pdfCurrency,
+} from "@/lib/report-export"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Button } from "@/components/ui/button"
 import { ButtonGroup, ButtonGroupText } from "@/components/ui/button-group"
@@ -20,6 +35,9 @@ import {
   ChartLineUpIcon,
   CoinsIcon,
   CurrencyCircleDollarIcon,
+  DownloadSimpleIcon,
+  FilePdfIcon,
+  FileXlsIcon,
   GearIcon,
   MagnifyingGlassIcon,
   PercentIcon,
@@ -36,6 +54,7 @@ import { FilterType } from "@/types/shared.type"
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import SortHeader from "@/components/custom/sort-header"
@@ -74,6 +93,7 @@ import { formatDateRange } from "little-date"
 import { DateRange } from "react-day-picker"
 import RowViewDialog from "./_dialogs/row-view"
 import UpdatePaymentNoteDialog from "./_dialogs/update-note"
+import SaleRowViewDialog from "@/app/(auth)/sale-history/_dialogs/row-view"
 
 const GET_PAYMENT_SUMMARY = gql`
   query PaymentSummary($start: String!, $end: String!) {
@@ -247,21 +267,11 @@ function DateRangeFilter({
   )
 }
 
-function PaymentSummaryTab() {
-  const [appliedRange, setAppliedRange] = useState<DateRange>({
-    from: startOfToday(),
-    to: startOfToday(),
-  })
-  const [presetLabel, setPresetLabel] = useState("Today")
-
+function PaymentSummaryTab({ range }: { range: DateRange }) {
   const { data, loading } = useQuery(GET_PAYMENT_SUMMARY, {
     variables: {
-      start: (appliedRange.from || startOfToday()).toISOString(),
-      end: (
-        appliedRange.to ||
-        appliedRange.from ||
-        startOfToday()
-      ).toISOString(),
+      start: (range.from || startOfToday()).toISOString(),
+      end: (range.to || range.from || startOfToday()).toISOString(),
     },
     fetchPolicy: "network-only",
   })
@@ -270,16 +280,6 @@ function PaymentSummaryTab() {
 
   return (
     <div className="flex flex-col gap-2.5 pt-4">
-      <div className="flex items-center justify-end">
-        <DateRangeFilter
-          appliedRange={appliedRange}
-          presetLabel={presetLabel}
-          onApply={(range, label) => {
-            setAppliedRange(range)
-            setPresetLabel(label)
-          }}
-        />
-      </div>
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
         <SummaryCard
           icon={<ChartLineUpIcon />}
@@ -367,12 +367,7 @@ type PaymentTypeSummaryNode = {
   net: number
 }
 
-function PaymentTypesTab() {
-  const [appliedRange, setAppliedRange] = useState<DateRange>({
-    from: startOfToday(),
-    to: startOfToday(),
-  })
-  const [presetLabel, setPresetLabel] = useState("Today")
+function PaymentTypesTab({ range }: { range: DateRange }) {
   const [rows, setRows] = useState<number>(8)
   const [page, setPage] = useState<number>(1)
   const [sort, setSort] = useState<{
@@ -382,12 +377,8 @@ function PaymentTypesTab() {
 
   const { data, loading } = useQuery(GET_PAYMENT_TYPE_SUMMARY, {
     variables: {
-      start: (appliedRange.from || startOfToday()).toISOString(),
-      end: (
-        appliedRange.to ||
-        appliedRange.from ||
-        startOfToday()
-      ).toISOString(),
+      start: (range.from || startOfToday()).toISOString(),
+      end: (range.to || range.from || startOfToday()).toISOString(),
     },
     fetchPolicy: "network-only",
   })
@@ -469,17 +460,6 @@ function PaymentTypesTab() {
 
   return (
     <div className="flex flex-col gap-1.5 pt-4">
-      <div className="flex justify-end">
-        <DateRangeFilter
-          appliedRange={appliedRange}
-          presetLabel={presetLabel}
-          onApply={(range, label) => {
-            setAppliedRange(range)
-            setPresetLabel(label)
-            setPage(1)
-          }}
-        />
-      </div>
       <div className="flex items-center justify-between">
         <span className="text-sm">
           Showing {total === 0 ? 0 : (page - 1) * rows + 1}-
@@ -541,6 +521,8 @@ const GET_PAYMENTS = gql`
     $search: String
     $filter: [Filter]
     $sort: Sort
+    $start: String
+    $end: String
   ) {
     paymentTable(
       first: $first
@@ -548,6 +530,8 @@ const GET_PAYMENTS = gql`
       search: $search
       filter: $filter
       sort: $sort
+      start: $start
+      end: $end
     ) {
       total
       pages
@@ -559,6 +543,11 @@ const GET_PAYMENTS = gql`
           note
           byName
           saleList
+          sales {
+            _id
+            saleNumber
+            total
+          }
           methodName
           paymentDate
         }
@@ -601,6 +590,305 @@ function Actions({ row }: { row?: IPaymentNode }) {
   )
 }
 
+const GET_SALES_OUTLETS = gql`
+  query SalesOutlets($start: String!, $end: String!) {
+    salesOutlets(start: $start, end: $end)
+  }
+`
+
+const TAB_LABELS: Record<string, string> = {
+  summary: "Payment Summary",
+  types: "Payment Types",
+  transactions: "Payment Transactions",
+}
+
+async function exportPaymentsReportExcel({
+  client,
+  activeTab,
+  range,
+}: {
+  client: ReturnType<typeof useApolloClient>
+  activeTab: string
+  range: DateRange
+}) {
+  const start = (range.from || startOfToday()).toISOString()
+  const end = (range.to || range.from || startOfToday()).toISOString()
+  const title = TAB_LABELS[activeTab] || "Payment Report"
+
+  const { data: outletsData } = await client.query({
+    query: GET_SALES_OUTLETS,
+    variables: { start, end },
+    fetchPolicy: "network-only",
+  })
+  const outlets: string[] = (outletsData as any)?.salesOutlets || []
+
+  const workbook = new ExcelJS.Workbook()
+  const sheet = workbook.addWorksheet(title.slice(0, 31))
+
+  if (activeTab === "summary") {
+    const { data } = await client.query({
+      query: GET_PAYMENT_SUMMARY,
+      variables: { start, end },
+      fetchPolicy: "network-only",
+    })
+    const summary = (data as any)?.paymentSummary
+
+    addExcelTitleRows(sheet, title, range, 2, outlets)
+    sheet.columns = [{ width: 22 }, { width: 18 }]
+    ;[
+      ["Sales (Inc)", summary?.salesInc || 0],
+      ["Sales (Ex)", summary?.salesEx || 0],
+      ["Refunds", summary?.refunds || 0],
+      ["Discounts", summary?.discounts || 0],
+      ["Net Sales", summary?.netSales || 0],
+      ["COGS", "N/A"],
+      ["Gross Profit", "N/A"],
+      ["Margin %", "N/A"],
+      ["Net Sales Tax", 0],
+      ["Surcharge / Shipping", 0],
+    ].forEach((r) => sheet.addRow(r))
+  } else if (activeTab === "types") {
+    const { data } = await client.query({
+      query: GET_PAYMENT_TYPE_SUMMARY,
+      variables: { start, end },
+      fetchPolicy: "network-only",
+    })
+    const nodes: PaymentTypeSummaryNode[] = (data as any)?.paymentTypeSummary || []
+
+    addExcelTitleRows(sheet, title, range, 4, outlets)
+    sheet.columns = [{ width: 26 }, { width: 18 }, { width: 14 }, { width: 16 }]
+    const headerRow = sheet.addRow(["Payment type", "Total collected", "Refunds", "Net"])
+    styleExcelHeaderRow(headerRow)
+    nodes.forEach((n) => sheet.addRow([n.name, n.totalCollected, n.refunds, n.net]))
+    const totalRow = sheet.addRow([
+      "TOTAL",
+      nodes.reduce((sum, n) => sum + n.totalCollected, 0),
+      nodes.reduce((sum, n) => sum + n.refunds, 0),
+      nodes.reduce((sum, n) => sum + n.net, 0),
+    ])
+    totalRow.font = { bold: true }
+  } else {
+    const { data } = await client.query({
+      query: GET_PAYMENTS,
+      variables: { first: 500, start, end },
+      fetchPolicy: "network-only",
+    })
+    const nodes: IPaymentNode[] =
+      (data as any)?.paymentTable?.edges?.map((e: any) => e.node) || []
+
+    addExcelTitleRows(sheet, title, range, 6, outlets)
+    sheet.columns = [
+      { width: 20 },
+      { width: 16 },
+      { width: 20 },
+      { width: 16 },
+      { width: 16 },
+      { width: 20 },
+    ]
+    const headerRow = sheet.addRow([
+      "Receipt #",
+      "Amount",
+      "Date & Time",
+      "Method",
+      "Payment Amount",
+      "User",
+    ])
+    styleExcelHeaderRow(headerRow)
+    nodes.forEach((n) =>
+      sheet.addRow([
+        n.saleList?.join(", ") || "-",
+        n.sales?.reduce((sum, s) => sum + (s.total || 0), 0) || 0,
+        n.paymentDate ? format(Number(n.paymentDate), "PPp") : "-",
+        n.methodName,
+        Number(n.amount),
+        n.byName,
+      ])
+    )
+    const totalRow = sheet.addRow([
+      "TOTAL",
+      nodes.reduce(
+        (sum, n) => sum + (n.sales?.reduce((s2, s) => s2 + (s.total || 0), 0) || 0),
+        0
+      ),
+      "",
+      "",
+      nodes.reduce((sum, n) => sum + Number(n.amount), 0),
+      "",
+    ])
+    totalRow.font = { bold: true }
+  }
+
+  await downloadExcelWorkbook(workbook, title, range)
+}
+
+async function exportPaymentsReportPdf({
+  client,
+  activeTab,
+  range,
+  userName,
+}: {
+  client: ReturnType<typeof useApolloClient>
+  activeTab: string
+  range: DateRange
+  userName: string
+}) {
+  const start = (range.from || startOfToday()).toISOString()
+  const end = (range.to || range.from || startOfToday()).toISOString()
+  const title = TAB_LABELS[activeTab] || "Payment Report"
+
+  const { data: outletsData } = await client.query({
+    query: GET_SALES_OUTLETS,
+    variables: { start, end },
+    fetchPolicy: "network-only",
+  })
+  const outlets: string[] = (outletsData as any)?.salesOutlets || []
+
+  const doc = new jsPDF({
+    orientation: activeTab === "transactions" ? "landscape" : "portrait",
+    unit: "pt",
+  })
+  const startY = addPdfHeader(doc, title, range, outlets)
+
+  if (activeTab === "summary") {
+    const { data } = await client.query({
+      query: GET_PAYMENT_SUMMARY,
+      variables: { start, end },
+      fetchPolicy: "network-only",
+    })
+    const summary = (data as any)?.paymentSummary
+
+    autoTable(doc, {
+      startY,
+      head: [
+        [
+          "Sales (Inc)",
+          "Sales (Ex)",
+          "Refunds",
+          "Discounts",
+          "Net Sales",
+          "Net Sales Tax",
+          "Surcharge / Shipping",
+        ],
+      ],
+      body: [
+        [
+          pdfCurrency(summary?.salesInc),
+          pdfCurrency(summary?.salesEx),
+          pdfCurrency(summary?.refunds),
+          pdfCurrency(summary?.discounts),
+          pdfCurrency(summary?.netSales),
+          pdfCurrency(0),
+          pdfCurrency(0),
+        ],
+      ],
+      ...pdfTableStyles,
+    })
+  } else if (activeTab === "types") {
+    const { data } = await client.query({
+      query: GET_PAYMENT_TYPE_SUMMARY,
+      variables: { start, end },
+      fetchPolicy: "network-only",
+    })
+    const nodes: PaymentTypeSummaryNode[] = (data as any)?.paymentTypeSummary || []
+
+    autoTable(doc, {
+      startY,
+      head: [["Payment type", "Total collected", "Refunds", "Net"]],
+      body: nodes.map((n) => [
+        n.name,
+        pdfCurrency(n.totalCollected),
+        pdfCurrency(n.refunds),
+        pdfCurrency(n.net),
+      ]),
+      columnStyles: {
+        1: { halign: "right" },
+        2: { halign: "right" },
+        3: { halign: "right" },
+      },
+      ...pdfTableStyles,
+    })
+  } else {
+    const { data } = await client.query({
+      query: GET_PAYMENTS,
+      variables: { first: 500, start, end },
+      fetchPolicy: "network-only",
+    })
+    const nodes: IPaymentNode[] =
+      (data as any)?.paymentTable?.edges?.map((e: any) => e.node) || []
+
+    autoTable(doc, {
+      startY,
+      head: [["Receipt #", "Amount", "Date & Time", "Method", "Payment Amount", "User"]],
+      body: nodes.map((n) => [
+        n.saleList?.join(", ") || "-",
+        pdfCurrency(n.sales?.reduce((sum, s) => sum + (s.total || 0), 0) || 0),
+        n.paymentDate ? format(Number(n.paymentDate), "PPp") : "-",
+        n.methodName,
+        pdfCurrency(n.amount),
+        n.byName,
+      ]),
+      ...pdfTableStyles,
+    })
+  }
+
+  addPdfFooter(doc, title, userName)
+  savePdfDocument(doc, title, range)
+}
+
+function ExportButton({ activeTab, range }: { activeTab: string; range: DateRange }) {
+  const client = useApolloClient()
+  const { data: session } = useSession()
+  const userName = (session as any)?.user?.name || "Unknown"
+  const [isExporting, setIsExporting] = useState(false)
+
+  const handleExcelExport = async () => {
+    setIsExporting(true)
+    try {
+      await exportPaymentsReportExcel({ client, activeTab, range })
+    } catch (error: any) {
+      toast.error(error.message || "Failed to export.")
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  const handlePdfExport = async () => {
+    setIsExporting(true)
+    try {
+      await exportPaymentsReportPdf({ client, activeTab, range, userName })
+    } catch (error: any) {
+      toast.error(error.message || "Failed to export.")
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          className="cursor-pointer gap-1.5 rounded-[10px]"
+          disabled={isExporting}
+        >
+          <DownloadSimpleIcon />
+          {isExporting ? "Exporting..." : "Export"}
+          <CaretDownIcon />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onSelect={handleExcelExport}>
+          <FileXlsIcon />
+          Excel
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={handlePdfExport}>
+          <FilePdfIcon />
+          PDF
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 export default function Page() {
   // Pagination state
   const [rows, setRows] = useState<number>(10)
@@ -625,12 +913,26 @@ export default function Page() {
   const [filter, setFilter] = useState<
     { key: string; value: string; type: FilterType }[]
   >([])
+  // Sale detail dialog, opened by clicking a Receipt # in the table
+  const [openSaleId, setOpenSaleId] = useState<string | null>(null)
+  const [openSaleDialog, setOpenSaleDialog] = useState(false)
+  // Shared date range + active tab (used by Export)
+  const [appliedRange, setAppliedRange] = useState<DateRange>({
+    from: startOfToday(),
+    to: startOfToday(),
+  })
+  const [presetLabel, setPresetLabel] = useState("Today")
+  const [activeTab, setActiveTab] = useState("summary")
+  const start = (appliedRange.from || startOfToday()).toISOString()
+  const end = (appliedRange.to || appliedRange.from || startOfToday()).toISOString()
   const { data, fetchMore, loading } = useQuery(GET_PAYMENTS, {
     variables: {
       first: rows,
       search,
       filter,
       sort,
+      start,
+      end,
     },
     fetchPolicy: "cache-and-network",
     nextFetchPolicy: "cache-first",
@@ -680,11 +982,28 @@ export default function Page() {
             onSortChange={setSort}
           />
         ),
-        cell: ({ row }) => (
-          <span className="font-medium text-primary">
-            {row.original.saleList.join(", ") || "—"}
-          </span>
-        ),
+        cell: ({ row }) =>
+          row.original.sales?.length ? (
+            <span className="flex flex-wrap gap-x-1.5">
+              {row.original.sales.map((sale, index) => (
+                <span key={sale._id.toString()}>
+                  <span
+                    className="cursor-pointer font-medium text-primary hover:underline"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setOpenSaleId(sale._id.toString())
+                      setOpenSaleDialog(true)
+                    }}
+                  >
+                    {sale.saleNumber}
+                  </span>
+                  {index < row.original.sales.length - 1 && ","}
+                </span>
+              ))}
+            </span>
+          ) : (
+            <span className="font-medium text-primary">—</span>
+          ),
         footer: () => (
           <ColumnFilter
             label="Receipt #"
@@ -693,6 +1012,25 @@ export default function Page() {
             filter={filter}
             onFilterChange={onFilter}
           />
+        ),
+      },
+      {
+        id: "saleAmount",
+        header: () => (
+          <div className="text-right">
+            <span>Amount</span>
+          </div>
+        ),
+        cell: ({ row }) => (
+          <div className="text-right font-medium">
+            {new Intl.NumberFormat("en-PH", {
+              style: "currency",
+              currency: "PHP",
+            }).format(
+              row.original.sales?.reduce((acc, s) => acc + (s.total || 0), 0) ||
+                0
+            )}
+          </div>
         ),
       },
       {
@@ -742,7 +1080,7 @@ export default function Page() {
         header: () => (
           <div className="text-right">
             <SortHeader
-              label="Amount"
+              label="Payment Amount"
               sortKey="amount"
               sortState={sort}
               onSortChange={setSort}
@@ -767,7 +1105,7 @@ export default function Page() {
         ),
         footer: () => (
           <ColumnFilter
-            label="Amount"
+            label="Payment Amount"
             filterKey="amount"
             filterType={FilterType.NUMBER}
             filter={filter}
@@ -824,6 +1162,8 @@ export default function Page() {
           search,
           filter,
           sort,
+          start,
+          end,
         },
         updateQuery: (prev: any, { fetchMoreResult: more }: any) => {
           if (!more) return prev
@@ -866,20 +1206,32 @@ export default function Page() {
 
   return (
     <div className="flex h-full w-full flex-col gap-1.5 p-2.5">
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center justify-between gap-1.5">
         <Label className="text-xl font-medium">Payment</Label>
+        <div className="flex items-center gap-1.5">
+          <DateRangeFilter
+            appliedRange={appliedRange}
+            presetLabel={presetLabel}
+            onApply={(range, label) => {
+              setAppliedRange(range)
+              setPresetLabel(label)
+              resetPage()
+            }}
+          />
+          <ExportButton activeTab={activeTab} range={appliedRange} />
+        </div>
       </div>
-      <Tabs defaultValue="summary">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList variant="line">
           <TabsTrigger value="summary">Payment Summary</TabsTrigger>
           <TabsTrigger value="types">Types</TabsTrigger>
           <TabsTrigger value="transactions">Payment Transactions</TabsTrigger>
         </TabsList>
         <TabsContent value="summary">
-          <PaymentSummaryTab />
+          <PaymentSummaryTab range={appliedRange} />
         </TabsContent>
         <TabsContent value="types">
-          <PaymentTypesTab />
+          <PaymentTypesTab range={appliedRange} />
         </TabsContent>
         <TabsContent
           value="transactions"
@@ -957,6 +1309,13 @@ export default function Page() {
             data={nodes.slice((page.current - 1) * rows, page.current * rows)}
             actionsColumn={<Actions />}
             rowView={<RowViewDialog />}
+          />
+          <SaleRowViewDialog
+            _id={openSaleId || ""}
+            open={openSaleDialog}
+            setOpen={setOpenSaleDialog}
+            onClose={() => setOpenSaleId(null)}
+            external
           />
         </TabsContent>
       </Tabs>

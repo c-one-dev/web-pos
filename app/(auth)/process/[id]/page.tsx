@@ -72,6 +72,7 @@ import Pay from "./_dialogs/pay"
 import ReceiptDialog from "./_dialogs/receipt"
 import { toast } from "sonner"
 import { Spinner } from "@/components/ui/spinner"
+import OpenRegisterDialog from "@/components/custom/open-register-dialog"
 
 const GENERATE_SALE = gql`
   mutation GenerateSale($input: SaleInput) {
@@ -79,15 +80,6 @@ const GENERATE_SALE = gql`
       ok
       message
       data
-    }
-  }
-`
-
-const OPEN_REGISTER_SESSION = gql`
-  mutation OpenRegisterSession($register: ID!, $openingFloat: Float!) {
-    openRegisterSession(register: $register, openingFloat: $openingFloat) {
-      ok
-      message
     }
   }
 `
@@ -128,6 +120,20 @@ const GET_REGISTER = gql`
   }
 `
 
+const DRAFT_STORAGE_PREFIX = "pos-sale-draft:"
+
+// Persists the in-progress sale (items, notes, discount, etc.) per register
+// so a refresh or navigating away and back doesn't lose the cart.
+function loadDraft(registerId: string) {
+  if (typeof window === "undefined") return null
+  try {
+    const raw = localStorage.getItem(`${DRAFT_STORAGE_PREFIX}${registerId}`)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
 function DiscardDialog({ discard }: { discard: () => void }) {
   return (
     <AlertDialog>
@@ -158,6 +164,14 @@ function DiscardDialog({ discard }: { discard: () => void }) {
 export default function Page() {
   const [isPending, startTransition] = useTransition()
   const params = useParams()
+  const registerId = params.id as string
+  const clearDraft = () => {
+    try {
+      localStorage.removeItem(`${DRAFT_STORAGE_PREFIX}${registerId}`)
+    } catch {
+      // ignore
+    }
+  }
   const { data, loading } = useQuery(GET_REGISTER, {
     variables: { _id: params.id },
     fetchPolicy: "network-only",
@@ -166,25 +180,8 @@ export default function Page() {
   const router = useRouter()
   const [selectedType, setSelectedType] = useState<string>("")
   const [generateSale] = useMutation(GENERATE_SALE)
-  const [openRegisterSession, { loading: openingRegister }] = useMutation(
-    OPEN_REGISTER_SESSION,
-    { refetchQueries: ["ProcessedRegister"] }
-  )
   const [openPay, setOpenPay] = useState(false)
   const [receiptSaleId, setReceiptSaleId] = useState<string | null>(null)
-
-  const handleOpenRegister = async () => {
-    try {
-      const result: any = await openRegisterSession({
-        variables: { register: register._id, openingFloat: 0 },
-      })
-      if (result.data.openRegisterSession.ok) {
-        toast.success(result.data.openRegisterSession.message)
-      }
-    } catch (error: any) {
-      toast.error(error.graphQLErrors?.[0]?.message ?? error.message)
-    }
-  }
 
   useEffect(() => {
     if (register && register.productTypes.length > 0)
@@ -194,19 +191,24 @@ export default function Page() {
 
   const [openSearchCommand, setOpenSearchCommand] = useState(false)
 
+  const emptySaleValues = {
+    customer: "",
+    items: [] as any,
+    payments: [] as any,
+    discount: 0,
+    subTotal: 0,
+    total: 0,
+    notes: "",
+    receivedAmount: 0,
+    changeAmount: 0,
+    netAmount: 0,
+    register: register?._id || "",
+  }
+
   const form = useForm({
     defaultValues: {
-      customer: "",
-      items: [] as any,
-      payments: [] as any,
-      discount: 0,
-      subTotal: 0,
-      total: 0,
-      notes: "",
-      receivedAmount: 0,
-      changeAmount: 0,
-      netAmount: 0,
-      register: register?._id || "",
+      ...emptySaleValues,
+      ...loadDraft(registerId),
     },
     onSubmit: ({ value: payload }: any) =>
       startTransition(async () => {
@@ -224,6 +226,7 @@ export default function Page() {
           })
           if ((result.data as any).generateSale.ok) {
             toast.success((result.data as any).generateSale.message)
+            clearDraft()
             setOpenPay(false)
             setReceiptSaleId((result.data as any).generateSale.data._id)
           }
@@ -232,6 +235,22 @@ export default function Page() {
         }
       }),
   })
+
+  const formValues = useStore(form.store, (state) => state.values)
+
+  // Mirror the whole cart to localStorage on every change so a refresh or
+  // navigating away and back restores it, keyed per register.
+  useEffect(() => {
+    if (!registerId) return
+    try {
+      localStorage.setItem(
+        `${DRAFT_STORAGE_PREFIX}${registerId}`,
+        JSON.stringify(formValues)
+      )
+    } catch {
+      // ignore (e.g. storage disabled/full)
+    }
+  }, [registerId, formValues])
 
   useEffect(() => {
     form.setFieldValue("register", register?._id || "")
@@ -272,14 +291,11 @@ export default function Page() {
           Open {register.name} to start this shift before processing sales.
         </p>
         <div className="mt-3 flex flex-col items-center gap-2">
-          <Button
+          <OpenRegisterDialog
+            registerId={register._id}
+            registerName={register.name}
             size="lg"
-            className="cursor-pointer rounded-[10px]"
-            onClick={handleOpenRegister}
-            disabled={openingRegister}
-          >
-            Open Register
-          </Button>
+          />
           <Button
             variant="link"
             className="cursor-pointer text-muted-foreground"
@@ -684,7 +700,12 @@ export default function Page() {
                       </Accordion>
                     </div>
                     <div>
-                      <DiscardDialog discard={() => form.reset()} />
+                      <DiscardDialog
+                        discard={() => {
+                          form.reset(emptySaleValues)
+                          clearDraft()
+                        }}
+                      />
                       <Pay
                         form={form}
                         state={state}
@@ -720,7 +741,7 @@ export default function Page() {
         saleId={receiptSaleId}
         onClose={() => {
           setReceiptSaleId(null)
-          form.reset()
+          form.reset(emptySaleValues)
         }}
       />
     </>

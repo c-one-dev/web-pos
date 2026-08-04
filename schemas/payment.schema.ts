@@ -21,12 +21,19 @@ export const paymentSchema = gql`
     pageInfo: PageInfo
   }
 
+  type PaymentSaleRef {
+    _id: ID
+    saleNumber: String
+    total: Float
+  }
+
   type PaymentNode {
     _id: ID!
-    amount: String
+    amount: Float
     note: String
     byName: String
     saleList: [String]
+    sales: [PaymentSaleRef]
     methodName: String
     paymentDate: String
   }
@@ -60,6 +67,8 @@ export const paymentSchema = gql`
       search: String
       filter: [Filter]
       sort: Sort
+      start: String
+      end: String
     ): PaymentConnection
     paymentSummary(start: String!, end: String!): PaymentSummary
     paymentTypeSummary(start: String!, end: String!): [PaymentTypeSummaryNode]

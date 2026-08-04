@@ -13,6 +13,11 @@ import {
   mutationValidationRegistry,
   NO_VALIDATION,
 } from "@/validators/mutationRegistry"
+import {
+  cashierRestrictedFields,
+  managerRestrictedFields,
+} from "@/validators/roleAccessRegistry"
+import { logActivity, describeActivity } from "@/helpers/activityLog"
 
 // Query/Mutation fields that must remain reachable without a session.
 const PUBLIC_FIELDS = new Set(["Mutation.signIn"])
@@ -62,14 +67,50 @@ export const schema = mapSchema(baseSchema, {
     if (PUBLIC_FIELDS.has(`${typeName}.${fieldName}`))
       return { ...fieldConfig, resolve }
 
+    const fieldKey = `${typeName}.${fieldName}`
+
     return {
       ...fieldConfig,
-      resolve: (source, args, context, info) => {
+      resolve: async (source, args, context, info) => {
         if (!context?.session)
           throw new GraphQLError("Unauthorized", {
             extensions: { code: "UNAUTHORIZED" },
           })
-        return resolve(source, args, context, info)
+        const role = context.session.role
+        if (role === "CASHIER" && cashierRestrictedFields.has(fieldKey))
+          throw new GraphQLError("Forbidden", {
+            extensions: { code: "FORBIDDEN" },
+          })
+        if (role === "MANAGER" && managerRestrictedFields.has(fieldKey))
+          throw new GraphQLError("Forbidden", {
+            extensions: { code: "FORBIDDEN" },
+          })
+        // Query.user is otherwise open (every role needs it for "My
+        // Profile"), but for anyone below ADMIN it must not become a way to
+        // read a coworker's profile by guessing their _id.
+        if (
+          role !== "ADMIN" &&
+          fieldKey === "Query.user" &&
+          args?._id &&
+          args._id.toString() !== context.session._id?.toString()
+        )
+          throw new GraphQLError("Forbidden", {
+            extensions: { code: "FORBIDDEN" },
+          })
+        const result = await resolve(source, args, context, info)
+        // Major Activity Log: every successful mutation (not queries) gets a
+        // row, independent of which domain it's in - so the log stays
+        // complete as new mutations are added, instead of needing each one
+        // remembered here individually. Mutation.signIn logs itself
+        // separately (resolvers/auth.resolver.ts) since it runs before a
+        // session exists and never reaches this wrapper.
+        if (typeName === "Mutation")
+          logActivity({
+            req: context.req,
+            user: { _id: context.session._id, name: context.session.name },
+            activity: describeActivity(fieldName, args, result),
+          })
+        return result
       },
     }
   },
