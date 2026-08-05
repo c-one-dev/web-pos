@@ -4,9 +4,10 @@ import { withAuth } from "next-auth/middleware"
 // Route prefixes CASHIER may not open directly by URL, mirroring the
 // GraphQL-level restriction in app/graphql/route.ts (cashierRestrictedFields)
 // — that layer blocks the actual data, this one avoids landing on a page
-// shell full of failed-query error states in the first place.
+// shell full of failed-query error states in the first place. Reports is
+// deliberately NOT restricted here - Cashier has full Reports access, same
+// as Manager.
 const CASHIER_RESTRICTED_PREFIXES = [
-  "/reports",
   "/user",
   "/outlet",
   "/brand",

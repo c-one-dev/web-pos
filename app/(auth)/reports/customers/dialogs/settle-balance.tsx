@@ -195,11 +195,16 @@ export default function SettleBalanceDialog({ _id }: Props) {
                           disabled={isPending}
                           id={field.name}
                           name={field.name}
-                          value={field.state.value}
+                          value={
+                            Number.isNaN(field.state.value)
+                              ? ""
+                              : field.state.value
+                          }
                           onBlur={field.handleBlur}
                           onChange={(e) =>
-                            field.handleChange(Number(e.target.value))
+                            field.handleChange(parseFloat(e.target.value))
                           }
+                          onFocus={(e) => e.currentTarget.select()}
                           type="number"
                           inputMode="decimal"
                           step="any"

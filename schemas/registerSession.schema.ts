@@ -83,7 +83,9 @@ export const registerSessionSchema = gql`
     registerName: String
     outletName: String
     openedAt: String
+    openedByName: String
     closedAt: String
+    status: RegisterSessionStatus
     expected: Float
     actual: Float
     difference: Float

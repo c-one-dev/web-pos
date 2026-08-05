@@ -4,14 +4,13 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
-  AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { Field, FieldLabel } from "@/components/ui/field"
-import { Textarea } from "@/components/ui/textarea"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { WarningIcon } from "@phosphor-icons/react"
 import { useMutation } from "@apollo/client/react"
 import gql from "graphql-tag"
 import { useRouter } from "next/navigation"
@@ -39,7 +38,6 @@ export default function CloseDialog({
   expectedTotals,
 }: Props) {
   const [open, setOpen] = useState(false)
-  const [notes, setNotes] = useState("")
   const router = useRouter()
   const [closeSession, { loading }] = useMutation(CLOSE_REGISTER_SESSION, {
     refetchQueries: ["ActiveRegisterSession", "Registers", "RegisterDetail"],
@@ -49,10 +47,12 @@ export default function CloseDialog({
     try {
       const tally = expectedTotals.map((item) => ({
         method: item.method._id,
-        counted: counted[item.method._id] ?? 0,
+        counted: Number.isFinite(counted[item.method._id])
+          ? counted[item.method._id]
+          : 0,
       }))
       const result: any = await closeSession({
-        variables: { _id: sessionId, input: { tally, notes } },
+        variables: { _id: sessionId, input: { tally } },
       })
       if (result.data.closeRegisterSession.ok) {
         toast.success(result.data.closeRegisterSession.message)
@@ -73,21 +73,16 @@ export default function CloseDialog({
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Close this register?</AlertDialogTitle>
-          <AlertDialogDescription>
-            This locks in the counted amounts entered in the Payment Tally as a
-            permanent record for this shift. This cannot be undone.
-          </AlertDialogDescription>
+          <AlertDialogTitle>Close this Register?</AlertDialogTitle>
         </AlertDialogHeader>
-        <Field>
-          <FieldLabel htmlFor="close-notes">Notes (optional)</FieldLabel>
-          <Textarea
-            id="close-notes"
-            placeholder="e.g. reason for any discrepancy"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
-        </Field>
+        <Alert variant="destructive">
+          <WarningIcon weight="fill" />
+          <AlertTitle>Reminder!</AlertTitle>
+          <AlertDescription>
+            If any discrepancies, don&apos;t forget to adjust actual counted box
+            before closing the register.
+          </AlertDescription>
+        </Alert>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
           <AlertDialogAction
@@ -95,7 +90,7 @@ export default function CloseDialog({
             onClick={onConfirm}
             disabled={loading}
           >
-            Yes, Close Register
+            Continue
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

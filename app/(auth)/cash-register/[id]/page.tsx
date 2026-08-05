@@ -197,13 +197,14 @@ export default function Page() {
                           type="number"
                           inputMode="decimal"
                           step="any"
-                          value={countedValue}
+                          value={Number.isNaN(countedValue) ? "" : countedValue}
                           onChange={(e) =>
                             setCounted((prev) => ({
                               ...prev,
-                              [methodId]: Number(e.target.value),
+                              [methodId]: parseFloat(e.target.value),
                             }))
                           }
+                          onFocus={(e) => e.currentTarget.select()}
                         />
                       </InputGroup>
                     </TableCell>

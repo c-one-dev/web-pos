@@ -28,6 +28,20 @@ function TotalDiscount({
 }>) {
   const [open, setOpen] = useState<boolean>()
   const [discountType, setDiscountType] = useState<"%" | "₱">("₱")
+  // Raw text mirrors of the % / ₱ discount inputs, separate from the
+  // committed state.discount used in the sale total - lets the field go
+  // visually empty while the user is mid-edit (backspacing) without ever
+  // computing NaN into state.total. Resynced explicitly whenever the user
+  // toggles which one is being edited (see the label's onClick below).
+  const [percentText, setPercentText] = useState<string>(() => {
+    const originalTotal = (state?.total || 0) + (state?.discount || 0)
+    return originalTotal
+      ? (((state?.discount || 0) / originalTotal) * 100).toFixed(2)
+      : "0"
+  })
+  const [amountText, setAmountText] = useState<string>(() =>
+    (state?.discount || 0).toString()
+  )
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -49,9 +63,24 @@ function TotalDiscount({
               Discount ({discountType === "%" ? "%" : "₱"})
               <span
                 className="text-primary hover:cursor-pointer hover:underline hover:underline-offset-2"
-                onClick={() =>
-                  setDiscountType(discountType === "%" ? "₱" : "%")
-                }
+                onClick={() => {
+                  const originalTotal =
+                    (state?.total || 0) + (state?.discount || 0)
+                  if (discountType === "%") {
+                    setAmountText((state?.discount || 0).toString())
+                    setDiscountType("₱")
+                  } else {
+                    setPercentText(
+                      originalTotal
+                        ? (
+                            ((state?.discount || 0) / originalTotal) *
+                            100
+                          ).toFixed(2)
+                        : "0"
+                    )
+                    setDiscountType("%")
+                  }
+                }}
               >
                 {discountType === "%"
                   ? "Change to fixed amount"
@@ -62,19 +91,16 @@ function TotalDiscount({
               <InputGroup>
                 <InputGroupAddon align="inline-end">%</InputGroupAddon>
                 <InputGroupInput
-                  value={parseFloat(
-                    (
-                      (state?.discount / (state?.total + state?.discount)) *
-                      100
-                    ).toFixed(2)
-                  )}
+                  value={percentText}
                   type="number"
                   min={0}
                   max={100}
                   onChange={(e) => {
+                    const raw = e.target.value
+                    setPercentText(raw)
                     const percentDiscount = Math.min(
                       100,
-                      Math.max(0, parseFloat(e.target.value || "0"))
+                      Math.max(0, parseFloat(raw) || 0)
                     )
                     const originalTotal = state.total + state.discount
                     const discountAmount = parseFloat(
@@ -83,6 +109,7 @@ function TotalDiscount({
                     form.setFieldValue("discount", discountAmount)
                     form.setFieldValue("total", originalTotal - discountAmount)
                   }}
+                  onFocus={(e) => e.currentTarget.select()}
                 />
               </InputGroup>
             )}
@@ -90,23 +117,26 @@ function TotalDiscount({
               <InputGroupAddon>₱</InputGroupAddon>
               <InputGroupInput
                 value={
-                  state?.discount ? parseFloat(state.discount.toFixed(2)) : 0
+                  discountType === "%" ? (state?.discount ?? 0) : amountText
                 }
                 type="number"
                 min={0}
                 max={state.total + state.discount}
                 readOnly={discountType === "%"}
                 onChange={(e) => {
+                  const raw = e.target.value
+                  setAmountText(raw)
                   const originalTotal = parseFloat(
                     (state.total + state.discount).toFixed(2)
                   )
                   const discount = Math.min(
                     originalTotal,
-                    Math.max(0, parseFloat(e.target.value || "0"))
+                    Math.max(0, parseFloat(raw) || 0)
                   )
                   form.setFieldValue("discount", discount)
                   form.setFieldValue("total", originalTotal - discount)
                 }}
+                onFocus={(e) => e.currentTarget.select()}
               />
             </InputGroup>
           </div>

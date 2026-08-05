@@ -4,35 +4,11 @@
 // real FORBIDDEN error even if they call the field directly (curl/devtools),
 // not just a hidden sidebar link.
 //
-// Only the "management" surface for each domain is listed here — read-only
-// `*Options` lookups used by cashier-facing forms (e.g. brandOptions,
-// paymentMethodOptions) are deliberately left out, along with anything the
-// Point of Sale / Dashboard / Customers pages need (generateSale, voidSale,
-// activeRegisterSession, openRegisterSession, dashboardSummary, customer
-// CRUD, etc.).
+// Reports is deliberately NOT restricted here - Cashier has full Reports
+// access (including the sensitive account-limit/store-credit/payment-note
+// mutations surfaced there), same as Manager. Only Store Setup admin
+// management stays Cashier-restricted below.
 export const cashierRestrictedFields = new Set<string>([
-  // Reports (entire section hidden from Cashier)
-  "Query.salesTransactionTable",
-  "Query.salesByItemTable",
-  "Query.salesOutlets",
-  "Query.voidedSaleTable",
-  "Query.paymentSummary",
-  "Query.paymentTypeSummary",
-  "Query.paymentTable",
-  "Query.payment",
-  "Query.registerSessionTable",
-  "Query.registerSession",
-  "Query.customerReport",
-  "Query.customerReportTable",
-  "Query.customerCreditHistoryTable",
-  "Query.customerLimitHistoryTable",
-  "Query.customerCreditHistoryItemById",
-  "Query.customerSalesTable",
-  "Mutation.adjustAccountLimit",
-  "Mutation.settleAccountBalance",
-  "Mutation.adjustStoreCredit",
-  "Mutation.updatePaymentNote",
-
   // Store Setup admin management (Users / Outlets / Payment Methods /
   // Brands / Registers) — Customers is deliberately NOT listed here, since
   // Cashier keeps access to that one.
@@ -54,22 +30,16 @@ export const cashierRestrictedFields = new Set<string>([
   "Mutation.createBrand",
   "Mutation.updateBrand",
   "Mutation.changeBrandStatus",
+  // Query.register (singular, by _id) is deliberately NOT listed here even
+  // though it's under the Store Setup "Registers" admin page - it's also
+  // the same field Cash Register and Process Sale use to load basic info
+  // (name, outlet, payment methods) for whichever register a cashier is
+  // actively operating. Only the admin list view is actually sensitive.
   "Query.registerTable",
-  "Query.register",
   "Mutation.createRegister",
   "Mutation.updateRegister",
   "Mutation.changeRegisterStatus",
   "Mutation.changeRegisterOpenStatus",
-
-  // "Users" report (timecards / activity log / sales targets) - Admin and
-  // Manager only, same as the rest of Reports. Note: Query.activeTimeCard
-  // and Mutation.clockIn/clockOut are deliberately NOT listed here - every
-  // role clocks in/out for themselves, it isn't a Reports-domain action.
-  "Query.timeCardByUserTable",
-  "Query.timeCardByDateTable",
-  "Query.activityLogTable",
-  "Query.salesTargetTable",
-  "Mutation.setSalesTarget",
 ])
 
 // MANAGER keeps everything ADMIN has except the Users domain — Manager must

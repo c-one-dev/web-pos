@@ -105,11 +105,11 @@ export default function AppSidebar() {
   const LOCAL_STORAGE_KEY = "menu-state"
   const currentPath = usePathname()
   const { data: session } = useSession()
-  // CASHIER gets a reduced sidebar (Reports hidden entirely, Products
-  // trimmed to Products/Product Types, Store Setup trimmed to Customers);
-  // MANAGER keeps everything except Users. Matches the server-side
-  // restrictions in app/graphql/route.ts and proxy.ts — this is just the UI
-  // reflecting what's actually reachable.
+  // CASHIER gets a reduced sidebar (Products trimmed to Products/Product
+  // Types, Store Setup trimmed to Customers) but full Reports access, same
+  // as Manager; MANAGER keeps everything except Users. Matches the
+  // server-side restrictions in app/graphql/route.ts and proxy.ts — this is
+  // just the UI reflecting what's actually reachable.
   const role = (session as any)?.user?.role
   const isCashier = role === "CASHIER"
   const isManager = role === "MANAGER"
@@ -213,36 +213,32 @@ export default function AppSidebar() {
               ))}
             </AccordionContent>
           </AccordionItem>
-          {!isCashier && (
-            <AccordionItem value="reports">
-              <AccordionTrigger>
-                <div className="flex items-center gap-2">
-                  <BooksIcon size={18} />
-                  <span className="text-sm">Reports</span>
-                </div>
-              </AccordionTrigger>
-              <AccordionContent>
-                {reportItems.map((item) => (
-                  <SidebarMenuItem key={item.url} className="px-1">
-                    <SidebarMenuButton asChild>
-                      <Link
-                        href={item.url || "/"}
-                        className={cn(
-                          "flex items-center gap-2 decoration-transparent hover:decoration-current active:decoration-current",
-                          item.url === currentPath && "text-primary"
-                        )}
-                      >
-                        <DotIcon size={12} className="ml-px" />
-                        <span className="text-sm no-underline">
-                          {item.label}
-                        </span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </AccordionContent>
-            </AccordionItem>
-          )}
+          <AccordionItem value="reports">
+            <AccordionTrigger>
+              <div className="flex items-center gap-2">
+                <BooksIcon size={18} />
+                <span className="text-sm">Reports</span>
+              </div>
+            </AccordionTrigger>
+            <AccordionContent>
+              {reportItems.map((item) => (
+                <SidebarMenuItem key={item.url} className="px-1">
+                  <SidebarMenuButton asChild>
+                    <Link
+                      href={item.url || "/"}
+                      className={cn(
+                        "flex items-center gap-2 decoration-transparent hover:decoration-current active:decoration-current",
+                        item.url === currentPath && "text-primary"
+                      )}
+                    >
+                      <DotIcon size={12} className="ml-px" />
+                      <span className="text-sm no-underline">{item.label}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </AccordionContent>
+          </AccordionItem>
           <AccordionItem value="store-setup">
             <AccordionTrigger>
               <div className="flex items-center gap-2">

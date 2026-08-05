@@ -638,6 +638,7 @@ function TargetCell({
         disabled={loading}
         value={value}
         onChange={(e) => setValue(e.currentTarget.value)}
+        onFocus={(e) => e.currentTarget.select()}
         onBlur={save}
         onKeyDown={(e) => {
           if (e.key === "Enter") e.currentTarget.blur()

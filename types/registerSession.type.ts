@@ -40,7 +40,9 @@ export interface IRegisterSessionTableNode {
   registerName: string
   outletName: string
   openedAt: string
-  closedAt: string
+  openedByName: string
+  closedAt: string | null
+  status: RegisterSessionStatus
   expected: number
   actual: number
   difference: number

@@ -196,11 +196,14 @@ export const registerSessionResolver = {
       }
     ) => {
       try {
-        const sortKey = sort?.key || "closedAt"
+        // Default sort by openedAt, not closedAt - every session has an
+        // openedAt (including still-OPEN ones, which have no closedAt at
+        // all), so this is the only key that sorts/filters both statuses
+        // consistently.
+        const sortKey = sort?.key || "openedAt"
         const sortOrder = sort?.order === "ASC" ? 1 : -1
 
         const baseStages: PipelineStage[] = [
-          { $match: { status: "CLOSED" } },
           {
             $lookup: {
               from: "registers",
@@ -223,9 +226,37 @@ export const registerSessionResolver = {
           },
           { $unwind: { path: "$outlet", preserveNullAndEmptyArrays: true } },
           {
+            $lookup: {
+              from: "users",
+              localField: "openedBy",
+              foreignField: "_id",
+              as: "openedByUser",
+            },
+          },
+          {
+            $unwind: {
+              path: "$openedByUser",
+              preserveNullAndEmptyArrays: true,
+            },
+          },
+          {
             $addFields: {
               registerName: "$register.name",
               outletName: { $ifNull: ["$outlet.name", "-"] },
+              openedByName: {
+                $trim: {
+                  input: {
+                    $concat: [
+                      { $ifNull: ["$openedByUser.name", ""] },
+                      " ",
+                      { $ifNull: ["$openedByUser.surname", ""] },
+                    ],
+                  },
+                },
+              },
+              // Still-OPEN sessions have never had a tally written, so this
+              // naturally sums to 0 rather than something misleading - the
+              // client shows "-" instead of ₱0.00 whenever status is OPEN.
               expected: { $sum: "$tally.expected" },
               actual: { $sum: "$tally.counted" },
               difference: { $sum: "$tally.difference" },
@@ -247,7 +278,7 @@ export const registerSessionResolver = {
             ? [
                 {
                   $match: {
-                    closedAt: {
+                    openedAt: {
                       $gte: new Date(start),
                       $lte: new Date(end),
                     },
@@ -301,7 +332,9 @@ export const registerSessionResolver = {
               registerName: 1,
               outletName: 1,
               openedAt: 1,
+              openedByName: 1,
               closedAt: 1,
+              status: 1,
               expected: 1,
               actual: 1,
               difference: 1,

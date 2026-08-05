@@ -55,7 +55,10 @@ export default function OpenRegisterDialog({
   const onConfirm = async () => {
     try {
       const result: any = await openSession({
-        variables: { register: registerId, openingFloat },
+        variables: {
+          register: registerId,
+          openingFloat: Number.isNaN(openingFloat) ? 0 : openingFloat,
+        },
       })
       if (result.data.openRegisterSession.ok) {
         toast.success(result.data.openRegisterSession.message)
@@ -97,8 +100,9 @@ export default function OpenRegisterDialog({
               type="number"
               inputMode="decimal"
               step="any"
-              value={openingFloat}
-              onChange={(e) => setOpeningFloat(Number(e.target.value))}
+              value={Number.isNaN(openingFloat) ? "" : openingFloat}
+              onChange={(e) => setOpeningFloat(parseFloat(e.target.value))}
+              onFocus={(e) => e.currentTarget.select()}
             />
           </InputGroup>
         </Field>

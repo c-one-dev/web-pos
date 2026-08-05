@@ -45,6 +45,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ColumnDef } from "@tanstack/react-table"
 import DataTable from "@/components/custom/data-table"
 import SortHeader from "@/components/custom/sort-header"
+import { StatusBadge } from "@/components/custom/status-badge"
 import { IRegisterSessionTableNode } from "@/types/registerSession.type"
 import { IVoidedSaleNode } from "@/types/sale.type"
 import ShiftDetailDrawer from "./_dialogs/shift-detail"
@@ -78,7 +79,9 @@ const GET_SHIFT_REPORT = gql`
           registerName
           outletName
           openedAt
+          openedByName
           closedAt
+          status
           expected
           actual
           difference
@@ -313,6 +316,11 @@ function ShiftReportTab() {
         ),
       },
       {
+        id: "status",
+        header: "Status",
+        cell: ({ row }) => <StatusBadge status={row.original.status} />,
+      },
+      {
         id: "openedAt",
         header: () => (
           <SortHeader
@@ -326,6 +334,11 @@ function ShiftReportTab() {
           row.original.openedAt
             ? format(Number(row.original.openedAt), "PP · p")
             : "-",
+      },
+      {
+        id: "openedByName",
+        header: "Opened By",
+        cell: ({ row }) => row.original.openedByName || "-",
       },
       {
         id: "closedAt",
@@ -346,30 +359,41 @@ function ShiftReportTab() {
         id: "expected",
         header: () => <div className="text-right">Expected</div>,
         cell: ({ row }) => (
-          <div className="text-right">{currency(row.original.expected)}</div>
+          <div className="text-right">
+            {row.original.status === "OPEN"
+              ? "-"
+              : currency(row.original.expected)}
+          </div>
         ),
       },
       {
         id: "actual",
         header: () => <div className="text-right">Actual</div>,
         cell: ({ row }) => (
-          <div className="text-right">{currency(row.original.actual)}</div>
+          <div className="text-right">
+            {row.original.status === "OPEN"
+              ? "-"
+              : currency(row.original.actual)}
+          </div>
         ),
       },
       {
         id: "difference",
         header: () => <div className="text-right">Difference</div>,
-        cell: ({ row }) => (
-          <div
-            className={
-              row.original.difference !== 0
-                ? "text-right font-medium text-destructive"
-                : "text-right font-medium"
-            }
-          >
-            {currency(row.original.difference)}
-          </div>
-        ),
+        cell: ({ row }) =>
+          row.original.status === "OPEN" ? (
+            <div className="text-right">-</div>
+          ) : (
+            <div
+              className={
+                row.original.difference !== 0
+                  ? "text-right font-medium text-destructive"
+                  : "text-right font-medium"
+              }
+            >
+              {currency(row.original.difference)}
+            </div>
+          ),
       },
     ],
     [sort]

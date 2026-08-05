@@ -394,6 +394,7 @@ export default function FormDialog({ _id, onClose }: Props) {
                           onChange={(e) =>
                             field.handleChange(parseFloat(e.target.value))
                           }
+                          onFocus={(e) => e.currentTarget.select()}
                           aria-invalid={isInvalid}
                           type="number"
                         />

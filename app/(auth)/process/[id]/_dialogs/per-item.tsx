@@ -38,6 +38,19 @@ function PerItem({
   const [open, setOpen] = useState<boolean>(false)
   const item = state.items[index]
   const [discountType, setDiscountType] = useState<"%" | "₱">("₱")
+  // Raw text mirrors of the % / ₱ discount inputs, separate from the
+  // committed item.discount used in cart math - lets the field go visually
+  // empty while the user is mid-edit (backspacing) without ever computing
+  // NaN into item.price/item.total. Resynced explicitly whenever the user
+  // toggles which one is being edited (see the label's onClick below).
+  const [percentText, setPercentText] = useState<string>(() =>
+    item.snapshotPrice
+      ? ((item.discount / item.snapshotPrice) * 100).toFixed(2)
+      : "0"
+  )
+  const [amountText, setAmountText] = useState<string>(() =>
+    (item?.discount || 0).toString()
+  )
 
   return (
     <Sheet open={open} onOpenChange={setOpen} modal={true}>
@@ -117,6 +130,7 @@ function PerItem({
                   })
                 }
               }}
+              onFocus={(e) => e.currentTarget.select()}
             />
           </div>
           <div className="space-y-2">
@@ -124,9 +138,21 @@ function PerItem({
               Discount {discountType === "%" ? "(%)" : "per item (₱)"}
               <span
                 className="text-primary hover:cursor-pointer hover:underline hover:underline-offset-2"
-                onClick={() =>
-                  setDiscountType(discountType === "%" ? "₱" : "%")
-                }
+                onClick={() => {
+                  if (discountType === "%") {
+                    setAmountText((item?.discount || 0).toString())
+                    setDiscountType("₱")
+                  } else {
+                    setPercentText(
+                      item.snapshotPrice
+                        ? ((item.discount / item.snapshotPrice) * 100).toFixed(
+                            2
+                          )
+                        : "0"
+                    )
+                    setDiscountType("%")
+                  }
+                }}
               >
                 {discountType === "%"
                   ? "Change to fixed amount"
@@ -137,69 +163,71 @@ function PerItem({
               <InputGroup>
                 <InputGroupAddon align="inline-end">%</InputGroupAddon>
                 <InputGroupInput
-                  value={parseFloat(
-                    ((item?.discount / item.snapshotPrice) * 100).toFixed(2)
-                  )}
+                  value={percentText}
                   type="number"
                   min={0}
                   max={100}
                   onChange={(e) => {
-                    {
-                      const discount = Math.min(
-                        100,
-                        Math.max(0, parseFloat(e.target.value || "0"))
-                      )
-                      form.setFieldValue(`items`, () => {
-                        const discountAmount = parseFloat(
-                          ((discount / 100) * item.snapshotPrice).toFixed(2)
-                        )
-                        const itemPrice = item.snapshotPrice - discountAmount
-                        const itemTotal = item.quantity * itemPrice
-                        return state.items.map((i: any, idx: number) => {
-                          if (idx === index) {
-                            return {
-                              ...i,
-                              discount: discountAmount,
-                              price: itemPrice,
-                              total: itemTotal,
-                            }
-                          } else return i
-                        })
-                      })
-                    }
-                  }}
-                />
-              </InputGroup>
-            )}
-            <InputGroup>
-              <InputGroupAddon>₱</InputGroupAddon>
-              <InputGroupInput
-                value={item?.discount || 0}
-                type="number"
-                min={0}
-                max={item.snapshotPrice}
-                readOnly={discountType === "%"}
-                onChange={(e) => {
-                  {
+                    const raw = e.target.value
+                    setPercentText(raw)
                     const discount = Math.min(
-                      item.snapshotPrice,
-                      Math.max(0, parseFloat(e.target.value || "0"))
+                      100,
+                      Math.max(0, parseFloat(raw) || 0)
                     )
                     form.setFieldValue(`items`, () => {
-                      const itemPrice = item.snapshotPrice - discount
+                      const discountAmount = parseFloat(
+                        ((discount / 100) * item.snapshotPrice).toFixed(2)
+                      )
+                      const itemPrice = item.snapshotPrice - discountAmount
                       const itemTotal = item.quantity * itemPrice
                       return state.items.map((i: any, idx: number) => {
                         if (idx === index) {
                           return {
                             ...i,
-                            discount,
+                            discount: discountAmount,
                             price: itemPrice,
                             total: itemTotal,
                           }
                         } else return i
                       })
                     })
-                  }
+                  }}
+                  onFocus={(e) => e.currentTarget.select()}
+                />
+              </InputGroup>
+            )}
+            <InputGroup>
+              <InputGroupAddon>₱</InputGroupAddon>
+              <InputGroupInput
+                value={
+                  discountType === "%" ? (item?.discount ?? 0) : amountText
+                }
+                type="number"
+                min={0}
+                max={item.snapshotPrice}
+                readOnly={discountType === "%"}
+                onFocus={(e) => e.currentTarget.select()}
+                onChange={(e) => {
+                  const raw = e.target.value
+                  setAmountText(raw)
+                  const discount = Math.min(
+                    item.snapshotPrice,
+                    Math.max(0, parseFloat(raw) || 0)
+                  )
+                  form.setFieldValue(`items`, () => {
+                    const itemPrice = item.snapshotPrice - discount
+                    const itemTotal = item.quantity * itemPrice
+                    return state.items.map((i: any, idx: number) => {
+                      if (idx === index) {
+                        return {
+                          ...i,
+                          discount,
+                          price: itemPrice,
+                          total: itemTotal,
+                        }
+                      } else return i
+                    })
+                  })
                 }}
               />
             </InputGroup>

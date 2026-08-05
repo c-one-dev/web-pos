@@ -417,6 +417,7 @@ function Pay({
                 type="number"
                 value={amountTendered}
                 onChange={(e) => setAmountTendered(parseFloat(e.target.value))}
+                onFocus={(e) => e.currentTarget.select()}
                 className="h-full text-center md:text-5xl"
               />
             </InputGroup>

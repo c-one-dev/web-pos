@@ -48,7 +48,10 @@ export default function CashMovementDialog({ sessionId, type }: Props) {
   const onConfirm = async () => {
     try {
       const result: any = await addMovement({
-        variables: { _id: sessionId, input: { type, amount, note } },
+        variables: {
+          _id: sessionId,
+          input: { type, amount: Number.isNaN(amount) ? 0 : amount, note },
+        },
       })
       if (result.data.addCashMovement.ok) {
         toast.success(result.data.addCashMovement.message)
@@ -92,8 +95,9 @@ export default function CashMovementDialog({ sessionId, type }: Props) {
                 type="number"
                 inputMode="decimal"
                 step="any"
-                value={amount}
-                onChange={(e) => setAmount(Number(e.target.value))}
+                value={Number.isNaN(amount) ? "" : amount}
+                onChange={(e) => setAmount(parseFloat(e.target.value))}
+                onFocus={(e) => e.currentTarget.select()}
               />
             </InputGroup>
           </Field>
@@ -111,7 +115,10 @@ export default function CashMovementDialog({ sessionId, type }: Props) {
           <DialogClose asChild>
             <Button variant="outline">Cancel</Button>
           </DialogClose>
-          <Button onClick={onConfirm} disabled={loading || amount <= 0}>
+          <Button
+            onClick={onConfirm}
+            disabled={loading || Number.isNaN(amount) || amount <= 0}
+          >
             Confirm {label}
           </Button>
         </DialogFooter>
