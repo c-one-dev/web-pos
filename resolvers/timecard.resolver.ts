@@ -1,9 +1,9 @@
 import { GraphQLError } from "graphql"
-import { startOfDay, endOfDay } from "date-fns"
 import type { PipelineStage } from "mongoose"
 import TimeCard from "../models/timecard.model"
 
-const fullName = (u: any) => `${u?.name || ""} ${u?.surname || ""}`.trim() || "-"
+const fullName = (u: any) =>
+  `${u?.name || ""} ${u?.surname || ""}`.trim() || "-"
 
 export const timecardResolver = {
   Query: {
@@ -22,8 +22,8 @@ export const timecardResolver = {
       { start, end, search }: { start: string; end: string; search?: string }
     ) => {
       try {
-        const rangeStart = startOfDay(new Date(start))
-        const rangeEnd = endOfDay(new Date(end))
+        const rangeStart = new Date(start)
+        const rangeEnd = new Date(end)
 
         const pipeline: PipelineStage[] = [
           { $match: { clockIn: { $gte: rangeStart, $lte: rangeEnd } } },
@@ -78,8 +78,8 @@ export const timecardResolver = {
       { start, end, search }: { start: string; end: string; search?: string }
     ) => {
       try {
-        const rangeStart = startOfDay(new Date(start))
-        const rangeEnd = endOfDay(new Date(end))
+        const rangeStart = new Date(start)
+        const rangeEnd = new Date(end)
         const cards = await TimeCard.find({
           clockIn: { $gte: rangeStart, $lte: rangeEnd },
         })

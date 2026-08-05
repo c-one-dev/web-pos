@@ -57,8 +57,8 @@ export const paymentResolver = {
 
         if (start && end)
           matchStage.paymentDate = {
-            $gte: startOfDay(new Date(start)),
-            $lte: endOfDay(new Date(end)),
+            $gte: new Date(start),
+            $lte: new Date(end),
           }
 
         if (search)
@@ -245,8 +245,8 @@ export const paymentResolver = {
       { start, end }: { start: string; end: string }
     ) => {
       try {
-        const rangeStart = startOfDay(new Date(start))
-        const rangeEnd = endOfDay(new Date(end))
+        const rangeStart = new Date(start)
+        const rangeEnd = new Date(end)
 
         const [totals] = await Sale.aggregate([
           {
@@ -284,8 +284,8 @@ export const paymentResolver = {
       { start, end }: { start: string; end: string }
     ) => {
       try {
-        const rangeStart = startOfDay(new Date(start))
-        const rangeEnd = endOfDay(new Date(end))
+        const rangeStart = new Date(start)
+        const rangeEnd = new Date(end)
 
         const [methods, totals] = await Promise.all([
           PaymentMethod.find().select("_id name").sort({ name: 1 }).lean(),

@@ -1,7 +1,7 @@
 export const flatten = (
   obj: Record<string, any>,
   prefix = "",
-  res: Record<string, any> = {},
+  res: Record<string, any> = {}
 ) => {
   Object.entries(obj).forEach(([key, val]) => {
     if (val === undefined) return

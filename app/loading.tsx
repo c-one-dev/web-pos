@@ -4,10 +4,8 @@ import { MorphingInfinity } from "@/components/morphing-infinity"
 export default function Loading() {
   return (
     <div className="flex h-svh w-full flex-col items-center justify-center gap-3">
-      <MorphingInfinity className="text-primary size-10" />
-      <span className="text-muted-foreground text-sm">
-        C-ONE POS System
-      </span>
+      <MorphingInfinity className="size-10 text-primary" />
+      <span className="text-sm text-muted-foreground">C-ONE POS System</span>
     </div>
   )
 }

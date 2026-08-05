@@ -227,10 +227,9 @@ export const userResolver = {
           const isSelf = ctx?.session?._id?.toString() === _id?.toString()
           const isAdmin = ctx?.session?.role === Role.ADMIN
           if (!isAdmin && !isSelf)
-            throw new GraphQLError(
-              "You are not allowed to update this user.",
-              { extensions: { code: "FORBIDDEN" } }
-            )
+            throw new GraphQLError("You are not allowed to update this user.", {
+              extensions: { code: "FORBIDDEN" },
+            })
 
           const updateInput = { ...input }
           // Only an admin may change a user's role — a self-service update

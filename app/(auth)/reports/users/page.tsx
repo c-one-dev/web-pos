@@ -349,8 +349,8 @@ function TimecardsByUserTab({ range }: { range: DateRange }) {
 
   const { data, loading } = useQuery(GET_TIMECARD_BY_USER, {
     variables: {
-      start: (range.from || startOfToday()).toISOString(),
-      end: (range.to || range.from || startOfToday()).toISOString(),
+      start: startOfDay(range.from || startOfToday()).toISOString(),
+      end: endOfDay(range.to || range.from || startOfToday()).toISOString(),
       search,
     },
     fetchPolicy: "network-only",
@@ -417,8 +417,8 @@ function TimecardsByDateTab({ range }: { range: DateRange }) {
 
   const { data, loading } = useQuery(GET_TIMECARD_BY_DATE, {
     variables: {
-      start: (range.from || startOfToday()).toISOString(),
-      end: (range.to || range.from || startOfToday()).toISOString(),
+      start: startOfDay(range.from || startOfToday()).toISOString(),
+      end: endOfDay(range.to || range.from || startOfToday()).toISOString(),
       search,
     },
     fetchPolicy: "network-only",
@@ -438,7 +438,9 @@ function TimecardsByDateTab({ range }: { range: DateRange }) {
         header: "Time in/out",
         cell: ({ row }) =>
           `${format(Number(row.original.clockIn), "p")} - ${
-            row.original.clockOut ? format(Number(row.original.clockOut), "p") : "-"
+            row.original.clockOut
+              ? format(Number(row.original.clockOut), "p")
+              : "-"
           }`,
       },
       {
@@ -497,8 +499,8 @@ function MajorActivityLogTab({ range }: { range: DateRange }) {
 
   const { data, loading } = useQuery(GET_ACTIVITY_LOG, {
     variables: {
-      start: (range.from || startOfToday()).toISOString(),
-      end: (range.to || range.from || startOfToday()).toISOString(),
+      start: startOfDay(range.from || startOfToday()).toISOString(),
+      end: endOfDay(range.to || range.from || startOfToday()).toISOString(),
       search,
     },
     fetchPolicy: "network-only",
@@ -573,7 +575,11 @@ const GET_SALES_TARGETS = gql`
 `
 
 const SET_SALES_TARGET = gql`
-  mutation SetSalesTarget($user: ID!, $period: SalesTargetPeriod!, $target: Float!) {
+  mutation SetSalesTarget(
+    $user: ID!
+    $period: SalesTargetPeriod!
+    $target: Float!
+  ) {
     setSalesTarget(user: $user, period: $period, target: $target) {
       ok
       message
@@ -715,8 +721,8 @@ async function exportTimecardsByUserExcel(
   client: ReturnType<typeof useApolloClient>,
   range: DateRange
 ) {
-  const start = (range.from || startOfToday()).toISOString()
-  const end = (range.to || range.from || startOfToday()).toISOString()
+  const start = startOfDay(range.from || startOfToday()).toISOString()
+  const end = endOfDay(range.to || range.from || startOfToday()).toISOString()
   const { data } = await client.query({
     query: GET_TIMECARD_BY_USER,
     variables: { start, end },
@@ -739,8 +745,8 @@ async function exportTimecardsByDateExcel(
   client: ReturnType<typeof useApolloClient>,
   range: DateRange
 ) {
-  const start = (range.from || startOfToday()).toISOString()
-  const end = (range.to || range.from || startOfToday()).toISOString()
+  const start = startOfDay(range.from || startOfToday()).toISOString()
+  const end = endOfDay(range.to || range.from || startOfToday()).toISOString()
   const { data } = await client.query({
     query: GET_TIMECARD_BY_DATE,
     variables: { start, end },
@@ -775,8 +781,8 @@ async function exportActivityLogExcel(
   client: ReturnType<typeof useApolloClient>,
   range: DateRange
 ) {
-  const start = (range.from || startOfToday()).toISOString()
-  const end = (range.to || range.from || startOfToday()).toISOString()
+  const start = startOfDay(range.from || startOfToday()).toISOString()
+  const end = endOfDay(range.to || range.from || startOfToday()).toISOString()
   const { data } = await client.query({
     query: GET_ACTIVITY_LOG,
     variables: { start, end },

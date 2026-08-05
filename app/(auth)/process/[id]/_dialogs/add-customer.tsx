@@ -41,7 +41,6 @@ function AddCustomer({ form }: { form: any }) {
   const customerOptions = (customerOptionsData as any)?.customerOptions
   const [openCustomerCommand, setOpenCustomerCommand] = useState<boolean>(false)
 
-
   return (
     <div>
       <form.Field name="customer">
@@ -63,7 +62,7 @@ function AddCustomer({ form }: { form: any }) {
                       className={cn(
                         "flex flex-1 items-center justify-center bg-transparent text-muted-foreground capitalize",
                         field.state.value &&
-                          "rounded-tr-none rounded-br-none text-black justify-start"
+                          "justify-start rounded-tr-none rounded-br-none text-black"
                       )}
                       type="button"
                     >

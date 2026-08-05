@@ -60,18 +60,18 @@ import {
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Calendar } from "@/components/ui/calendar"
 import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-} from "recharts"
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
 import { ChartContainer, ChartTooltip } from "@/components/ui/chart"
 import {
   startOfToday,
+  startOfDay,
+  endOfDay,
   startOfWeek,
   endOfWeek,
   startOfMonth,
@@ -95,7 +95,11 @@ const GET_PAYMENT_SUMMARY = gql`
 `
 
 const GET_DASHBOARD_BREAKDOWN = gql`
-  query SalesReportBreakdown($start: String!, $end: String!, $timezone: String) {
+  query SalesReportBreakdown(
+    $start: String!
+    $end: String!
+    $timezone: String
+  ) {
     dashboardSummary(start: $start, end: $end, timezone: $timezone) {
       salesByDate {
         key
@@ -187,10 +191,16 @@ const GET_SALES_TRANSACTIONS = gql`
 `
 
 const DATE_PRESETS: { label: string; getRange: () => DateRange }[] = [
-  { label: "Today", getRange: () => ({ from: startOfToday(), to: startOfToday() }) },
+  {
+    label: "Today",
+    getRange: () => ({ from: startOfToday(), to: startOfToday() }),
+  },
   {
     label: "This Week",
-    getRange: () => ({ from: startOfWeek(new Date()), to: endOfWeek(new Date()) }),
+    getRange: () => ({
+      from: startOfWeek(new Date()),
+      to: endOfWeek(new Date()),
+    }),
   },
   {
     label: "Last 7 Days",
@@ -198,7 +208,10 @@ const DATE_PRESETS: { label: string; getRange: () => DateRange }[] = [
   },
   {
     label: "This Month",
-    getRange: () => ({ from: startOfMonth(new Date()), to: endOfMonth(new Date()) }),
+    getRange: () => ({
+      from: startOfMonth(new Date()),
+      to: endOfMonth(new Date()),
+    }),
   },
   {
     label: "Last 30 Days",
@@ -271,8 +284,8 @@ async function exportSalesReportExcel({
   activeTab: string
   range: DateRange
 }) {
-  const start = (range.from || startOfToday()).toISOString()
-  const end = (range.to || range.from || startOfToday()).toISOString()
+  const start = startOfDay(range.from || startOfToday()).toISOString()
+  const end = endOfDay(range.to || range.from || startOfToday()).toISOString()
   const title = TAB_LABELS[activeTab] || "Sales Report"
 
   const { data: outletsData } = await client.query({
@@ -303,7 +316,8 @@ async function exportSalesReportExcel({
       }),
     ])
     const summary = (summaryData as any)?.paymentSummary
-    const salesByDate = (breakdownData as any)?.dashboardSummary?.salesByDate || []
+    const salesByDate =
+      (breakdownData as any)?.dashboardSummary?.salesByDate || []
 
     addTitleRows(sheet, title, range, 2, outlets)
     sheet.columns = [{ width: 22 }, { width: 18 }]
@@ -314,7 +328,12 @@ async function exportSalesReportExcel({
       ["Net Sales", summary?.netSales || 0],
     ].forEach((r) => sheet.addRow(r))
     sheet.addRow([])
-    const headerRow = sheet.addRow(["Date", "Sales", "Transactions", "Avg. sale value"])
+    const headerRow = sheet.addRow([
+      "Date",
+      "Sales",
+      "Transactions",
+      "Avg. sale value",
+    ])
     styleHeaderRow(headerRow)
     salesByDate.forEach((point: any) => {
       sheet.addRow([
@@ -340,7 +359,13 @@ async function exportSalesReportExcel({
       { width: 16 },
       { width: 16 },
     ]
-    const headerRow = sheet.addRow(["Item", "SKU", "Quantity sold", "Sales", "Discounts"])
+    const headerRow = sheet.addRow([
+      "Item",
+      "SKU",
+      "Quantity sold",
+      "Sales",
+      "Discounts",
+    ])
     styleHeaderRow(headerRow)
     nodes.forEach((n) =>
       sheet.addRow([n.name, n.sku, n.quantitySold, n.salesExTax, n.discounts])
@@ -461,8 +486,8 @@ async function exportSalesReportPdf({
   range: DateRange
   userName: string
 }) {
-  const start = (range.from || startOfToday()).toISOString()
-  const end = (range.to || range.from || startOfToday()).toISOString()
+  const start = startOfDay(range.from || startOfToday()).toISOString()
+  const end = endOfDay(range.to || range.from || startOfToday()).toISOString()
   const title = TAB_LABELS[activeTab] || "Sales Report"
 
   const { data: outletsData } = await client.query({
@@ -537,7 +562,8 @@ async function exportSalesReportPdf({
       }),
     ])
     const summary = (summaryData as any)?.paymentSummary
-    const salesByDate = (breakdownData as any)?.dashboardSummary?.salesByDate || []
+    const salesByDate =
+      (breakdownData as any)?.dashboardSummary?.salesByDate || []
 
     autoTable(doc, {
       startY,
@@ -610,7 +636,13 @@ async function exportSalesReportPdf({
   savePdfDocument(doc, title, range)
 }
 
-function ExportButton({ activeTab, range }: { activeTab: string; range: DateRange }) {
+function ExportButton({
+  activeTab,
+  range,
+}: {
+  activeTab: string
+  range: DateRange
+}) {
   const client = useApolloClient()
   const { data: session } = useSession()
   const userName = (session as any)?.user?.name || "Unknown"
@@ -673,7 +705,9 @@ function DateRangeFilter({
   presetLabel: string
   onApply: (range: DateRange, label: string) => void
 }) {
-  const [stagedRange, setStagedRange] = useState<DateRange | undefined>(appliedRange)
+  const [stagedRange, setStagedRange] = useState<DateRange | undefined>(
+    appliedRange
+  )
   const [open, setOpen] = useState(false)
 
   return (
@@ -801,8 +835,8 @@ function TotalsTable<T extends { _id: string }>({
       <div className="flex items-center justify-between">
         <span className="text-sm text-muted-foreground">
           Showing {total === 0 ? 0 : (page.current - 1) * rows + 1}-
-          {page.current === page.max ? total : page.current * rows} out of {total}{" "}
-          result{total === 1 ? "" : "s"}.
+          {page.current === page.max ? total : page.current * rows} out of{" "}
+          {total} result{total === 1 ? "" : "s"}.
         </span>
         <div className="flex gap-1.5">
           <Select
@@ -825,7 +859,9 @@ function TotalsTable<T extends { _id: string }>({
           </Select>
           <ButtonGroup>
             <Button
-              onClick={() => setPage((prev) => ({ ...prev, current: prev.current - 1 }))}
+              onClick={() =>
+                setPage((prev) => ({ ...prev, current: prev.current - 1 }))
+              }
               disabled={page.current === 1}
               variant="outline"
             >
@@ -833,7 +869,9 @@ function TotalsTable<T extends { _id: string }>({
             </Button>
             <ButtonGroupText>{`Page ${page.current} of ${page.max}`}</ButtonGroupText>
             <Button
-              onClick={() => setPage((prev) => ({ ...prev, current: prev.current + 1 }))}
+              onClick={() =>
+                setPage((prev) => ({ ...prev, current: prev.current + 1 }))
+              }
               disabled={page.current === page.max}
               variant="outline"
             >
@@ -858,8 +896,8 @@ function SalesSummaryTab({ range }: { range: DateRange }) {
     []
   )
   const variables = {
-    start: (range.from || startOfToday()).toISOString(),
-    end: (range.to || range.from || startOfToday()).toISOString(),
+    start: startOfDay(range.from || startOfToday()).toISOString(),
+    end: endOfDay(range.to || range.from || startOfToday()).toISOString(),
   }
   const { data: summaryData, loading: summaryLoading } = useQuery(
     GET_PAYMENT_SUMMARY,
@@ -870,7 +908,8 @@ function SalesSummaryTab({ range }: { range: DateRange }) {
     { variables: { ...variables, timezone }, fetchPolicy: "network-only" }
   )
   const summary = (summaryData as any)?.paymentSummary
-  const salesByDate = (breakdownData as any)?.dashboardSummary?.salesByDate || []
+  const salesByDate =
+    (breakdownData as any)?.dashboardSummary?.salesByDate || []
 
   return (
     <div className="flex flex-col gap-2.5 pt-4">
@@ -909,10 +948,18 @@ function SalesSummaryTab({ range }: { range: DateRange }) {
               No sales in this period.
             </div>
           ) : (
-            <ChartContainer config={chartConfig} className="aspect-auto h-72 w-full">
+            <ChartContainer
+              config={chartConfig}
+              className="aspect-auto h-72 w-full"
+            >
               <BarChart data={salesByDate}>
                 <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                <XAxis dataKey="label" tickLine={false} axisLine={false} tickMargin={8} />
+                <XAxis
+                  dataKey="label"
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                />
                 <YAxis
                   tickLine={false}
                   axisLine={false}
@@ -924,7 +971,11 @@ function SalesSummaryTab({ range }: { range: DateRange }) {
                   content={<DailySalesTooltip />}
                   cursor={{ fill: "var(--muted)" }}
                 />
-                <Bar dataKey="total" fill="var(--color-total)" radius={[2, 2, 0, 0]} />
+                <Bar
+                  dataKey="total"
+                  fill="var(--color-total)"
+                  radius={[2, 2, 0, 0]}
+                />
               </BarChart>
             </ChartContainer>
           )}
@@ -946,8 +997,8 @@ type SalesByItemNode = {
 function SalesByItemsTab({ range }: { range: DateRange }) {
   const { data, loading } = useQuery(GET_SALES_BY_ITEMS, {
     variables: {
-      start: (range.from || startOfToday()).toISOString(),
-      end: (range.to || range.from || startOfToday()).toISOString(),
+      start: startOfDay(range.from || startOfToday()).toISOString(),
+      end: endOfDay(range.to || range.from || startOfToday()).toISOString(),
     },
     fetchPolicy: "network-only",
   })
@@ -1003,8 +1054,8 @@ type TotalPoint = { key: string; label: string; total: number }
 function ByCategoryTab({ range }: { range: DateRange }) {
   const { data, loading } = useQuery(GET_DASHBOARD_BREAKDOWN, {
     variables: {
-      start: (range.from || startOfToday()).toISOString(),
-      end: (range.to || range.from || startOfToday()).toISOString(),
+      start: startOfDay(range.from || startOfToday()).toISOString(),
+      end: endOfDay(range.to || range.from || startOfToday()).toISOString(),
     },
     fetchPolicy: "network-only",
   })
@@ -1045,8 +1096,8 @@ function ByCategoryTab({ range }: { range: DateRange }) {
 function UsersTab({ range }: { range: DateRange }) {
   const { data, loading } = useQuery(GET_DASHBOARD_BREAKDOWN, {
     variables: {
-      start: (range.from || startOfToday()).toISOString(),
-      end: (range.to || range.from || startOfToday()).toISOString(),
+      start: startOfDay(range.from || startOfToday()).toISOString(),
+      end: endOfDay(range.to || range.from || startOfToday()).toISOString(),
     },
     fetchPolicy: "network-only",
   })
@@ -1109,20 +1160,27 @@ type SalesTransactionNode = {
 
 function SalesTransactionsTab({ range }: { range: DateRange }) {
   const [rows, setRows] = useState<number>(10)
-  const [page, setPage] = useState<{ current: number; loaded: number; max: number }>({
+  const [page, setPage] = useState<{
+    current: number
+    loaded: number
+    max: number
+  }>({
     current: 1,
     loaded: 1,
     max: 1,
   })
   const [search, setSearch] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
-  const [sort, setSort] = useState<{ key: string; order: "ASC" | "DESC" } | null>(null)
+  const [sort, setSort] = useState<{
+    key: string
+    order: "ASC" | "DESC"
+  } | null>(null)
 
   const variables = {
     first: rows,
     search,
-    start: (range.from || startOfToday()).toISOString(),
-    end: (range.to || range.from || startOfToday()).toISOString(),
+    start: startOfDay(range.from || startOfToday()).toISOString(),
+    end: endOfDay(range.to || range.from || startOfToday()).toISOString(),
     sort,
   }
 
@@ -1139,7 +1197,10 @@ function SalesTransactionsTab({ range }: { range: DateRange }) {
     const endCursor = result?.salesTransactionTable?.pageInfo?.endCursor || null
 
     // eslint-disable-next-line react-hooks/set-state-in-render
-    setPage((prev) => ({ ...prev, max: result?.salesTransactionTable?.pages || 1 }))
+    setPage((prev) => ({
+      ...prev,
+      max: result?.salesTransactionTable?.pages || 1,
+    }))
 
     return {
       total: result?.salesTransactionTable?.total || 0,
@@ -1161,7 +1222,9 @@ function SalesTransactionsTab({ range }: { range: DateRange }) {
           />
         ),
         cell: ({ row }) => (
-          <span className="font-medium text-primary">{row.original.saleNumber}</span>
+          <span className="font-medium text-primary">
+            {row.original.saleNumber}
+          </span>
         ),
       },
       {
@@ -1176,7 +1239,9 @@ function SalesTransactionsTab({ range }: { range: DateRange }) {
         ),
         cell: ({ row }) => (
           <span className="text-muted-foreground">
-            {row.original.date ? format(Number(row.original.date), "PP · p") : "-"}
+            {row.original.date
+              ? format(Number(row.original.date), "PP · p")
+              : "-"}
           </span>
         ),
       },
@@ -1197,7 +1262,9 @@ function SalesTransactionsTab({ range }: { range: DateRange }) {
       {
         id: "currentSaleStatus",
         header: "Status",
-        cell: ({ row }) => <StatusBadge status={row.original.currentSaleStatus} />,
+        cell: ({ row }) => (
+          <StatusBadge status={row.original.currentSaleStatus} />
+        ),
       },
       {
         id: "paymentTypes",
@@ -1217,7 +1284,9 @@ function SalesTransactionsTab({ range }: { range: DateRange }) {
           </div>
         ),
         cell: ({ row }) => (
-          <div className="text-right font-medium">{currency(row.original.total)}</div>
+          <div className="text-right font-medium">
+            {currency(row.original.total)}
+          </div>
         ),
       },
       {
@@ -1293,8 +1362,8 @@ function SalesTransactionsTab({ range }: { range: DateRange }) {
       <div className="flex items-center justify-between">
         <span className="text-sm">
           Showing {total === 0 ? 0 : (page.current - 1) * rows + 1}-
-          {page.current === page.max ? total : page.current * rows} out of {total}{" "}
-          result{total === 1 ? "" : "s"}.
+          {page.current === page.max ? total : page.current * rows} out of{" "}
+          {total} result{total === 1 ? "" : "s"}.
         </span>
         <div className="flex gap-1.5">
           <Select
@@ -1318,7 +1387,11 @@ function SalesTransactionsTab({ range }: { range: DateRange }) {
             </SelectContent>
           </Select>
           <ButtonGroup>
-            <Button onClick={onPrevPage} disabled={page.current === 1} variant="outline">
+            <Button
+              onClick={onPrevPage}
+              disabled={page.current === 1}
+              variant="outline"
+            >
               Prev
             </Button>
             <ButtonGroupText>{`Page ${page.current} of ${page.max}`}</ButtonGroupText>

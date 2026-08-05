@@ -29,7 +29,6 @@ export interface Sort {
   order: "ASC" | "DESC"
 }
 
-
 export enum FilterType {
   TEXT = "TEXT",
   NUMBER = "NUMBER",

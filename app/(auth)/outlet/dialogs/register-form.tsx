@@ -552,7 +552,8 @@ export default function RegisterFormDialog({ _id, outlet }: Props) {
                               aria-expanded={openPaymentMethodCommand}
                               className={cn(
                                 field.state.value &&
-                                  "rounded-tr-none rounded-br-none",  isInvalid && "border-destructive",
+                                  "rounded-tr-none rounded-br-none",
+                                isInvalid && "border-destructive",
                                 "flex-1 justify-between bg-transparent text-black/80 capitalize"
                               )}
                               type="button"

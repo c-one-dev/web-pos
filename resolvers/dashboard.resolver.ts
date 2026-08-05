@@ -1,6 +1,6 @@
 import Sale from "../models/sale.model"
 import Customer from "../models/customer.model"
-import { startOfDay, endOfDay, format, differenceInCalendarDays } from "date-fns"
+import { format, differenceInCalendarDays } from "date-fns"
 import type { PipelineStage } from "mongoose"
 
 // Bucket the Sales tab by day for short ranges, month for multi-month
@@ -74,12 +74,16 @@ export const dashboardResolver = {
   Query: {
     dashboardSummary: async (
       _: any,
-      { start, end, timezone }: { start: string; end: string; timezone?: string }
+      {
+        start,
+        end,
+        timezone,
+      }: { start: string; end: string; timezone?: string }
     ) => {
       try {
         const tz = timezone || "UTC"
-        const rangeStart = startOfDay(new Date(start))
-        const rangeEnd = endOfDay(new Date(end))
+        const rangeStart = new Date(start)
+        const rangeEnd = new Date(end)
         const dateGranularity = resolveDateGranularity(rangeStart, rangeEnd)
         const matchStage = {
           currentSaleStatus: { $ne: "VOIDED" },

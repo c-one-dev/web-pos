@@ -5,6 +5,8 @@ import { useQuery } from "@apollo/client/react"
 import { format } from "date-fns"
 import {
   startOfToday,
+  startOfDay,
+  endOfDay,
   startOfWeek,
   endOfWeek,
   startOfMonth,
@@ -270,11 +272,9 @@ function ShiftReportTab() {
     variables: {
       first: rows,
       search,
-      start: (appliedRange.from || startOfToday()).toISOString(),
-      end: (
-        appliedRange.to ||
-        appliedRange.from ||
-        startOfToday()
+      start: startOfDay(appliedRange.from || startOfToday()).toISOString(),
+      end: endOfDay(
+        appliedRange.to || appliedRange.from || startOfToday()
       ).toISOString(),
       includeDeleted,
       sort,
@@ -389,11 +389,9 @@ function ShiftReportTab() {
           first: rows,
           after: endCursor,
           search,
-          start: (appliedRange.from || startOfToday()).toISOString(),
-          end: (
-            appliedRange.to ||
-            appliedRange.from ||
-            startOfToday()
+          start: startOfDay(appliedRange.from || startOfToday()).toISOString(),
+          end: endOfDay(
+            appliedRange.to || appliedRange.from || startOfToday()
           ).toISOString(),
           includeDeleted,
           sort,
@@ -549,11 +547,9 @@ function VoidedTransactionsTab() {
     variables: {
       first: rows,
       search,
-      start: (appliedRange.from || startOfToday()).toISOString(),
-      end: (
-        appliedRange.to ||
-        appliedRange.from ||
-        startOfToday()
+      start: startOfDay(appliedRange.from || startOfToday()).toISOString(),
+      end: endOfDay(
+        appliedRange.to || appliedRange.from || startOfToday()
       ).toISOString(),
       sort,
     },
@@ -643,11 +639,9 @@ function VoidedTransactionsTab() {
           first: rows,
           after: endCursor,
           search,
-          start: (appliedRange.from || startOfToday()).toISOString(),
-          end: (
-            appliedRange.to ||
-            appliedRange.from ||
-            startOfToday()
+          start: startOfDay(appliedRange.from || startOfToday()).toISOString(),
+          end: endOfDay(
+            appliedRange.to || appliedRange.from || startOfToday()
           ).toISOString(),
           sort,
         },

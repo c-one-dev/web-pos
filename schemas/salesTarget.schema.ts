@@ -25,6 +25,10 @@ export const salesTargetSchema = gql`
   }
 
   type Mutation {
-    setSalesTarget(user: ID!, period: SalesTargetPeriod!, target: Float!): Response
+    setSalesTarget(
+      user: ID!
+      period: SalesTargetPeriod!
+      target: Float!
+    ): Response
   }
 `

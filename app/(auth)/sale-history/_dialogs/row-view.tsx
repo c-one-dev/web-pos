@@ -285,7 +285,7 @@ export default function RowViewDialog({
                     </div>
                     <div className="-space-y-px">
                       <span className="block text-right">
-                        Order Date: {" "}
+                        Order Date:{" "}
                         <span className="text-muted-foreground">
                           {data?.sale?.createdAt
                             ? format(Number(data.sale.createdAt), "PPpp")
@@ -339,8 +339,8 @@ export default function RowViewDialog({
                         <Separator />
                       </div>
                     )) || (
-                        <span className="text-muted-foreground">No items</span>
-                      )}
+                      <span className="text-muted-foreground">No items</span>
+                    )}
                   </div>
                   <div className="flex flex-col space-y-1">
                     <div className="flex w-full items-center justify-between">

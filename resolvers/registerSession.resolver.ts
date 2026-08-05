@@ -1,6 +1,5 @@
 import { GraphQLError } from "graphql"
 import { Types, type PipelineStage } from "mongoose"
-import { startOfDay, endOfDay } from "date-fns"
 import Register from "../models/register.model"
 import RegisterSession from "../models/registerSession.model"
 import PaymentMethod from "../models/paymentMethod.model"
@@ -249,8 +248,8 @@ export const registerSessionResolver = {
                 {
                   $match: {
                     closedAt: {
-                      $gte: startOfDay(new Date(start)),
-                      $lte: endOfDay(new Date(end)),
+                      $gte: new Date(start),
+                      $lte: new Date(end),
                     },
                   },
                 },

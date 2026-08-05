@@ -6,7 +6,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group"
 import { MagnifyingGlassIcon } from "@phosphor-icons/react"
 import { useQuery } from "@apollo/client/react"
 import gql from "graphql-tag"

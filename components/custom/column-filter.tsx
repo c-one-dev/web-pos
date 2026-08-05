@@ -322,7 +322,7 @@ export default function ColumnFilter({
               )}
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-auto p-0 pt-4 px-1">
+          <PopoverContent className="w-auto p-0 px-1 pt-4">
             <div className="flex">
               <div className="flex flex-col gap-1 border-r p-2 pr-3">
                 {DATE_RANGE_PRESETS.map((preset) => (
@@ -352,9 +352,7 @@ export default function ColumnFilter({
                       Reset
                     </Button>
                     <Button
-                      onClick={() =>
-                        dateRange && applyDateRange(dateRange)
-                      }
+                      onClick={() => dateRange && applyDateRange(dateRange)}
                     >
                       Apply
                     </Button>

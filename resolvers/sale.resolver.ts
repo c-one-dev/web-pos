@@ -438,8 +438,8 @@ export const saleResolver = {
                 {
                   $match: {
                     voidedAt: {
-                      $gte: startOfDay(new Date(start)),
-                      $lte: endOfDay(new Date(end)),
+                      $gte: new Date(start),
+                      $lte: new Date(end),
                     },
                   },
                 },

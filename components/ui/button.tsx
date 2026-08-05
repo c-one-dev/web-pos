@@ -59,7 +59,10 @@ function Button({
       data-slot="button"
       data-variant={variant}
       data-size={size}
-      className={cn(buttonVariants({ variant, size, className }), loading && "pointer-events-none flex justify-center")}
+      className={cn(
+        buttonVariants({ variant, size, className }),
+        loading && "pointer-events-none flex justify-center"
+      )}
       {...props}
     >
       {loading ? <Spinner /> : props.children}

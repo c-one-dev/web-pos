@@ -10,7 +10,8 @@ const BROWSER_PATTERNS: [RegExp, string][] = [
 
 const formatUserAgent = (ua?: string | null): string | undefined => {
   if (!ua) return undefined
-  const browserName = BROWSER_PATTERNS.find(([re]) => re.test(ua))?.[1] || "Unknown"
+  const browserName =
+    BROWSER_PATTERNS.find(([re]) => re.test(ua))?.[1] || "Unknown"
   const versionMatch =
     ua.match(/Edg\/([\d.]+)/) ||
     ua.match(/OPR\/([\d.]+)/) ||

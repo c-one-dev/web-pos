@@ -82,7 +82,8 @@ export default function StatusDialog({ _id, status, onClose }: Props) {
       >
         <DialogHeader>
           <DialogTitle>
-            {statusText} Outlet: <span className="underline">{data?.outlet?.name}</span>
+            {statusText} Outlet:{" "}
+            <span className="underline">{data?.outlet?.name}</span>
           </DialogTitle>
           <DialogDescription>
             Are you sure you want to {statusText.toLowerCase()} this outlet?

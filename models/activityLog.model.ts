@@ -14,4 +14,5 @@ const ActivityLog = new Schema<IActivityLog>(
   { timestamps: true }
 )
 
-export default models.ActivityLog || model<IActivityLog>("ActivityLog", ActivityLog)
+export default models.ActivityLog ||
+  model<IActivityLog>("ActivityLog", ActivityLog)

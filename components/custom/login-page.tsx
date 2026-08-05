@@ -64,9 +64,7 @@ function LoginIllustration() {
         className="absolute top-[10%] right-[3%] w-[24%] max-w-72"
       />
 
-      <div
-        className="absolute top-[28%] left-1/2 aspect-square w-[50%] max-w-[26rem] -translate-x-1/2 rounded-full bg-gray-500/20"
-      />
+      <div className="absolute top-[28%] left-1/2 aspect-square w-[50%] max-w-[26rem] -translate-x-1/2 rounded-full bg-gray-500/20" />
 
       <Image
         src="/POS/pc1.png"

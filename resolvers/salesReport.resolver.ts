@@ -1,5 +1,4 @@
 import Sale from "../models/sale.model"
-import { startOfDay, endOfDay } from "date-fns"
 import { Types, type PipelineStage } from "mongoose"
 import { fromCursor, toCursor } from "../helpers/cursor"
 
@@ -56,7 +55,9 @@ export const salesReportResolver = {
               as: "registerDoc",
             },
           },
-          { $unwind: { path: "$registerDoc", preserveNullAndEmptyArrays: true } },
+          {
+            $unwind: { path: "$registerDoc", preserveNullAndEmptyArrays: true },
+          },
           {
             $lookup: {
               from: "outlets",
@@ -92,8 +93,8 @@ export const salesReportResolver = {
                 {
                   $match: {
                     date: {
-                      $gte: startOfDay(new Date(start)),
-                      $lte: endOfDay(new Date(end)),
+                      $gte: new Date(start),
+                      $lte: new Date(end),
                     },
                   },
                 },
@@ -233,8 +234,8 @@ export const salesReportResolver = {
       { start, end }: { start: string; end: string }
     ) => {
       try {
-        const rangeStart = startOfDay(new Date(start))
-        const rangeEnd = endOfDay(new Date(end))
+        const rangeStart = new Date(start)
+        const rangeEnd = new Date(end)
 
         const pipeline: PipelineStage[] = [
           {
@@ -287,8 +288,8 @@ export const salesReportResolver = {
       { start, end }: { start: string; end: string }
     ) => {
       try {
-        const rangeStart = startOfDay(new Date(start))
-        const rangeEnd = endOfDay(new Date(end))
+        const rangeStart = new Date(start)
+        const rangeEnd = new Date(end)
 
         const pipeline: PipelineStage[] = [
           { $match: { createdAt: { $gte: rangeStart, $lte: rangeEnd } } },

@@ -1,4 +1,3 @@
-import { startOfDay, endOfDay } from "date-fns"
 import ActivityLog from "../models/activityLog.model"
 
 // Logs accumulate faster than the other two report tables since every
@@ -14,8 +13,8 @@ export const activityLogResolver = {
       { start, end, search }: { start: string; end: string; search?: string }
     ) => {
       try {
-        const rangeStart = startOfDay(new Date(start))
-        const rangeEnd = endOfDay(new Date(end))
+        const rangeStart = new Date(start)
+        const rangeEnd = new Date(end)
         const matchStage: Record<string, any> = {
           date: { $gte: rangeStart, $lte: rangeEnd },
         }

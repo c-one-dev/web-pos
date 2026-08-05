@@ -38,6 +38,10 @@ export const dashboardSchema = gql`
   }
 
   type Query {
-    dashboardSummary(start: String!, end: String!, timezone: String): DashboardSummary
+    dashboardSummary(
+      start: String!
+      end: String!
+      timezone: String
+    ): DashboardSummary
   }
 `

@@ -18,6 +18,8 @@ import {
 } from "recharts"
 import {
   startOfToday,
+  startOfDay,
+  endOfDay,
   startOfWeek,
   endOfWeek,
   startOfMonth,
@@ -40,7 +42,11 @@ import { ButtonGroup, ButtonGroupText } from "@/components/ui/button-group"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { ChartContainer, ChartTooltip } from "@/components/ui/chart"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -102,10 +108,16 @@ const GET_DASHBOARD_SUMMARY = gql`
 `
 
 const DATE_PRESETS: { label: string; getRange: () => DateRange }[] = [
-  { label: "Today", getRange: () => ({ from: startOfToday(), to: startOfToday() }) },
+  {
+    label: "Today",
+    getRange: () => ({ from: startOfToday(), to: startOfToday() }),
+  },
   {
     label: "This Week",
-    getRange: () => ({ from: startOfWeek(new Date()), to: endOfWeek(new Date()) }),
+    getRange: () => ({
+      from: startOfWeek(new Date()),
+      to: endOfWeek(new Date()),
+    }),
   },
   {
     label: "Last 7 Days",
@@ -113,7 +125,10 @@ const DATE_PRESETS: { label: string; getRange: () => DateRange }[] = [
   },
   {
     label: "This Month",
-    getRange: () => ({ from: startOfMonth(new Date()), to: endOfMonth(new Date()) }),
+    getRange: () => ({
+      from: startOfMonth(new Date()),
+      to: endOfMonth(new Date()),
+    }),
   },
   {
     label: "Last 30 Days",
@@ -247,7 +262,9 @@ function DonutTooltip({ active, payload, total }: any) {
   return (
     <div className="grid gap-1 rounded-none border border-border/50 bg-background px-3 py-2 text-xs shadow-xl">
       <span className="font-medium">{point.label}</span>
-      <span className="font-mono text-base font-semibold text-foreground">{pct}%</span>
+      <span className="font-mono text-base font-semibold text-foreground">
+        {pct}%
+      </span>
     </div>
   )
 }
@@ -285,7 +302,10 @@ function CategoryDonut({
           strokeWidth={0}
         >
           {points.map((point, index) => (
-            <Cell key={point.key} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+            <Cell
+              key={point.key}
+              fill={CHART_COLORS[index % CHART_COLORS.length]}
+            />
           ))}
         </Pie>
         <ChartTooltip content={<DonutTooltip total={total} />} />
@@ -295,7 +315,9 @@ function CategoryDonut({
           <div key={point.key} className="flex items-center gap-2 text-sm">
             <span
               className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
-              style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
+              style={{
+                backgroundColor: CHART_COLORS[index % CHART_COLORS.length],
+              }}
             />
             <span className="min-w-28 text-foreground">{point.label}</span>
             <span className="font-mono text-muted-foreground">
@@ -308,7 +330,13 @@ function CategoryDonut({
   )
 }
 
-function TeamTable({ data, loading }: { data?: TeamPoint[]; loading: boolean }) {
+function TeamTable({
+  data,
+  loading,
+}: {
+  data?: TeamPoint[]
+  loading: boolean
+}) {
   const [rows, setRows] = useState<number>(5)
   const [page, setPage] = useState<{ current: number; max: number }>({
     current: 1,
@@ -390,7 +418,9 @@ function TeamTable({ data, loading }: { data?: TeamPoint[]; loading: boolean }) 
         header: () => <span>Rate (%)</span>,
         cell: ({ row }) => (
           <span className="font-mono text-muted-foreground">
-            {grandTotal ? ((row.original.total / grandTotal) * 100).toFixed(2) : "0.00"}
+            {grandTotal
+              ? ((row.original.total / grandTotal) * 100).toFixed(2)
+              : "0.00"}
             %
           </span>
         ),
@@ -406,8 +436,8 @@ function TeamTable({ data, loading }: { data?: TeamPoint[]; loading: boolean }) 
       <div className="flex items-center justify-between">
         <span className="text-sm text-muted-foreground">
           Showing {(page.current - 1) * rows + 1}-
-          {page.current === page.max ? total : page.current * rows} out of {total}{" "}
-          member{total === 1 ? "" : "s"}.
+          {page.current === page.max ? total : page.current * rows} out of{" "}
+          {total} member{total === 1 ? "" : "s"}.
         </span>
         <div className="flex gap-1.5">
           <Select
@@ -431,7 +461,9 @@ function TeamTable({ data, loading }: { data?: TeamPoint[]; loading: boolean }) 
           </Select>
           <ButtonGroup>
             <Button
-              onClick={() => setPage((prev) => ({ ...prev, current: prev.current - 1 }))}
+              onClick={() =>
+                setPage((prev) => ({ ...prev, current: prev.current - 1 }))
+              }
               disabled={page.current === 1}
               variant="outline"
             >
@@ -439,7 +471,9 @@ function TeamTable({ data, loading }: { data?: TeamPoint[]; loading: boolean }) 
             </Button>
             <ButtonGroupText>{`Page ${page.current} of ${page.max}`}</ButtonGroupText>
             <Button
-              onClick={() => setPage((prev) => ({ ...prev, current: prev.current + 1 }))}
+              onClick={() =>
+                setPage((prev) => ({ ...prev, current: prev.current + 1 }))
+              }
               disabled={page.current === page.max}
               variant="outline"
             >
@@ -470,13 +504,17 @@ export default function Page() {
     to: startOfToday(),
   })
   const [presetLabel, setPresetLabel] = useState("Today")
-  const [stagedRange, setStagedRange] = useState<DateRange | undefined>(appliedRange)
+  const [stagedRange, setStagedRange] = useState<DateRange | undefined>(
+    appliedRange
+  )
   const [open, setOpen] = useState(false)
 
   const { data, loading } = useQuery(GET_DASHBOARD_SUMMARY, {
     variables: {
-      start: (appliedRange.from || startOfToday()).toISOString(),
-      end: (appliedRange.to || appliedRange.from || startOfToday()).toISOString(),
+      start: startOfDay(appliedRange.from || startOfToday()).toISOString(),
+      end: endOfDay(
+        appliedRange.to || appliedRange.from || startOfToday()
+      ).toISOString(),
       timezone,
     },
     fetchPolicy: "network-only",
@@ -507,7 +545,7 @@ export default function Page() {
             </Button>
           </PopoverTrigger>
           <PopoverContent
-            className="w-auto rounded-lg p-0 pt-4 px-1"
+            className="w-auto rounded-lg p-0 px-1 pt-4"
             align="end"
           >
             <div className="flex">
@@ -596,10 +634,15 @@ export default function Page() {
             <TabsContent value="sales" className="pt-4">
               {loading ? (
                 <Skeleton className="h-72 w-full rounded-lg" />
-              ) : !summary?.salesByDate?.some((p: SalesPoint) => p.total > 0) ? (
+              ) : !summary?.salesByDate?.some(
+                  (p: SalesPoint) => p.total > 0
+                ) ? (
                 <EmptyChartState />
               ) : (
-                <ChartContainer config={chartConfig} className="aspect-auto h-72 w-full">
+                <ChartContainer
+                  config={chartConfig}
+                  className="aspect-auto h-72 w-full"
+                >
                   <AreaChart data={summary.salesByDate}>
                     <CartesianGrid vertical={false} strokeDasharray="3 3" />
                     <XAxis
@@ -630,7 +673,10 @@ export default function Page() {
             </TabsContent>
 
             <TabsContent value="product-types" className="pt-4">
-              <CategoryDonut data={summary?.salesByProductType} loading={loading} />
+              <CategoryDonut
+                data={summary?.salesByProductType}
+                loading={loading}
+              />
             </TabsContent>
 
             <TabsContent value="days" className="pt-4">
@@ -640,10 +686,15 @@ export default function Page() {
             <TabsContent value="time" className="pt-4">
               {loading ? (
                 <Skeleton className="h-72 w-full rounded-lg" />
-              ) : !summary?.salesByHour?.some((p: SalesPoint) => p.total > 0) ? (
+              ) : !summary?.salesByHour?.some(
+                  (p: SalesPoint) => p.total > 0
+                ) ? (
                 <EmptyChartState />
               ) : (
-                <ChartContainer config={chartConfig} className="aspect-auto h-72 w-full">
+                <ChartContainer
+                  config={chartConfig}
+                  className="aspect-auto h-72 w-full"
+                >
                   <BarChart data={summary.salesByHour}>
                     <CartesianGrid vertical={false} strokeDasharray="3 3" />
                     <XAxis
@@ -664,7 +715,11 @@ export default function Page() {
                       content={<SalesTooltip />}
                       cursor={{ fill: "var(--muted)" }}
                     />
-                    <Bar dataKey="total" fill="var(--color-total)" radius={[2, 2, 0, 0]} />
+                    <Bar
+                      dataKey="total"
+                      fill="var(--color-total)"
+                      radius={[2, 2, 0, 0]}
+                    />
                   </BarChart>
                 </ChartContainer>
               )}

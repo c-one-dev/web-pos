@@ -181,9 +181,24 @@ export default function ReceiptDialog({ saleId, onClose }: Props) {
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-black">
-                  <th style={{ width: "60%" }} className="pb-1 text-left font-medium">Item</th>
-                  <th style={{ width: "20%" }} className="pb-1 text-right font-medium">Unit</th>
-                  <th style={{ width: "20%" }} className="pb-1 text-right font-medium">Amount</th>
+                  <th
+                    style={{ width: "60%" }}
+                    className="pb-1 text-left font-medium"
+                  >
+                    Item
+                  </th>
+                  <th
+                    style={{ width: "20%" }}
+                    className="pb-1 text-right font-medium"
+                  >
+                    Unit
+                  </th>
+                  <th
+                    style={{ width: "20%" }}
+                    className="pb-1 text-right font-medium"
+                  >
+                    Amount
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -203,7 +218,9 @@ export default function ReceiptDialog({ saleId, onClose }: Props) {
                 <tr>
                   <td></td>
                   <td className="pt-3 pb-1 text-right font-medium">Subtotal</td>
-                  <td className="pt-3 pb-1 text-right font-medium">{currency(sale.subTotal)}</td>
+                  <td className="pt-3 pb-1 text-right font-medium">
+                    {currency(sale.subTotal)}
+                  </td>
                 </tr>
                 <tr>
                   <td></td>
@@ -212,8 +229,12 @@ export default function ReceiptDialog({ saleId, onClose }: Props) {
                 </tr>
                 <tr className="font-bold">
                   <td></td>
-                  <td className="border-t border-black pt-1 pb-1 text-right">Total</td>
-                  <td className="border-t border-black pt-1 pb-1 text-right">{currency(sale.total)}</td>
+                  <td className="border-t border-black pt-1 pb-1 text-right">
+                    Total
+                  </td>
+                  <td className="border-t border-black pt-1 pb-1 text-right">
+                    {currency(sale.total)}
+                  </td>
                 </tr>
                 {sale.payments.map((payment: any, index: number) => (
                   <tr key={index}>
@@ -232,13 +253,15 @@ export default function ReceiptDialog({ saleId, onClose }: Props) {
                 <tr>
                   <td></td>
                   <td colSpan={2} className="pt-1">
-                    <div className="border-t border-black w-full"></div>
+                    <div className="w-full border-t border-black"></div>
                   </td>
                 </tr>
                 <tr className="font-bold">
                   <td colSpan={2} className="pt-1 text-left">
                     <span>Outstanding:</span>
-                    <span style={{ marginLeft: "7rem", fontWeight: 500 }}>{currency(outstanding)}</span>
+                    <span style={{ marginLeft: "7rem", fontWeight: 500 }}>
+                      {currency(outstanding)}
+                    </span>
                   </td>
                   <td></td>
                 </tr>

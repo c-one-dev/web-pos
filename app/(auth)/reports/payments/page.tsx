@@ -82,6 +82,8 @@ import {
 } from "@/components/ui/tooltip"
 import {
   startOfToday,
+  startOfDay,
+  endOfDay,
   startOfWeek,
   endOfWeek,
   startOfMonth,
@@ -270,8 +272,8 @@ function DateRangeFilter({
 function PaymentSummaryTab({ range }: { range: DateRange }) {
   const { data, loading } = useQuery(GET_PAYMENT_SUMMARY, {
     variables: {
-      start: (range.from || startOfToday()).toISOString(),
-      end: (range.to || range.from || startOfToday()).toISOString(),
+      start: startOfDay(range.from || startOfToday()).toISOString(),
+      end: endOfDay(range.to || range.from || startOfToday()).toISOString(),
     },
     fetchPolicy: "network-only",
   })
@@ -377,8 +379,8 @@ function PaymentTypesTab({ range }: { range: DateRange }) {
 
   const { data, loading } = useQuery(GET_PAYMENT_TYPE_SUMMARY, {
     variables: {
-      start: (range.from || startOfToday()).toISOString(),
-      end: (range.to || range.from || startOfToday()).toISOString(),
+      start: startOfDay(range.from || startOfToday()).toISOString(),
+      end: endOfDay(range.to || range.from || startOfToday()).toISOString(),
     },
     fetchPolicy: "network-only",
   })
@@ -611,8 +613,8 @@ async function exportPaymentsReportExcel({
   activeTab: string
   range: DateRange
 }) {
-  const start = (range.from || startOfToday()).toISOString()
-  const end = (range.to || range.from || startOfToday()).toISOString()
+  const start = startOfDay(range.from || startOfToday()).toISOString()
+  const end = endOfDay(range.to || range.from || startOfToday()).toISOString()
   const title = TAB_LABELS[activeTab] || "Payment Report"
 
   const { data: outletsData } = await client.query({
@@ -653,13 +655,21 @@ async function exportPaymentsReportExcel({
       variables: { start, end },
       fetchPolicy: "network-only",
     })
-    const nodes: PaymentTypeSummaryNode[] = (data as any)?.paymentTypeSummary || []
+    const nodes: PaymentTypeSummaryNode[] =
+      (data as any)?.paymentTypeSummary || []
 
     addExcelTitleRows(sheet, title, range, 4, outlets)
     sheet.columns = [{ width: 26 }, { width: 18 }, { width: 14 }, { width: 16 }]
-    const headerRow = sheet.addRow(["Payment type", "Total collected", "Refunds", "Net"])
+    const headerRow = sheet.addRow([
+      "Payment type",
+      "Total collected",
+      "Refunds",
+      "Net",
+    ])
     styleExcelHeaderRow(headerRow)
-    nodes.forEach((n) => sheet.addRow([n.name, n.totalCollected, n.refunds, n.net]))
+    nodes.forEach((n) =>
+      sheet.addRow([n.name, n.totalCollected, n.refunds, n.net])
+    )
     const totalRow = sheet.addRow([
       "TOTAL",
       nodes.reduce((sum, n) => sum + n.totalCollected, 0),
@@ -707,7 +717,8 @@ async function exportPaymentsReportExcel({
     const totalRow = sheet.addRow([
       "TOTAL",
       nodes.reduce(
-        (sum, n) => sum + (n.sales?.reduce((s2, s) => s2 + (s.total || 0), 0) || 0),
+        (sum, n) =>
+          sum + (n.sales?.reduce((s2, s) => s2 + (s.total || 0), 0) || 0),
         0
       ),
       "",
@@ -732,8 +743,8 @@ async function exportPaymentsReportPdf({
   range: DateRange
   userName: string
 }) {
-  const start = (range.from || startOfToday()).toISOString()
-  const end = (range.to || range.from || startOfToday()).toISOString()
+  const start = startOfDay(range.from || startOfToday()).toISOString()
+  const end = endOfDay(range.to || range.from || startOfToday()).toISOString()
   const title = TAB_LABELS[activeTab] || "Payment Report"
 
   const { data: outletsData } = await client.query({
@@ -789,7 +800,8 @@ async function exportPaymentsReportPdf({
       variables: { start, end },
       fetchPolicy: "network-only",
     })
-    const nodes: PaymentTypeSummaryNode[] = (data as any)?.paymentTypeSummary || []
+    const nodes: PaymentTypeSummaryNode[] =
+      (data as any)?.paymentTypeSummary || []
 
     autoTable(doc, {
       startY,
@@ -818,7 +830,16 @@ async function exportPaymentsReportPdf({
 
     autoTable(doc, {
       startY,
-      head: [["Receipt #", "Amount", "Date & Time", "Method", "Payment Amount", "User"]],
+      head: [
+        [
+          "Receipt #",
+          "Amount",
+          "Date & Time",
+          "Method",
+          "Payment Amount",
+          "User",
+        ],
+      ],
       body: nodes.map((n) => [
         n.saleList?.join(", ") || "-",
         pdfCurrency(n.sales?.reduce((sum, s) => sum + (s.total || 0), 0) || 0),
@@ -835,7 +856,13 @@ async function exportPaymentsReportPdf({
   savePdfDocument(doc, title, range)
 }
 
-function ExportButton({ activeTab, range }: { activeTab: string; range: DateRange }) {
+function ExportButton({
+  activeTab,
+  range,
+}: {
+  activeTab: string
+  range: DateRange
+}) {
   const client = useApolloClient()
   const { data: session } = useSession()
   const userName = (session as any)?.user?.name || "Unknown"
@@ -923,8 +950,10 @@ export default function Page() {
   })
   const [presetLabel, setPresetLabel] = useState("Today")
   const [activeTab, setActiveTab] = useState("summary")
-  const start = (appliedRange.from || startOfToday()).toISOString()
-  const end = (appliedRange.to || appliedRange.from || startOfToday()).toISOString()
+  const start = startOfDay(appliedRange.from || startOfToday()).toISOString()
+  const end = endOfDay(
+    appliedRange.to || appliedRange.from || startOfToday()
+  ).toISOString()
   const { data, fetchMore, loading } = useQuery(GET_PAYMENTS, {
     variables: {
       first: rows,
