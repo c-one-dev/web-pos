@@ -321,6 +321,9 @@ function ProcessSalePage({
     receivedAmount: 0,
     changeAmount: 0,
     netAmount: 0,
+    // Set from the Pay sheet when the cashier chooses to keep a sale's
+    // change as store credit rather than hand it back.
+    changeToStoreCredit: false,
     register: register?._id || "",
   }
 
@@ -345,6 +348,7 @@ function ProcessSalePage({
               receivedAmount: 0,
               changeAmount: 0,
               netAmount: 0,
+              changeToStoreCredit: false,
             }
           : loadDraft(registerId)),
     },

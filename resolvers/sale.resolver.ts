@@ -653,10 +653,37 @@ export const saleResolver = {
           const onAccountTotal = totalForMethod(input.payments, onAccountId)
           const storeCreditTotal = totalForMethod(input.payments, storeCreditId)
 
+          // Change retained as store credit. The cash never leaves the
+          // drawer, so the sale must record no change and a net equal to the
+          // full tender - otherwise the shift would expect less cash than is
+          // physically there. The customer is owed the difference as credit.
+          const creditedChange =
+            input.changeToStoreCredit && input.changeAmount > 0
+              ? input.changeAmount
+              : 0
+          if (creditedChange > 0 && !input.customer)
+            throw new GraphQLError(
+              "A customer must be selected to keep the change as store credit.",
+              { extensions: { code: "CUSTOMER_REQUIRED" } }
+            )
+          // Zero the change on the tenders themselves so the sale, its Payment
+          // documents and the shift tally all agree nothing was handed back.
+          const effectivePayments =
+            creditedChange > 0
+              ? input.payments.map((payment: any) => ({
+                  ...payment,
+                  change: 0,
+                }))
+              : input.payments
+
           let populatedResult
           await session.withTransaction(async () => {
             let customer: any = null
-            if (onAccountTotal > 0 || storeCreditTotal > 0) {
+            if (
+              onAccountTotal > 0 ||
+              storeCreditTotal > 0 ||
+              creditedChange > 0
+            ) {
               if (!input.customer)
                 throw new GraphQLError(
                   "A customer must be selected to use On Account or Store Credit.",
@@ -681,7 +708,7 @@ export const saleResolver = {
 
             // Generate Multiple Payments
             const payments = await Payment.insertMany(
-              input.payments.map((payment: any) => ({
+              effectivePayments.map((payment: any) => ({
                 ...payment,
                 by: ctx.session._id,
                 sale: [], // Will be updated after sale creation
@@ -701,6 +728,11 @@ export const saleResolver = {
                 payment: payment._id,
               })),
               saleNumber: `${register?.prefix || "REG"}-${String(count + 1).padStart(5, "0")}`,
+              changeAmount: creditedChange > 0 ? 0 : input.changeAmount,
+              netAmount:
+                creditedChange > 0 ? input.receivedAmount : input.netAmount,
+              changeToStoreCredit: creditedChange > 0,
+              changeCreditedAmount: creditedChange,
               isOnAccount: onAccountTotal > 0,
               currentSalePaymentStatus: paymentStatus,
               salePaymentStatusHistory: payments.map(
@@ -760,6 +792,28 @@ export const saleResolver = {
                       transacted: -storeCreditTotal,
                       date: new Date(),
                       description: `Applied to sale ${newSale.saleNumber}`,
+                    },
+                  },
+                },
+                { session }
+              )
+            }
+            // Change kept on account. Netted against any store credit spent on
+            // this same sale so the running "remaining" stays truthful when a
+            // customer both spends credit and leaves change in one visit.
+            if (customer && creditedChange > 0) {
+              const balanceBefore =
+                customer.storeCredit.current - storeCreditTotal
+              await Customer.updateOne(
+                { _id: customer._id },
+                {
+                  $inc: { "storeCredit.current": creditedChange },
+                  $push: {
+                    "storeCredit.history": {
+                      remaining: balanceBefore + creditedChange,
+                      transacted: creditedChange,
+                      date: new Date(),
+                      description: `Change kept from sale ${newSale.saleNumber}`,
                     },
                   },
                 },

@@ -79,6 +79,10 @@ export interface ISale {
   receivedAmount: number
   changeAmount: number
   netAmount: number
+  // Change retained as store credit instead of handed back. changeAmount is
+  // 0 on such a sale, since no cash left the drawer.
+  changeToStoreCredit?: boolean
+  changeCreditedAmount?: number
   refundedAmount: number
   refunds: ISaleRefund[]
   notes: string

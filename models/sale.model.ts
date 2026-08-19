@@ -116,6 +116,10 @@ const Sale = new Schema<ISale>(
     receivedAmount: { type: Number, required: true },
     changeAmount: { type: Number, required: true },
     netAmount: { type: Number, required: true },
+    // Recorded so a receipt or audit can tell a zero-change sale apart from
+    // one whose change was retained as store credit.
+    changeToStoreCredit: { type: Boolean, default: false },
+    changeCreditedAmount: { type: Number, default: 0 },
     // Running total of store credit issued back against this sale, and the
     // individual refunds that make it up.
     refundedAmount: { type: Number, required: true, default: 0 },

@@ -1,4 +1,12 @@
 import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
   Sheet,
   SheetClose,
   SheetContent,
@@ -222,6 +230,7 @@ function Pay({
   )
   const [amountTendered, setAmountTendered] = useState<number>(total)
   const [note, setNote] = useState<string>("")
+  const [askKeepChange, setAskKeepChange] = useState<boolean>(false)
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -239,6 +248,14 @@ function Pay({
     ],
     [register]
   )
+
+  // The Pay button is a plain button rather than a submit, so the change
+  // question can be asked before the sale is actually rung up.
+  const submitSale = (keepChange: boolean) => {
+    form.setFieldValue("changeToStoreCredit", keepChange)
+    setAskKeepChange(false)
+    form.handleSubmit()
+  }
 
   const addPayment = (methodId: string | undefined) => {
     if (!methodId) return
@@ -361,6 +378,10 @@ function Pay({
                               )
                               form.setFieldValue("changeAmount", changeAmount)
                               form.setFieldValue("netAmount", netAmount)
+                              // Put the removed tender back in the input so a
+                              // mistyped method can be re-rung without typing
+                              // the amount out again.
+                              setAmountTendered(payment.amount)
                             }}
                           />
                           {
@@ -494,10 +515,16 @@ function Pay({
         </div>
         <SheetFooter>
           <Button
-            type="submit"
-            form="sale-form"
+            type="button"
             disabled={submitting}
             loading={submitting}
+            onClick={() => {
+              // Only worth asking when there is change to keep and an account
+              // to keep it on - a walk-in has nowhere to put it.
+              if (state.changeAmount > 0 && state.customer)
+                setAskKeepChange(true)
+              else submitSale(false)
+            }}
           >
             Pay
           </Button>
@@ -507,6 +534,38 @@ function Pay({
             </Button>
           </SheetClose>
         </SheetFooter>
+        <AlertDialog open={askKeepChange} onOpenChange={setAskKeepChange}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                Keep the change as store credit?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                This sale has{" "}
+                <span className="font-semibold text-foreground">
+                  {new Intl.NumberFormat("en-PH", {
+                    style: "currency",
+                    currency: "PHP",
+                  }).format(state.changeAmount)}
+                </span>{" "}
+                in change. Add it to the customer&apos;s store credit for a
+                future purchase, or hand it back in cash?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => submitSale(false)}
+              >
+                No, give the cash
+              </Button>
+              <Button type="button" onClick={() => submitSale(true)}>
+                Yes, keep as credit
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </SheetContent>
     </Sheet>
   )

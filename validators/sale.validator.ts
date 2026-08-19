@@ -41,6 +41,7 @@ export const saleSchema = z
     receivedAmount: z.number().nonnegative(),
     changeAmount: z.number().nonnegative(),
     netAmount: z.number().nonnegative(),
+    changeToStoreCredit: z.boolean().optional().nullable(),
     register: z.string(),
   })
   .refine((sale) => sale.discount <= sale.subTotal, {

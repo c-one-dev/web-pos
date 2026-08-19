@@ -146,6 +146,9 @@ export const saleSchema = gql`
     netAmount: Float
     notes: String
     register: ID
+    # When true and the sale has change due, the change is retained as store
+    # credit for the customer instead of being handed back in cash.
+    changeToStoreCredit: Boolean
   }
 
   # Sale History Table
