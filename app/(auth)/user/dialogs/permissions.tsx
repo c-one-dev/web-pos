@@ -292,7 +292,9 @@ function GroupHeading({
       <span className="text-[10px] text-muted-foreground tabular-nums">
         {stats.granted}/{stats.total}
       </span>
-      <label className="ml-auto flex cursor-pointer items-center gap-1.5 text-muted-foreground transition-colors select-none hover:text-foreground">
+      {/* Styled as an outline button rather than muted text: as a bare
+          tickbox on the same white as the rows below, people missed it. */}
+      <label className="ml-auto flex h-6 cursor-pointer items-center gap-1.5 rounded-sm border border-border bg-background px-2 font-medium transition-colors select-none hover:bg-muted hover:text-foreground">
         <Checkbox
           checked={checkedState(source, granted)}
           onCheckedChange={(value) => onToggle(source, value === true)}
