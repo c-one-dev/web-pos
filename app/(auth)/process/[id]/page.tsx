@@ -24,7 +24,14 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
-import { Suspense, use, useEffect, useState, useTransition } from "react"
+import {
+  Suspense,
+  use,
+  useCallback,
+  useEffect,
+  useState,
+  useTransition,
+} from "react"
 import Image from "next/image"
 import { cn } from "@/lib/utils"
 import {
@@ -395,6 +402,58 @@ function ProcessSalePage({
     form.setFieldValue("register", register?._id || "")
   }, [register?._id, form])
 
+  // Adding a product from the tile grid and from the search popover has to do
+  // exactly the same thing, so the "bump the quantity or append a line" rule
+  // lives here instead of inline on the tile.
+  const addProductToCart = useCallback(
+    (product: any) => {
+      const currentItems = (form.getFieldValue("items") ?? []) as any[]
+      const existingItem = currentItems.find(
+        (item: any) =>
+          product._id === item.product && item.price == item.snapshotPrice
+      )
+
+      if (existingItem) {
+        form.setFieldValue(
+          "items",
+          currentItems.map((item: any) => {
+            if (
+              existingItem.product === item.product &&
+              item.price == item.snapshotPrice
+            ) {
+              const newQty = item.quantity + 1
+              const itemPrice = item.snapshotPrice - item.discount
+              return {
+                ...item,
+                subTotal: item.snapshotPrice * newQty,
+                quantity: newQty,
+                price: itemPrice,
+                total: itemPrice * newQty,
+              }
+            }
+            return item
+          })
+        )
+        return
+      }
+
+      form.setFieldValue("items", [
+        ...currentItems,
+        {
+          product: product._id,
+          snapshotPrice: product.currentPrice,
+          snapshotName: product.name,
+          quantity: 1,
+          price: product.currentPrice,
+          subTotal: product.currentPrice,
+          discount: 0,
+          total: product.currentPrice,
+        },
+      ])
+    },
+    [form]
+  )
+
   const items = useStore(form.store, (state) => state.values.items)
   const discount = useStore(form.store, (state) => state.values.discount)
 
@@ -545,7 +604,7 @@ function ProcessSalePage({
                           </Button>
                         </ButtonGroup>
                       </PopoverTrigger>
-                      <PopoverContent className="w-full p-0">
+                      <PopoverContent className="w-(--radix-popover-trigger-width) p-0">
                         <Command>
                           <CommandInput placeholder="Search products" />
                           <CommandList>
@@ -554,9 +613,20 @@ function ProcessSalePage({
                               {register?.products?.map((product: IProduct) => (
                                 <CommandItem
                                   key={product._id.toString()}
-                                  value={product._id.toString()}
+                                  // cmdk scores the typed query against `value`,
+                                  // so it has to carry the fields the placeholder
+                                  // promises — an ObjectId matches nothing.
+                                  value={`${product.name} ${product.sku} ${product.barcode}`}
+                                  className="cursor-pointer"
+                                  onSelect={() => {
+                                    addProductToCart(product)
+                                    setOpenSearchCommand(false)
+                                  }}
                                 >
                                   <span className="block">{product.name}</span>
+                                  <span className="text-muted-foreground">
+                                    {product.sku}
+                                  </span>
                                 </CommandItem>
                               ))}
                             </CommandGroup>
@@ -620,56 +690,7 @@ function ProcessSalePage({
                         <div
                           key={product._id}
                           className="flex h-36 flex-col border hover:cursor-pointer hover:drop-shadow sm:h-45"
-                          onClick={() => {
-                            form.setFieldValue(
-                              "items",
-                              (() => {
-                                const currentItems = state.items
-                                const existingItem = currentItems.find(
-                                  (item: any) => {
-                                    return (
-                                      product._id === item.product &&
-                                      item.price == item.snapshotPrice
-                                    )
-                                  }
-                                )
-
-                                if (existingItem) {
-                                  return currentItems.map((item: any) => {
-                                    if (
-                                      existingItem.product === item.product &&
-                                      item.price == item.snapshotPrice
-                                    ) {
-                                      const newQty = item.quantity + 1
-                                      const itemPrice =
-                                        item.snapshotPrice - item.discount
-                                      return {
-                                        ...item,
-                                        subTotal: item.snapshotPrice * newQty,
-                                        quantity: newQty,
-                                        price: itemPrice,
-                                        total: itemPrice * newQty,
-                                      }
-                                    } else return item
-                                  })
-                                }
-
-                                return [
-                                  ...form.getFieldValue("items"),
-                                  {
-                                    product: product._id,
-                                    snapshotPrice: product.currentPrice,
-                                    snapshotName: product.name,
-                                    quantity: 1,
-                                    price: product.currentPrice,
-                                    subTotal: product.currentPrice,
-                                    discount: 0,
-                                    total: product.currentPrice,
-                                  },
-                                ]
-                              })()
-                            )
-                          }}
+                          onClick={() => addProductToCart(product)}
                         >
                           <div className="flex flex-1 items-center justify-center bg-slate-300">
                             <span className="text-4xl font-semibold text-muted uppercase sm:text-6xl">
