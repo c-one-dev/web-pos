@@ -352,9 +352,14 @@ export default function Page() {
 
   const filteredPaymentDetails: PaymentDetailRow[] = useMemo(() => {
     const rows = detail?.paymentDetails || []
+    // A split payment's type is a joined list ("Gcash, Card"), so match on
+    // membership rather than equality - an exact compare would drop every
+    // multi-tender sale from the filtered view.
     return paymentType === "ALL"
       ? rows
-      : rows.filter((r: PaymentDetailRow) => r.type === paymentType)
+      : rows.filter((r: PaymentDetailRow) =>
+          (r.type || "").split(", ").includes(paymentType)
+        )
   }, [detail, paymentType])
 
   if (loading && !detail) {

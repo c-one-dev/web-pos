@@ -230,7 +230,11 @@ export const registerSessionResolver = {
           0
         )
 
-        const paymentDetails = sales.flatMap((s: any) =>
+        // One row per individual payment. The On Account tab is built from
+        // this rather than from the grouped rows below, because a split
+        // payment only puts *part* of the sale on account - grouping first
+        // would report the whole sale total as owed.
+        const paymentRows = sales.flatMap((s: any) =>
           (s.payments || []).map((p: any) => ({
             date: p.date,
             _id: s._id,
@@ -242,7 +246,35 @@ export const registerSessionResolver = {
             userName: fullName(s.by),
           }))
         )
-        const onAccountSales = paymentDetails.filter((p) => p.isOnAccount)
+        const onAccountSales = paymentRows.filter((p) => p.isOnAccount)
+
+        // Payment Details is one row per SALE: a sale settled with more than
+        // one tender shows a single line with the methods joined, matching
+        // the convention Transaction by SKU already uses for its payments
+        // column. paymentAmount is the sale's total net tender, not one
+        // method's share - use the Payment Summary tab for per-method totals.
+        const paymentDetails = sales
+          .filter((s: any) => (s.payments || []).length > 0)
+          .map((s: any) => {
+            const payments = s.payments || []
+            return {
+              date: payments[0]?.date,
+              _id: s._id,
+              saleNumber: s.saleNumber,
+              saleTotal: s.total,
+              paymentAmount: payments.reduce(
+                (sum: number, p: any) => sum + (p.amount - p.change),
+                0
+              ),
+              type: [
+                ...new Set(payments.map((p: any) => p.method?.name || "-")),
+              ].join(", "),
+              isOnAccount: payments.some(
+                (p: any) => p.method?._id?.toString() === onAccountId
+              ),
+              userName: fullName(s.by),
+            }
+          })
 
         const transactions = sales.map((s: any) => ({
           date: s.createdAt,
