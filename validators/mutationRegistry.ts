@@ -18,6 +18,7 @@ import {
 } from "./registerSession.validator"
 import {
   customerSchema,
+  customerUpdateSchema,
   adjustAccountLimitSchema,
   adjustStoreCreditSchema,
 } from "./customer.validator"
@@ -87,7 +88,7 @@ export const mutationValidationRegistry: Record<
   adjustAccountLimit: adjustAccountLimitSchema,
   settleAccountBalance: settleAccountBalanceSchema,
   adjustStoreCredit: adjustStoreCreditSchema,
-  updateCustomer: customerSchema,
+  updateCustomer: customerUpdateSchema,
   changeCustomerStatus: NO_VALIDATION,
 
   createOutlet: outletSchema,

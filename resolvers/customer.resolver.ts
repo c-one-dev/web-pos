@@ -7,6 +7,7 @@ import { flatten } from "../helpers/flatten"
 import { checkSchema, validate } from "../helpers/validate"
 import {
   customerSchema,
+  customerUpdateSchema,
   adjustAccountLimitSchema,
   adjustStoreCreditSchema,
 } from "../validators/customer.validator"
@@ -484,14 +485,50 @@ export const customerResolver = {
     createCustomer: validate(checkSchema(customerSchema))(
       async (_: any, { input }: any) => {
         try {
+          const now = new Date()
+          // Opening balances are optional. max and current start equal - the
+          // customer has spent none of their line yet - and each gets a
+          // history entry so the starting figure is auditable alongside the
+          // adjustments that follow it.
+          const openingLimit = input.accountLimit || 0
+          const openingCredit = input.storeCredit || 0
           const initialLimitsAndCredits = {
-            accountLimit: { max: 0, current: 0, history: [] },
-            storeCredit: { current: 0, history: [] },
+            accountLimit: {
+              max: openingLimit,
+              current: openingLimit,
+              history:
+                openingLimit > 0
+                  ? [
+                      {
+                        remaining: openingLimit,
+                        transacted: openingLimit,
+                        date: now,
+                        description: "Opening account limit",
+                      },
+                    ]
+                  : [],
+            },
+            storeCredit: {
+              current: openingCredit,
+              history:
+                openingCredit > 0
+                  ? [
+                      {
+                        remaining: openingCredit,
+                        transacted: openingCredit,
+                        date: now,
+                        description: "Opening store credit",
+                      },
+                    ]
+                  : [],
+            },
           }
           const result = await Customer.create({
             ...input,
             type: input.type || "CUSTOMER",
             name: displayName(input),
+            // Spread last so the raw numeric inputs can never land on the
+            // document in place of the subdocuments built above.
             ...initialLimitsAndCredits,
           })
           return {
@@ -615,7 +652,7 @@ export const customerResolver = {
         }
       }
     ),
-    updateCustomer: validate(checkSchema(customerSchema))(
+    updateCustomer: validate(checkSchema(customerUpdateSchema))(
       async (_: any, { _id, input }: any) => {
         try {
           const result = await Customer.findByIdAndUpdate(

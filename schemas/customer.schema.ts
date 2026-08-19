@@ -146,6 +146,10 @@ export const customerSchema = gql`
     lastName: String
     type: CustomerType
     email: String
+    # Opening balances - honoured by createCustomer only. Later changes go
+    # through adjustAccountLimit / adjustStoreCredit so they stay audited.
+    accountLimit: Float
+    storeCredit: Float
   }
 
   type Query {

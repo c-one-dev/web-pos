@@ -14,6 +14,28 @@ export const customerSchema = z.object({
     .optional()
     .nullable()
     .or(z.literal("")),
+  // Opening balances, accepted on create only. Both seed a history entry so
+  // the starting figure is auditable the same way a later adjustment is.
+  accountLimit: z
+    .number()
+    .min(0, "Account limit cannot be negative")
+    .optional()
+    .nullable(),
+  storeCredit: z
+    .number()
+    .min(0, "Store credit cannot be negative")
+    .optional()
+    .nullable(),
+})
+
+// updateCustomer writes with flatten(), which would $set a bare number over
+// the accountLimit/storeCredit subdocuments and destroy their max/current/
+// history shape. Balances are only ever changed through adjustAccountLimit,
+// adjustStoreCredit and settleAccountBalance, so they are omitted here rather
+// than relying on the resolver to remember to strip them.
+export const customerUpdateSchema = customerSchema.omit({
+  accountLimit: true,
+  storeCredit: true,
 })
 
 export const adjustAccountLimitSchema = z.object({

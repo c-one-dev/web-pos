@@ -154,11 +154,19 @@ export default function FormDialog({
       lastName: "",
       type: "CUSTOMER",
       email: "",
+      accountLimit: "",
+      storeCredit: "",
     },
     validators: {
       onSubmit: ({ formApi, value }: any) => {
         try {
-          customerSchema.parse(value)
+          // The balance inputs hold strings; coerce before validating so an
+          // empty field reads as 0 rather than failing the number check.
+          customerSchema.parse({
+            ...value,
+            accountLimit: parseFloat(value.accountLimit) || 0,
+            storeCredit: parseFloat(value.storeCredit) || 0,
+          })
         } catch (error: any) {
           JSON.parse(error).map(({ path, message }: any) => {
             const pathName = path.join(".")
@@ -172,12 +180,18 @@ export default function FormDialog({
     onSubmit: ({ value }: any) =>
       startTransition(async () => {
         try {
-          const payload = {
+          const payload: Record<string, any> = {
             firstName: value.firstName.trim(),
             middleName: value.middleName?.trim() || null,
             lastName: value.lastName.trim(),
             type: value.type || "CUSTOMER",
             email: value.email?.trim() || null,
+          }
+          // Opening balances are create-only; on edit they are left to the
+          // audited adjust flows, and the update validator rejects them.
+          if (!isUpdate) {
+            payload.accountLimit = parseFloat(value.accountLimit) || 0
+            payload.storeCredit = parseFloat(value.storeCredit) || 0
           }
 
           const result: any = isUpdate
@@ -251,6 +265,12 @@ export default function FormDialog({
             id="customer-form"
             onSubmit={(e) => {
               e.preventDefault()
+              // This sheet is portaled to the body, but React propagates
+              // events through the React tree, not the DOM. Opened from the
+              // register's customer picker it sits inside the sale form, so
+              // without this the submit bubbles on and triggers the sale's
+              // own validation ("Received amount cannot be less than total").
+              e.stopPropagation()
               form.handleSubmit()
             }}
           >
@@ -343,6 +363,53 @@ export default function FormDialog({
                   </Field>
                 )}
               </form.Subscribe>
+              {/* Opening balances, create-only. After this the audited
+                  adjust flows on the customer report page own them. */}
+              {!isUpdate &&
+                (
+                  [
+                    ["accountLimit", "Account Limit"],
+                    ["storeCredit", "Store Credit"],
+                  ] as const
+                ).map(([name, label]) => (
+                  <form.Field key={name} name={name}>
+                    {(field) => {
+                      const isInvalid =
+                        field.state.meta.isTouched && !field.state.meta.isValid
+                      return (
+                        <Field data-invalid={isInvalid}>
+                          <FieldLabel htmlFor={field.name}>
+                            {label}
+                            <span className="text-muted-foreground">
+                              {" "}
+                              (optional)
+                            </span>
+                          </FieldLabel>
+                          <InputGroup className="-my-1">
+                            <InputGroupInput
+                              placeholder="0.00"
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              disabled={isPending}
+                              id={field.name}
+                              name={field.name}
+                              value={field.state.value}
+                              onBlur={field.handleBlur}
+                              onChange={(e) =>
+                                field.handleChange(e.target.value)
+                              }
+                              aria-invalid={isInvalid}
+                            />
+                          </InputGroup>
+                          {isInvalid && (
+                            <FieldError errors={field.state.meta.errors} />
+                          )}
+                        </Field>
+                      )
+                    }}
+                  </form.Field>
+                ))}
               <form.Field name="email">
                 {(field) => {
                   const isInvalid =
