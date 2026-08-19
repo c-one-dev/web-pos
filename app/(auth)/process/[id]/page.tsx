@@ -29,6 +29,7 @@ import {
   use,
   useCallback,
   useEffect,
+  useRef,
   useState,
   useTransition,
 } from "react"
@@ -266,6 +267,10 @@ function ProcessSalePage({
   duplicateSale?: any
 }) {
   const [isPending, startTransition] = useTransition()
+  // isPending only flips on the next render, so two clicks landing in the
+  // same frame could both get through and ring the cart up twice. This ref
+  // is set synchronously, closing that window.
+  const submitLock = useRef(false)
   const params = useParams()
   const registerId = params.id as string
   // Present when ?edit=<saleId> resolved to a sale - switches this page from
@@ -343,7 +348,9 @@ function ProcessSalePage({
             }
           : loadDraft(registerId)),
     },
-    onSubmit: ({ value: payload }: any) =>
+    onSubmit: ({ value: payload }: any) => {
+      if (submitLock.current) return
+      submitLock.current = true
       startTransition(async () => {
         try {
           if (payload.receivedAmount < payload.total) {
@@ -376,8 +383,13 @@ function ProcessSalePage({
           }
         } catch (error: any) {
           toast.error(error.graphQLErrors?.[0]?.message ?? error.message)
+        } finally {
+          // Released on failure too, so a rejected sale (insufficient
+          // balance, closed register) can be corrected and retried.
+          submitLock.current = false
         }
-      }),
+      })
+    },
   })
 
   const formValues = useStore(form.store, (state) => state.values)
@@ -917,6 +929,7 @@ function ProcessSalePage({
                         register={register}
                         open={openPay}
                         setOpen={setOpenPay}
+                        submitting={isPending}
                       >
                         <Button
                           className="flex h-16 w-full justify-between p-3.5 text-xl sm:h-20 sm:text-2xl"

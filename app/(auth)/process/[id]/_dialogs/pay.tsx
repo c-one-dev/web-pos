@@ -201,6 +201,7 @@ function Pay({
   form,
   open,
   setOpen,
+  submitting = false,
 }: Readonly<{
   children: React.ReactNode
   form: any
@@ -208,6 +209,9 @@ function Pay({
   register: any
   open: boolean
   setOpen: React.Dispatch<React.SetStateAction<boolean>>
+  // True while generateSale/updateSale is in flight. Locks the submit button
+  // so a second or third click can't ring up the same cart twice.
+  submitting?: boolean
 }>) {
   const subTotal = state.subTotal
   const discount = state.discount
@@ -489,11 +493,18 @@ function Pay({
           </div>
         </div>
         <SheetFooter>
-          <Button type="submit" form="sale-form">
+          <Button
+            type="submit"
+            form="sale-form"
+            disabled={submitting}
+            loading={submitting}
+          >
             Pay
           </Button>
           <SheetClose asChild>
-            <Button variant="outline">Cancel</Button>
+            <Button variant="outline" disabled={submitting}>
+              Cancel
+            </Button>
           </SheetClose>
         </SheetFooter>
       </SheetContent>
