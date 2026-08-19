@@ -52,13 +52,41 @@ const FETCH_CUSTOMER = gql`
 type Props = {
   _id?: string
   onClose?: () => void
+  // Lets a caller supply its own trigger instead of the default
+  // "Create Customer" button - the register's customer picker opens this
+  // same form from inside its popover.
+  trigger?: React.ReactNode
+  // Fires with the newly created customer node so a caller can select it
+  // straight away rather than making the cashier re-open the list.
+  onCreated?: (customer: any) => void
+  // Optional controlled mode. The register opens this form from inside a
+  // popover; rendering the sheet as a child of the popover would unmount it
+  // the moment it took focus, so the caller keeps it as a sibling and drives
+  // it from here instead.
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
-export default function FormDialog({ _id }: Props) {
+export default function FormDialog({
+  _id,
+  trigger,
+  onCreated,
+  open: controlledOpen,
+  onOpenChange,
+}: Props) {
   const isUpdate = Boolean(_id)
-  const [open, setOpen] = useState<boolean>(false)
+  const [uncontrolledOpen, setUncontrolledOpen] = useState<boolean>(false)
+  const isControlled = controlledOpen !== undefined
+  const open = isControlled ? controlledOpen : uncontrolledOpen
+  const setOpen = (next: boolean) => {
+    if (isControlled) onOpenChange?.(next)
+    else setUncontrolledOpen(next)
+  }
   const [isPending, startTransition] = useTransition()
   const [createCustomer] = useMutation(CREATE_CUSTOMER, {
+    // Keeps the register's customer dropdown in step - it reads
+    // CustomerOptions, which updateQueries below does not touch.
+    refetchQueries: ["CustomerOptions"],
     updateQueries: {
       CustomerTable: (prev, { mutationResult }: any) => {
         if (!mutationResult.data.createCustomer.ok) return prev
@@ -158,6 +186,8 @@ export default function FormDialog({ _id }: Props) {
               result.data.createCustomer?.message ||
                 result.data.updateCustomer?.message
             )
+            if (result.data.createCustomer?.ok)
+              onCreated?.(result.data.createCustomer.data?.node)
             form.reset()
           }
         } catch (error: any) {
@@ -175,17 +205,20 @@ export default function FormDialog({ _id }: Props) {
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>
-        {isUpdate ? (
-          <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-            Edit
-          </DropdownMenuItem>
-        ) : (
-          <Button className="cursor-pointer rounded-[10px]">
-            Create Customer
-          </Button>
-        )}
-      </SheetTrigger>
+      {!isControlled && (
+        <SheetTrigger asChild>
+          {trigger ??
+            (isUpdate ? (
+              <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                Edit
+              </DropdownMenuItem>
+            ) : (
+              <Button className="cursor-pointer rounded-[10px]">
+                Create Customer
+              </Button>
+            ))}
+        </SheetTrigger>
+      )}
       <SheetContent>
         <SheetHeader>
           <SheetTitle>Customer Form</SheetTitle>

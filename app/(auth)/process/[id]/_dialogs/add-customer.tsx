@@ -20,6 +20,7 @@ import { gql } from "@apollo/client"
 import { useQuery } from "@apollo/client/react"
 import { CaretDownIcon, CheckIcon, PlusCircleIcon } from "@phosphor-icons/react"
 import React, { useState } from "react"
+import CustomerFormDialog from "@/app/(auth)/customer/_dialogs/form"
 
 const GET_CUSTOMER_OPTIONS = gql`
   query CustomerOptions {
@@ -40,6 +41,7 @@ function AddCustomer({ form }: { form: any }) {
   )
   const customerOptions = (customerOptionsData as any)?.customerOptions
   const [openCustomerCommand, setOpenCustomerCommand] = useState<boolean>(false)
+  const [openCreateCustomer, setOpenCreateCustomer] = useState<boolean>(false)
 
   return (
     <div>
@@ -79,7 +81,7 @@ function AddCustomer({ form }: { form: any }) {
                     </Button>
                   </ButtonGroup>
                 </PopoverTrigger>
-                <PopoverContent className="w-full p-0">
+                <PopoverContent className="w-(--radix-popover-trigger-width) p-0">
                   <Command>
                     <CommandInput placeholder={`Filter ${field.name}`} />
                     <CommandList>
@@ -88,12 +90,15 @@ function AddCustomer({ form }: { form: any }) {
                         {customerOptions?.map((o: IOption) => (
                           <CommandItem
                             key={o.value}
-                            value={o.value}
-                            onSelect={(val) => {
-                              if (val === field.state.value) field.setValue("")
-                              else {
-                                field.setValue(val.trim())
-                              }
+                            // cmdk matches the typed query against `value`, so
+                            // it has to be the name - an ObjectId never
+                            // matches what the cashier types.
+                            value={o.label}
+                            className="cursor-pointer"
+                            onSelect={() => {
+                              if (o.value === field.state.value?.toString())
+                                field.setValue("")
+                              else field.setValue(o.value.toString())
                               setOpenCustomerCommand(false)
                             }}
                           >
@@ -105,9 +110,33 @@ function AddCustomer({ form }: { form: any }) {
                         ))}
                       </CommandGroup>
                     </CommandList>
+                    <div className="border-t p-1">
+                      <Button
+                        variant="ghost"
+                        type="button"
+                        className="w-full justify-start font-normal"
+                        onClick={() => {
+                          setOpenCustomerCommand(false)
+                          setOpenCreateCustomer(true)
+                        }}
+                      >
+                        <PlusCircleIcon /> Create Customer
+                      </Button>
+                    </div>
                   </Command>
                 </PopoverContent>
               </Popover>
+              {/* Sibling of the popover, not a child - see the controlled
+                  open note in the customer form dialog. */}
+              <CustomerFormDialog
+                open={openCreateCustomer}
+                onOpenChange={setOpenCreateCustomer}
+                onCreated={(customer) => {
+                  // Select the customer that was just created so the cashier
+                  // can carry straight on to payment.
+                  if (customer?._id) field.setValue(customer._id.toString())
+                }}
+              />
               {isInvalid && <FieldError errors={field.state.meta.errors} />}
             </Field>
           )
