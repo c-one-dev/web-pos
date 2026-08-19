@@ -35,7 +35,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import RowViewDialog from "./_dialogs/row-view"
+// Store Setup -> Customers opens the same customer drawer as
+// Reports -> Customer: sales history, plus the Store Credit and Account Limit
+// panels with their transaction history and adjust actions. One component so
+// the two pages can't drift apart.
+import RowViewDialog from "@/app/(auth)/reports/customers/dialogs/row-view"
 
 const GET_CUSTOMERS = gql`
   query CustomerTable(
