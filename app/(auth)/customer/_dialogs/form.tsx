@@ -18,6 +18,13 @@ import { toast } from "sonner"
 import { Field, FieldError, FieldLabel, FieldSet } from "@/components/ui/field"
 import { InputGroup, InputGroupInput } from "@/components/ui/input-group"
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 const CREATE_CUSTOMER = gql`
   mutation CreateCustomer($input: CustomerInput!) {
@@ -43,7 +50,10 @@ const FETCH_CUSTOMER = gql`
   query Customer($_id: ID!) {
     customer(_id: $_id) {
       _id
-      name
+      firstName
+      middleName
+      lastName
+      type
       email
     }
   }
@@ -139,7 +149,10 @@ export default function FormDialog({
 
   const form = useForm({
     defaultValues: {
-      name: "",
+      firstName: "",
+      middleName: "",
+      lastName: "",
+      type: "CUSTOMER",
       email: "",
     },
     validators: {
@@ -160,8 +173,11 @@ export default function FormDialog({
       startTransition(async () => {
         try {
           const payload = {
-            name: value.name,
-            email: value.email,
+            firstName: value.firstName.trim(),
+            middleName: value.middleName?.trim() || null,
+            lastName: value.lastName.trim(),
+            type: value.type || "CUSTOMER",
+            email: value.email?.trim() || null,
           }
 
           const result: any = isUpdate
@@ -198,7 +214,10 @@ export default function FormDialog({
 
   useEffect(() => {
     if (data?.customer) {
-      form.setFieldValue("name", data.customer.name)
+      form.setFieldValue("firstName", data.customer.firstName || "")
+      form.setFieldValue("middleName", data.customer.middleName || "")
+      form.setFieldValue("lastName", data.customer.lastName || "")
+      form.setFieldValue("type", data.customer.type || "CUSTOMER")
       form.setFieldValue("email", data.customer.email || "")
     }
   }, [data, form])
@@ -236,32 +255,94 @@ export default function FormDialog({
             }}
           >
             <FieldSet>
-              <form.Field name="name">
-                {(field) => {
-                  const isInvalid =
-                    field.state.meta.isTouched && !field.state.meta.isValid
-                  return (
-                    <Field data-invalid={isInvalid}>
-                      <FieldLabel htmlFor={field.name}>Name</FieldLabel>
-                      <InputGroup className="-my-1">
-                        <InputGroupInput
-                          placeholder="Name"
-                          disabled={isPending}
-                          id={field.name}
-                          name={field.name}
-                          value={field.state.value}
-                          onBlur={field.handleBlur}
-                          onChange={(e) => field.handleChange(e.target.value)}
-                          aria-invalid={isInvalid}
-                        />
-                      </InputGroup>
-                      {isInvalid && (
-                        <FieldError errors={field.state.meta.errors} />
-                      )}
-                    </Field>
-                  )
-                }}
+              {(
+                [
+                  ["firstName", "First Name", true],
+                  ["middleName", "Middle Name", false],
+                  ["lastName", "Last Name", true],
+                ] as const
+              ).map(([name, label, required]) => (
+                <form.Field key={name} name={name}>
+                  {(field) => {
+                    const isInvalid =
+                      field.state.meta.isTouched && !field.state.meta.isValid
+                    return (
+                      <Field data-invalid={isInvalid}>
+                        <FieldLabel htmlFor={field.name}>
+                          {label}
+                          {!required && (
+                            <span className="text-muted-foreground">
+                              {" "}
+                              (optional)
+                            </span>
+                          )}
+                        </FieldLabel>
+                        <InputGroup className="-my-1">
+                          <InputGroupInput
+                            placeholder={label}
+                            disabled={isPending}
+                            id={field.name}
+                            name={field.name}
+                            value={field.state.value}
+                            onBlur={field.handleBlur}
+                            onChange={(e) => field.handleChange(e.target.value)}
+                            aria-invalid={isInvalid}
+                          />
+                        </InputGroup>
+                        {isInvalid && (
+                          <FieldError errors={field.state.meta.errors} />
+                        )}
+                      </Field>
+                    )
+                  }}
+                </form.Field>
+              ))}
+              <form.Field name="type">
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor={field.name}>Type</FieldLabel>
+                    <Select
+                      value={field.state.value}
+                      onValueChange={(value) => field.handleChange(value)}
+                      disabled={isPending}
+                    >
+                      <SelectTrigger id={field.name} className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="CUSTOMER">Customer</SelectItem>
+                        <SelectItem value="EMPLOYEE">Employee</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                )}
               </form.Field>
+              {/* Derived, never typed - mirrors what the server builds so the
+                  user can see the name that will appear on receipts. */}
+              <form.Subscribe
+                selector={(state) =>
+                  [state.values.firstName, state.values.lastName] as const
+                }
+              >
+                {([firstName, lastName]) => (
+                  <Field>
+                    <FieldLabel htmlFor="displayName">Display Name</FieldLabel>
+                    <InputGroup className="-my-1">
+                      <InputGroupInput
+                        id="displayName"
+                        readOnly
+                        tabIndex={-1}
+                        className="text-muted-foreground"
+                        placeholder="From first and last name"
+                        value={[firstName, lastName]
+                          .map((p) => (p || "").trim())
+                          .filter(Boolean)
+                          .join(" ")}
+                      />
+                    </InputGroup>
+                  </Field>
+                )}
+              </form.Subscribe>
               <form.Field name="email">
                 {(field) => {
                   const isInvalid =

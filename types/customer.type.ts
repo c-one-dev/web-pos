@@ -27,9 +27,16 @@ export interface IStoreCredit {
   history: IStoreCreditHistoryItem[]
 }
 
+export type CustomerType = "CUSTOMER" | "EMPLOYEE"
+
 export interface ICustomer {
   _id: Types.ObjectId | string
+  firstName: string
+  middleName?: string
+  lastName: string
+  // Derived as "firstName lastName" on write - see the model for why.
   name: string
+  type: CustomerType
   email: string
   accountLimit: IAccountLimit
   storeCredit: IStoreCredit
@@ -62,7 +69,10 @@ export interface IStoreCreditInput {
 }
 
 export interface ICustomerInput {
-  name: string
+  firstName: string
+  middleName?: string | null
+  lastName: string
+  type?: CustomerType | null
   email: string
   accountLimit: IAccountLimitInput
   storeCredit: IStoreCreditInput
@@ -71,6 +81,7 @@ export interface ICustomerInput {
 export interface ICustomerNode {
   _id: Types.ObjectId | string
   name: string
+  type?: CustomerType
   remainingAccountLimit: number
   remainingStoreCredit: number
   isActive: boolean

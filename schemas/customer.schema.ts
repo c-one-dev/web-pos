@@ -27,9 +27,18 @@ export const customerSchema = gql`
     history: [StoreCreditHistoryItem]
   }
 
+  enum CustomerType {
+    CUSTOMER
+    EMPLOYEE
+  }
+
   type Customer {
     _id: ID
+    firstName: String
+    middleName: String
+    lastName: String
     name: String
+    type: CustomerType
     email: String
     accountLimit: AccountLimit
     storeCredit: StoreCredit
@@ -58,6 +67,7 @@ export const customerSchema = gql`
   type CustomerNode {
     _id: ID!
     name: String
+    type: CustomerType
     isActive: Boolean
   }
 
@@ -131,7 +141,10 @@ export const customerSchema = gql`
 
   # Inputs
   input CustomerInput {
-    name: String
+    firstName: String
+    middleName: String
+    lastName: String
+    type: CustomerType
     email: String
   }
 

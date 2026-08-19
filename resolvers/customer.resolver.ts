@@ -16,9 +16,22 @@ import { IStoreCreditHistoryItem } from "@/types/customer.type"
 
 const CURSOR_TYPE = "customer"
 
+// Display name is always derived here rather than taken from the client, so
+// it can never drift out of step with the name parts it is built from.
+// Middle name is deliberately left out - it is stored, but not displayed.
+const displayName = (input: any) =>
+  [input.firstName, input.lastName]
+    .map((part: string) => (part || "").trim())
+    .filter(Boolean)
+    .join(" ")
+
 const generateCustomerNode = (customer: any) => ({
   _id: customer._id,
+  firstName: customer.firstName,
+  middleName: customer.middleName,
+  lastName: customer.lastName,
   name: customer.name,
+  type: customer.type || "CUSTOMER",
   email: customer.email,
   remainingAccountLimit: customer.accountLimit.current,
   remainingStoreCredit: customer.storeCredit.current,
@@ -477,6 +490,8 @@ export const customerResolver = {
           }
           const result = await Customer.create({
             ...input,
+            type: input.type || "CUSTOMER",
+            name: displayName(input),
             ...initialLimitsAndCredits,
           })
           return {
@@ -603,9 +618,13 @@ export const customerResolver = {
     updateCustomer: validate(checkSchema(customerSchema))(
       async (_: any, { _id, input }: any) => {
         try {
-          const result = await Customer.findByIdAndUpdate(_id, flatten(input), {
-            returnDocument: "after",
-          }).lean()
+          const result = await Customer.findByIdAndUpdate(
+            _id,
+            // Rebuild the display name from the incoming parts so an edit to
+            // first/last name is reflected everywhere customer.name is read.
+            flatten({ ...input, name: displayName(input) }),
+            { returnDocument: "after" }
+          ).lean()
           if (!result) throw new GraphQLError("Customer not found")
           return {
             ok: true,
