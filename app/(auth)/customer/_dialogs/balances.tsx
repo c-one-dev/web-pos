@@ -79,7 +79,6 @@ export default function CustomerBalances({ _id }: { _id: string }) {
             {peso(used > 0 ? used : 0)} currently outstanding
           </p>
           <div className="mt-1 flex flex-wrap gap-1.5">
-            <AdjustLimitDialog _id={_id} />
             <AccountLimitDrawer _id={_id} />
           </div>
         </div>
@@ -95,7 +94,6 @@ export default function CustomerBalances({ _id }: { _id: string }) {
             Issued on refunds, or granted manually.
           </p>
           <div className="mt-auto flex flex-wrap gap-1.5 pt-1">
-            <AdjustCreditDialog _id={_id} />
             <StoreCreditDrawer _id={_id} />
           </div>
         </div>
