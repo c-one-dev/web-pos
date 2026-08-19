@@ -70,7 +70,7 @@ export default function AdjustLimitDialog({ _id }: Props) {
     skip: !_id || !open,
   })
   const [adjustCredit] = useMutation(ADJUST_ACCOUNT_LIMIT, {
-    refetchQueries: ["ViewAccountLimitDetails", "CustomerReport"],
+    refetchQueries: ["ViewAccountLimitDetails", "CustomerReport", "Customer"],
     awaitRefetchQueries: true,
     updateQueries: {
       CustomerReportTable: (prev, { mutationResult }: any) => {
@@ -154,6 +154,10 @@ export default function AdjustLimitDialog({ _id }: Props) {
             id="adjust-credit-form"
             onSubmit={(e) => {
               e.preventDefault()
+              // Portaled content still propagates events up the React tree,
+              // so without this a submit here would also submit whatever form
+              // this dialog happens to be rendered inside.
+              e.stopPropagation()
               form.handleSubmit()
             }}
           >

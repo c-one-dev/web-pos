@@ -69,7 +69,7 @@ export default function AdjustCreditDialog({ _id }: Props) {
     skip: !_id || !open,
   })
   const [adjustCredit] = useMutation(ADJUST_STORE_CREDIT, {
-    refetchQueries: ["ViewStoreCreditDetails", "CustomerReport"],
+    refetchQueries: ["ViewStoreCreditDetails", "CustomerReport", "Customer"],
     awaitRefetchQueries: true,
     updateQueries: {
       CustomerReportTable: (prev, { mutationResult }: any) => {
@@ -152,6 +152,10 @@ export default function AdjustCreditDialog({ _id }: Props) {
             id="adjust-credit-form"
             onSubmit={(e) => {
               e.preventDefault()
+              // Portaled content still propagates events up the React tree,
+              // so without this a submit here would also submit whatever form
+              // this dialog happens to be rendered inside.
+              e.stopPropagation()
               form.handleSubmit()
             }}
           >

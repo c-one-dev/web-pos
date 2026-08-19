@@ -16,7 +16,11 @@ import { useForm } from "@tanstack/react-form"
 import { customerSchema } from "@/validators/customer.validator"
 import { toast } from "sonner"
 import { Field, FieldError, FieldLabel, FieldSet } from "@/components/ui/field"
-import { InputGroup, InputGroupInput } from "@/components/ui/input-group"
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group"
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import {
   Select,
@@ -25,6 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import CustomerBalances from "./balances"
 
 const CREATE_CUSTOMER = gql`
   mutation CreateCustomer($input: CustomerInput!) {
@@ -364,9 +369,17 @@ export default function FormDialog({
                 )}
               </form.Subscribe>
               {/* Opening balances, create-only. After this the audited
-                  adjust flows on the customer report page own them. */}
-              {!isUpdate &&
-                (
+                  adjust flows own them - see the Balances section below. */}
+              {!isUpdate && (
+                <div className="flex flex-col gap-3 rounded-md border bg-muted/30 p-3">
+                  <div>
+                    <p className="text-sm font-medium">Opening Balances</p>
+                    <p className="text-xs text-muted-foreground">
+                      Optional. Leave blank to start at zero — both can be
+                      adjusted later from the customer&apos;s record.
+                    </p>
+                  </div>
+                  {(
                   [
                     ["accountLimit", "Account Limit"],
                     ["storeCredit", "Store Credit"],
@@ -378,14 +391,9 @@ export default function FormDialog({
                         field.state.meta.isTouched && !field.state.meta.isValid
                       return (
                         <Field data-invalid={isInvalid}>
-                          <FieldLabel htmlFor={field.name}>
-                            {label}
-                            <span className="text-muted-foreground">
-                              {" "}
-                              (optional)
-                            </span>
-                          </FieldLabel>
-                          <InputGroup className="-my-1">
+                          <FieldLabel htmlFor={field.name}>{label}</FieldLabel>
+                          <InputGroup className="-my-1 bg-background">
+                            <InputGroupAddon>₱</InputGroupAddon>
                             <InputGroupInput
                               placeholder="0.00"
                               type="number"
@@ -409,7 +417,9 @@ export default function FormDialog({
                       )
                     }}
                   </form.Field>
-                ))}
+                  ))}
+                </div>
+              )}
               <form.Field name="email">
                 {(field) => {
                   const isInvalid =
@@ -439,6 +449,20 @@ export default function FormDialog({
               </form.Field>
             </FieldSet>
           </form>
+          {/* Deliberately outside the <form> above. These are the same
+              adjust/history dialogs used on Reports -> Customer, and they
+              carry their own <form>; nested inside, their submit would
+              bubble up the React tree and submit this one too. */}
+          {isUpdate && _id && (
+            <div className="mt-5 flex flex-col gap-2 border-t pt-4">
+              <p className="text-sm font-medium">Balances</p>
+              <p className="-mt-1 text-xs text-muted-foreground">
+                Limit and credit changes are recorded in the customer&apos;s
+                history.
+              </p>
+              <CustomerBalances _id={_id} />
+            </div>
+          )}
         </div>
         <SheetFooter>
           <Button type="submit" form="customer-form" disabled={isPending}>
