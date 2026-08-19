@@ -27,6 +27,22 @@ export interface ISaleItem {
   price: number
   subTotal: number
   total: number
+  refundedQuantity: number
+}
+
+export interface ISaleRefundItem {
+  itemIndex: number
+  snapshotName: string
+  quantity: number
+  amount: number
+}
+
+export interface ISaleRefund {
+  items: ISaleRefundItem[]
+  amount: number
+  note?: string
+  date: string | Date
+  by: IUser | Types.ObjectId | string
 }
 
 export interface ISalePayment {
@@ -63,6 +79,8 @@ export interface ISale {
   receivedAmount: number
   changeAmount: number
   netAmount: number
+  refundedAmount: number
+  refunds: ISaleRefund[]
   notes: string
   currentSalePaymentStatus: SalePaymentStatus
   salePaymentStatusHistory: ISalePaymentStatusHistoryItem[]

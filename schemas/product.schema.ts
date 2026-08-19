@@ -14,6 +14,7 @@ export const productSchema = gql`
     barcode: String
     description: String
     currentPrice: Float
+    cost: Float
     priceHistory: [ProductPriceHistoryItem]
     brand: Brand
     type: ProductType
@@ -50,6 +51,7 @@ export const productSchema = gql`
     barcode: String
     description: String
     currentPrice: Float
+    cost: Float
     brand: ID
     type: ID
     registers: [ID]

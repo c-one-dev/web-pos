@@ -31,6 +31,8 @@ import {
 import { Calendar } from "../ui/calendar"
 import {
   startOfToday,
+  startOfDay,
+  endOfDay,
   startOfWeek,
   endOfWeek,
   startOfMonth,
@@ -101,7 +103,11 @@ export default function ColumnFilter({
   const applyDateRange = (range: DateRange) => {
     if (!range.from || !range.to) return
     setDateRange(range)
-    const dateRangeISO = `${range.from.toISOString()}_${range.to.toISOString()}`
+    // Bound the range here, in the user's timezone, rather than letting the
+    // resolver re-floor it - a server running in UTC (Vercel) would
+    // otherwise shift the window by the local UTC offset and return the
+    // wrong day's rows.
+    const dateRangeISO = `${startOfDay(range.from).toISOString()}_${endOfDay(range.to).toISOString()}`
     onFilterChange((prev: Filter[]) => [
       ...prev.filter((f: Filter) => f.key != filterKey),
       { key: filterKey, value: dateRangeISO, type: FilterType.DATE },

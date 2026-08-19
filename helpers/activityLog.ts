@@ -108,8 +108,6 @@ const ACTIVITY_LABELS: Record<string, (args: any, result: any) => string> = {
     `Closed a register${result?.data?.register?.name ? ` - ${result.data.register.name}` : ""}`,
   changePassword: () => "Changed their password",
   switchUser: (_args, result) => result?.message || "Switched user",
-  clockIn: () => "Clocked in",
-  clockOut: () => "Clocked out",
   setSalesTarget: () => "Set a sales target",
 }
 

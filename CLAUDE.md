@@ -14,7 +14,7 @@ A simplified Point-of-Sale system modeled loosely after HIKE POS. Core focus:
 - **Sale history & reports** — paginated tables with filters, sorting, and status badges
 - **User management** — role-based with forced password change on first login
 
-No refund logic exists and none should be added. Void (cancel a sale entirely) is the only post-sale mutation.
+Refunds are **store credit only**: `refundSaleItems` credits the customer's store credit and never reverses a payment or takes cash out of the drawer. Void (cancel a sale entirely) is the other post-sale mutation. No cash-back refund exists and none should be added.
 
 ---
 
@@ -125,7 +125,7 @@ Central status → color mapping. Use this everywhere a status string needs to b
 <StatusBadge status={row.original.currentSaleStatus} />
 ```
 
-Statuses mapped: `PENDING`, `COMPLETED`, `VOIDED`, `PAID`, `UNPAID`, `PARTIALLY_PAID`, `ACTIVE`, `INACTIVE`.
+Statuses mapped: `PENDING`, `COMPLETED`, `REFUNDED`, `VOIDED`, `PAID`, `UNPAID`, `PARTIALLY_PAID`, `ACTIVE`, `INACTIVE`.
 
 To add a new status, add it to `STATUS_VARIANTS` in that file only.
 
@@ -148,7 +148,8 @@ Eye/eye-closed toggle built on `InputGroup`. Use for all password fields — nev
 - **Pagination**: cursor-based everywhere. All `*Table` queries accept `first`, `after`, `search`, `filter`, `sort`. Max page size is 500 (server-clamped).
 - **Responses**: all mutations return `{ ok: Boolean!, message: String!, data: ... }`.
 - **Discounts**: always stored as numbers (`Float`), never strings. `.toFixed(2)` returns a string — always wrap in `parseFloat()`.
-- **Void only**: there is no refund mutation and none should be added. `voidSale` sets `currentSaleStatus: "VOIDED"` and appends to `saleStatusHistory`.
+- **Void**: `voidSale` sets `currentSaleStatus: "VOIDED"` and appends to `saleStatusHistory`.
+- **Refunds are store credit only**: `refundSaleItems` refunds chosen line items (partial or full) by crediting `storeCredit.current` on the customer, inside a transaction. It never reverses a payment, so a closed register's tally stays intact. Rules it enforces: a walk-in sale can't be refunded (no account to credit), a voided sale can't be refunded, a line can't be refunded past its remaining quantity (`items[].refundedQuantity`), and total refunds can't exceed `sale.total`. A sale-level discount is prorated across lines so a full refund returns exactly what was paid. Refunding every unit sets `currentSaleStatus: "REFUNDED"`; a partial refund leaves the status alone and only raises `refundedAmount`. Once any refund exists the sale's items are frozen — `assertSaleIsEditable` rejects further edits. Do not add a cash-back refund path.
 - **PARTIALLY_PAID**: only applicable to `ON_ACCOUNT` and `STORE_CREDIT` payment types. `currentSalePaymentStatus` is computed the same way for every method (`checkSalesPaymentStatus` in `helpers/salesFn.ts`) — On Account/Store Credit tenders count toward "paid" immediately, same as Cash. `generateSale` deducts the net tendered amount (`amount - change`) from the customer's `accountLimit.current` / `storeCredit.current` in the same transaction as the sale, and rejects the sale (`INSUFFICIENT_BALANCE`) if it would exceed the available balance. See `TASKS.md` for what's still open (a dedicated settlement/repayment mutation).
 - **No stock management**: products have no quantity/stock fields. Do not add them.
 

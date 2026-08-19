@@ -53,8 +53,24 @@ export const userSchema = gql`
     pin: String
   }
 
+  type UserPermissions {
+    _id: ID!
+    fullName: String
+    role: Role
+    # null when no explicit permissions have ever been saved for this user,
+    # i.e. they still run on their role's default set below.
+    permissions: [String]
+    # The role default, so the dialog can show what this user gets today and
+    # what "reset to role default" would mean.
+    defaultPermissions: [String]
+  }
+
   type Query {
     user(_id: ID!): User
+    userPermissions(_id: ID!): UserPermissions
+    # The effective permission set of the *signed-in* user, for the sidebar
+    # and the client-side route guard. Never gated - every session needs it.
+    myPermissions: [String]
     userTable(
       first: Int
       after: String
@@ -70,6 +86,7 @@ export const userSchema = gql`
     createUser(input: UserInput): Response
     updateUser(_id: ID!, input: UserInput): Response
     changeUserStatus(_id: ID!): Response
+    updateUserPermissions(_id: ID!, permissions: [String!]!): Response
     changePassword(oldPassword: String!, newPassword: String!): Response
   }
 `

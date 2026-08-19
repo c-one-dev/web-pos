@@ -27,7 +27,8 @@ import {
   TagIcon,
 } from "@phosphor-icons/react"
 import { useEffect, useMemo, useState } from "react"
-import { useSession } from "next-auth/react"
+import { usePermissions } from "@/hooks/use-permissions"
+import { permissionsForRoute } from "@/validators/permissionRegistry"
 
 const pointOfSalesItems = [
   {
@@ -104,23 +105,22 @@ const storeItems = [
 export default function AppSidebar() {
   const LOCAL_STORAGE_KEY = "menu-state"
   const currentPath = usePathname()
-  const { data: session } = useSession()
-  // CASHIER gets a reduced sidebar (Products trimmed to Products/Product
-  // Types, Store Setup trimmed to Customers) but full Reports access, same
-  // as Manager; MANAGER keeps everything except Users. Matches the
-  // server-side restrictions in app/graphql/route.ts and proxy.ts — this is
-  // just the UI reflecting what's actually reachable.
-  const role = (session as any)?.user?.role
-  const isCashier = role === "CASHIER"
-  const isManager = role === "MANAGER"
-  const visibleProductItems = isCashier
-    ? productItems.filter((item) => item.label !== "Brands")
-    : productItems
-  const visibleStoreItems = isCashier
-    ? storeItems.filter((item) => item.label === "Customers")
-    : isManager
-      ? storeItems.filter((item) => item.label !== "Users")
-      : storeItems
+  // The sidebar shows exactly what this user is allowed to open - their
+  // explicit permissions when an admin has saved some, otherwise their role
+  // default (validators/roleAccessRegistry.ts). Same source of truth as the
+  // route guard and the per-field checks in app/graphql/route.ts, so a
+  // visible link always leads somewhere that actually loads.
+  const { can } = usePermissions()
+  const allowed = (items: { label: string; url: string }[]) =>
+    items.filter((item) => {
+      const required = permissionsForRoute(item.url)
+      return !required || can(...required)
+    })
+  const visiblePointOfSalesItems = allowed(pointOfSalesItems)
+  const visibleProductItems = allowed(productItems)
+  const visibleReportItems = allowed(reportItems)
+  const visibleStoreItems = allowed(storeItems)
+  const canSeeDashboard = can("dashboard.view")
   const DEFAULT_OPEN_ITEMS = useMemo(() => ["point_of_sale"], [])
   const [openItems, setOpenItems] = useState<string[]>(DEFAULT_OPEN_ITEMS)
 
@@ -143,128 +143,146 @@ export default function AppSidebar() {
     <Sidebar>
       <SidebarHeader className="mx-auto">C-ONE POS System</SidebarHeader>
       <SidebarContent>
-        <div className="not-last:border-b">
-          <Link
-            href="/dashboard"
-            className={cn(
-              "relative flex flex-1 items-center gap-2 rounded-none border border-transparent px-2.5 pt-2.5 pb-1.75 text-left text-xs font-medium transition-all outline-none hover:cursor-pointer hover:underline focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50",
-              currentPath === "/dashboard" && "text-primary"
-            )}
-          >
-            <SquaresFourIcon size={18} />
-            <span className="text-sm">Dashboard</span>
-          </Link>
-        </div>
+        {canSeeDashboard && (
+          <div className="not-last:border-b">
+            <Link
+              href="/dashboard"
+              className={cn(
+                "relative flex flex-1 items-center gap-2 rounded-none border border-transparent px-2.5 pt-2.5 pb-1.75 text-left text-xs font-medium transition-all outline-none hover:cursor-pointer hover:underline focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50",
+                currentPath === "/dashboard" && "text-primary"
+              )}
+            >
+              <SquaresFourIcon size={18} />
+              <span className="text-sm">Dashboard</span>
+            </Link>
+          </div>
+        )}
         <Accordion
           type="multiple"
           value={openItems}
           onValueChange={handleValueChange}
           className="list-none"
         >
-          <AccordionItem value="point_of_sale">
-            <AccordionTrigger>
-              <div className="flex items-center gap-2">
-                <CashRegisterIcon size={18} />
-                <span className="text-sm">Point of Sale</span>
-              </div>
-            </AccordionTrigger>
-            <AccordionContent>
-              {pointOfSalesItems.map((item) => (
-                <SidebarMenuItem key={item.url} className="px-1">
-                  <SidebarMenuButton asChild>
-                    <Link
-                      href={item.url || "/"}
-                      className={cn(
-                        "flex items-center gap-2 decoration-transparent hover:decoration-current active:decoration-current",
-                        item.url === currentPath && "text-primary"
-                      )}
-                    >
-                      <DotIcon size={12} className="ml-px" />
-                      <span className="text-sm no-underline">{item.label}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </AccordionContent>
-          </AccordionItem>
-          <AccordionItem value="products">
-            <AccordionTrigger>
-              <div className="flex items-center gap-2">
-                <TagIcon size={18} />
-                <span className="text-sm">Products</span>
-              </div>
-            </AccordionTrigger>
-            <AccordionContent>
-              {visibleProductItems.map((item) => (
-                <SidebarMenuItem key={item.url} className="px-1">
-                  <SidebarMenuButton asChild>
-                    <Link
-                      href={item.url || "/"}
-                      className={cn(
-                        "flex items-center gap-2 decoration-transparent hover:decoration-current active:decoration-current",
-                        item.url === currentPath && "text-primary"
-                      )}
-                    >
-                      <DotIcon size={12} className="ml-px" />
-                      <span className="text-sm no-underline">{item.label}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </AccordionContent>
-          </AccordionItem>
-          <AccordionItem value="reports">
-            <AccordionTrigger>
-              <div className="flex items-center gap-2">
-                <BooksIcon size={18} />
-                <span className="text-sm">Reports</span>
-              </div>
-            </AccordionTrigger>
-            <AccordionContent>
-              {reportItems.map((item) => (
-                <SidebarMenuItem key={item.url} className="px-1">
-                  <SidebarMenuButton asChild>
-                    <Link
-                      href={item.url || "/"}
-                      className={cn(
-                        "flex items-center gap-2 decoration-transparent hover:decoration-current active:decoration-current",
-                        item.url === currentPath && "text-primary"
-                      )}
-                    >
-                      <DotIcon size={12} className="ml-px" />
-                      <span className="text-sm no-underline">{item.label}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </AccordionContent>
-          </AccordionItem>
-          <AccordionItem value="store-setup">
-            <AccordionTrigger>
-              <div className="flex items-center gap-2">
-                <StorefrontIcon size={18} />
-                <span className="text-sm">Store Setup</span>
-              </div>
-            </AccordionTrigger>
-            <AccordionContent>
-              {visibleStoreItems.map((item) => (
-                <SidebarMenuItem key={item.url} className="px-1">
-                  <SidebarMenuButton asChild>
-                    <Link
-                      href={item.url || "/"}
-                      className={cn(
-                        "flex items-center gap-2 decoration-transparent hover:decoration-current active:decoration-current",
-                        item.url === currentPath && "text-primary"
-                      )}
-                    >
-                      <DotIcon size={12} className="ml-px" />
-                      <span className="text-sm no-underline">{item.label}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </AccordionContent>
-          </AccordionItem>
+          {visiblePointOfSalesItems.length > 0 && (
+            <AccordionItem value="point_of_sale">
+              <AccordionTrigger>
+                <div className="flex items-center gap-2">
+                  <CashRegisterIcon size={18} />
+                  <span className="text-sm">Point of Sale</span>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent>
+                {visiblePointOfSalesItems.map((item) => (
+                  <SidebarMenuItem key={item.url} className="px-1">
+                    <SidebarMenuButton asChild>
+                      <Link
+                        href={item.url || "/"}
+                        className={cn(
+                          "flex items-center gap-2 decoration-transparent hover:decoration-current active:decoration-current",
+                          item.url === currentPath && "text-primary"
+                        )}
+                      >
+                        <DotIcon size={12} className="ml-px" />
+                        <span className="text-sm no-underline">
+                          {item.label}
+                        </span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </AccordionContent>
+            </AccordionItem>
+          )}
+          {visibleProductItems.length > 0 && (
+            <AccordionItem value="products">
+              <AccordionTrigger>
+                <div className="flex items-center gap-2">
+                  <TagIcon size={18} />
+                  <span className="text-sm">Products</span>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent>
+                {visibleProductItems.map((item) => (
+                  <SidebarMenuItem key={item.url} className="px-1">
+                    <SidebarMenuButton asChild>
+                      <Link
+                        href={item.url || "/"}
+                        className={cn(
+                          "flex items-center gap-2 decoration-transparent hover:decoration-current active:decoration-current",
+                          item.url === currentPath && "text-primary"
+                        )}
+                      >
+                        <DotIcon size={12} className="ml-px" />
+                        <span className="text-sm no-underline">
+                          {item.label}
+                        </span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </AccordionContent>
+            </AccordionItem>
+          )}
+          {visibleReportItems.length > 0 && (
+            <AccordionItem value="reports">
+              <AccordionTrigger>
+                <div className="flex items-center gap-2">
+                  <BooksIcon size={18} />
+                  <span className="text-sm">Reports</span>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent>
+                {visibleReportItems.map((item) => (
+                  <SidebarMenuItem key={item.url} className="px-1">
+                    <SidebarMenuButton asChild>
+                      <Link
+                        href={item.url || "/"}
+                        className={cn(
+                          "flex items-center gap-2 decoration-transparent hover:decoration-current active:decoration-current",
+                          item.url === currentPath && "text-primary"
+                        )}
+                      >
+                        <DotIcon size={12} className="ml-px" />
+                        <span className="text-sm no-underline">
+                          {item.label}
+                        </span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </AccordionContent>
+            </AccordionItem>
+          )}
+          {visibleStoreItems.length > 0 && (
+            <AccordionItem value="store-setup">
+              <AccordionTrigger>
+                <div className="flex items-center gap-2">
+                  <StorefrontIcon size={18} />
+                  <span className="text-sm">Store Setup</span>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent>
+                {visibleStoreItems.map((item) => (
+                  <SidebarMenuItem key={item.url} className="px-1">
+                    <SidebarMenuButton asChild>
+                      <Link
+                        href={item.url || "/"}
+                        className={cn(
+                          "flex items-center gap-2 decoration-transparent hover:decoration-current active:decoration-current",
+                          item.url === currentPath && "text-primary"
+                        )}
+                      >
+                        <DotIcon size={12} className="ml-px" />
+                        <span className="text-sm no-underline">
+                          {item.label}
+                        </span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </AccordionContent>
+            </AccordionItem>
+          )}
         </Accordion>
       </SidebarContent>
       <SidebarFooter />

@@ -24,6 +24,27 @@ export const saleSchema = gql`
     price: Float
     subTotal: Float
     total: Float
+    refundedQuantity: Int
+  }
+
+  type SaleRefundItem {
+    itemIndex: Int
+    snapshotName: String
+    quantity: Int
+    amount: Float
+  }
+
+  type SaleRefund {
+    items: [SaleRefundItem]
+    amount: Float
+    note: String
+    date: String
+    by: User
+  }
+
+  input RefundItemInput {
+    itemIndex: Int!
+    quantity: Int!
   }
 
   type SalePayment {
@@ -57,6 +78,8 @@ export const saleSchema = gql`
     subTotal: Float
     discount: Float
     total: Float
+    refundedAmount: Float
+    refunds: [SaleRefund]
     receivedAmount: Float
     changeAmount: Float
     netAmount: Float
@@ -68,6 +91,7 @@ export const saleSchema = gql`
     register: Register
     by: User
     isOnAccount: Boolean
+    isEditable: Boolean
     createdAt: String
     updatedAt: String
   }
@@ -224,6 +248,13 @@ export const saleSchema = gql`
 
   type Mutation {
     generateSale(input: SaleInput): Response
+    updateSale(_id: ID!, input: SaleInput): Response
     voidSale(_id: ID!): Response
+    updateSaleNotes(_id: ID!, notes: String): Response
+    refundSaleItems(
+      _id: ID!
+      items: [RefundItemInput!]!
+      note: String
+    ): Response
   }
 `

@@ -10,6 +10,7 @@ export const productSchema = z.object({
     .number()
     .nonnegative()
     .min(0, { message: "Please enter a valid price." }),
+  cost: z.number().nonnegative("Cost cannot be negative").optional(),
   type: z.string().nonempty("Type is required"),
   brand: z.string().optional().nullable(),
   registers: z.array(z.string()).optional(),

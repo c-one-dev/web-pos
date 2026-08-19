@@ -73,7 +73,7 @@ export default function SelectRegisterSheet({ children }: Props) {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>{children}</SheetTrigger>
-      <SheetContent className="lg:min-w-175">
+      <SheetContent className="w-full data-[side=right]:w-full data-[side=right]:sm:max-w-[min(56rem,96vw)]">
         <SheetHeader>
           <SheetTitle className="text-left text-xl font-bold">
             Select your cash register

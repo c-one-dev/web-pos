@@ -1,6 +1,5 @@
 import { GraphQLError } from "graphql"
 import User from "../models/user.model"
-import { startOfDay, endOfDay } from "date-fns"
 import { Types, type PipelineStage } from "mongoose"
 import { randomBytes } from "crypto"
 import type { IDataTableArgs } from "../types/shared.type"
@@ -8,7 +7,16 @@ import { Role } from "../types/user.type"
 import { fromCursor, toCursor } from "../helpers/cursor"
 import { flatten } from "../helpers/flatten"
 import { checkSchema, validate } from "../helpers/validate"
-import { userSchema, changePasswordSchema } from "../validators/user.validator"
+import {
+  userSchema,
+  changePasswordSchema,
+  updateUserPermissionsSchema,
+} from "../validators/user.validator"
+import { normalizePermissions } from "../validators/permissionRegistry"
+import {
+  effectivePermissions,
+  roleDefaultPermissions,
+} from "../validators/roleAccessRegistry"
 import bcrypt from "bcryptjs"
 import { isISOString } from "../helpers/isoString"
 
@@ -23,6 +31,30 @@ const generateTempPassword = (length = 12) =>
   Array.from(randomBytes(length))
     .map((byte) => TEMP_PASSWORD_CHARS[byte % TEMP_PASSWORD_CHARS.length])
     .join("")
+
+// Managing another user's permissions is an ADMIN/MANAGER-only action, on top
+// of the `users.user.permissions` permission enforced in app/graphql/route.ts.
+// Two extra rules beyond the role check:
+//   - nobody edits their own permissions (no self-lockout, no self-grant)
+//   - a MANAGER may not touch an ADMIN's permissions
+const assertCanManagePermissions = (ctx: any, target: any) => {
+  const actorRole = ctx?.session?.role
+  const actorId = ctx?.session?._id?.toString()
+
+  if (actorRole !== Role.ADMIN && actorRole !== Role.MANAGER)
+    throw new GraphQLError("You are not allowed to manage user permissions.", {
+      extensions: { code: "FORBIDDEN" },
+    })
+  if (actorId && actorId === target._id?.toString())
+    throw new GraphQLError("You cannot manage your own permissions.", {
+      extensions: { code: "FORBIDDEN" },
+    })
+  if (actorRole === Role.MANAGER && target.role === Role.ADMIN)
+    throw new GraphQLError(
+      "A manager cannot manage an administrator's permissions.",
+      { extensions: { code: "FORBIDDEN" } }
+    )
+}
 
 const generateNode = (user: any) => ({
   _id: user._id,
@@ -75,8 +107,8 @@ export const userResolver = {
                 if (!start || !end) return null
                 return {
                   [key]: {
-                    $gte: startOfDay(start),
-                    $lte: endOfDay(end),
+                    $gte: start,
+                    $lte: end,
                   },
                 }
               case "BOOLEAN":
@@ -181,6 +213,41 @@ export const userResolver = {
         throw error
       }
     },
+    userPermissions: async (_: any, { _id }: any, ctx: any) => {
+      try {
+        const target = await User.findById(_id)
+          .select("name surname role permissions")
+          .lean()
+        if (!target) throw new GraphQLError("User not found")
+        assertCanManagePermissions(ctx, target)
+
+        return {
+          _id: target._id,
+          fullName: `${target.name} ${target.surname}`,
+          role: target.role,
+          // Left as null when never saved, so the dialog can tell
+          // "no explicit permissions yet" apart from "everything unticked".
+          permissions: target.permissions ?? null,
+          defaultPermissions: roleDefaultPermissions[target.role] ?? [],
+        }
+      } catch (error) {
+        throw error
+      }
+    },
+    // The signed-in user's own effective permissions - what the sidebar shows
+    // and what the route guard allows. Open to every session by design: it
+    // only ever describes the caller.
+    myPermissions: async (_: any, __: any, ctx: any) => {
+      try {
+        const me = await User.findById(ctx?.session?._id)
+          .select("role permissions")
+          .lean()
+        if (!me) throw new GraphQLError("User not found")
+        return [...effectivePermissions(me.role, me.permissions)]
+      } catch (error) {
+        throw error
+      }
+    },
     activeUsers: async () => {
       try {
         const users = await User.find({ isActive: true }).lean()
@@ -281,6 +348,42 @@ export const userResolver = {
         throw error
       }
     },
+    updateUserPermissions: validate(checkSchema(updateUserPermissionsSchema))(
+      async (_: any, { _id, permissions }: any, ctx: any) => {
+        try {
+          const target = await User.findById(_id).select("role").lean()
+          if (!target) throw new GraphQLError("User not found")
+          assertCanManagePermissions(ctx, target)
+
+          // Re-normalized server-side: unknown keys dropped, ancestors of any
+          // granted key pulled back in - the client's tree state is a
+          // convenience, not the source of truth.
+          const normalized = normalizePermissions(permissions ?? [])
+          const result = await User.findByIdAndUpdate(
+            _id,
+            { $set: { permissions: normalized } },
+            { returnDocument: "after" }
+          )
+            .select("name surname role permissions")
+            .lean()
+          if (!result) throw new GraphQLError("User not found")
+
+          return {
+            ok: true,
+            message: "User permissions updated successfully.",
+            data: {
+              _id: result._id,
+              fullName: `${result.name} ${result.surname}`,
+              role: result.role,
+              permissions: result.permissions ?? [],
+              defaultPermissions: roleDefaultPermissions[result.role] ?? [],
+            },
+          }
+        } catch (error) {
+          throw error
+        }
+      }
+    ),
     changePassword: validate(checkSchema(changePasswordSchema))(
       async (_: any, { oldPassword, newPassword }: any, ctx: any) => {
         try {

@@ -1,5 +1,5 @@
 "use client"
-import { useParams, useRouter } from "next/navigation"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { useMutation, useQuery } from "@apollo/client/react"
 import { gql } from "@apollo/client"
@@ -14,6 +14,7 @@ import {
   GraduationCapIcon,
   PlusCircleIcon,
   TrashSimpleIcon,
+  XIcon,
 } from "@phosphor-icons/react"
 import {
   Breadcrumb,
@@ -23,7 +24,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
-import { use, useEffect, useState, useTransition } from "react"
+import { Suspense, use, useEffect, useState, useTransition } from "react"
 import Image from "next/image"
 import { cn } from "@/lib/utils"
 import {
@@ -84,6 +85,59 @@ const GENERATE_SALE = gql`
   }
 `
 
+const UPDATE_SALE = gql`
+  mutation UpdateSale($_id: ID!, $input: SaleInput) {
+    updateSale(_id: $_id, input: $input) {
+      ok
+      message
+      data
+    }
+  }
+`
+
+const GET_SALE_FOR_EDIT = gql`
+  query SaleForEdit($_id: ID!) {
+    sale(_id: $_id) {
+      _id
+      saleNumber
+      subTotal
+      discount
+      total
+      receivedAmount
+      changeAmount
+      netAmount
+      notes
+      isEditable
+      customer {
+        _id
+      }
+      items {
+        snapshotName
+        snapshotPrice
+        quantity
+        discount
+        price
+        subTotal
+        total
+        product {
+          _id
+          name
+          image
+        }
+      }
+      payments {
+        amount
+        change
+        note
+        date
+        method {
+          _id
+        }
+      }
+    }
+  }
+`
+
 const GET_REGISTER = gql`
   query ProcessedRegister($_id: ID!) {
     processedRegister(_id: $_id) {
@@ -134,6 +188,42 @@ function loadDraft(registerId: string) {
   }
 }
 
+// Shapes a saved sale back into the cart's form values so an edit starts
+// from exactly what was rung up. Fed in as the form's initial values rather
+// than reset in afterwards, so there's no window where the cart is empty.
+function saleToFormValues(sale: any, registerId: string) {
+  return {
+    customer: sale.customer?._id || "",
+    // Mirrors exactly the shape the add-to-cart handler builds - anything
+    // extra (product name/image for display) is rejected by SaleItemInput.
+    items: (sale.items || []).map((item: any) => ({
+      product: item.product?._id,
+      snapshotName: item.snapshotName,
+      snapshotPrice: item.snapshotPrice,
+      quantity: item.quantity,
+      discount: item.discount,
+      price: item.price,
+      subTotal: item.subTotal,
+      total: item.total,
+    })),
+    payments: (sale.payments || []).map((payment: any) => ({
+      method: payment.method?._id,
+      amount: payment.amount,
+      change: payment.change,
+      note: payment.note || "",
+      date: payment.date,
+    })),
+    discount: sale.discount,
+    subTotal: sale.subTotal,
+    total: sale.total,
+    notes: sale.notes || "",
+    receivedAmount: sale.receivedAmount,
+    changeAmount: sale.changeAmount,
+    netAmount: sale.netAmount,
+    register: registerId,
+  }
+}
+
 function DiscardDialog({ discard }: { discard: () => void }) {
   return (
     <AlertDialog>
@@ -161,10 +251,24 @@ function DiscardDialog({ discard }: { discard: () => void }) {
   )
 }
 
-export default function Page() {
+function ProcessSalePage({
+  editSale,
+  duplicateSale,
+}: {
+  editSale?: any
+  duplicateSale?: any
+}) {
   const [isPending, startTransition] = useTransition()
   const params = useParams()
   const registerId = params.id as string
+  // Present when ?edit=<saleId> resolved to a sale - switches this page from
+  // ringing up a new sale to correcting an existing one (see updateSale).
+  const editSaleId = editSale?._id || null
+  const isEditing = Boolean(editSale)
+  // ?duplicate=<saleId> instead pre-fills the cart from a past sale and then
+  // behaves like any new sale: generateSale, its own sale number, its own
+  // payment. The original is never touched.
+  const isDuplicating = Boolean(duplicateSale)
   const clearDraft = () => {
     try {
       localStorage.removeItem(`${DRAFT_STORAGE_PREFIX}${registerId}`)
@@ -180,6 +284,9 @@ export default function Page() {
   const router = useRouter()
   const [selectedType, setSelectedType] = useState<string>("")
   const [generateSale] = useMutation(GENERATE_SALE)
+  const [updateSale] = useMutation(UPDATE_SALE, {
+    refetchQueries: ["SaleHistoryTable", "Sale"],
+  })
   const [openPay, setOpenPay] = useState(false)
   const [receiptSaleId, setReceiptSaleId] = useState<string | null>(null)
 
@@ -208,13 +315,43 @@ export default function Page() {
   const form = useForm({
     defaultValues: {
       ...emptySaleValues,
-      ...loadDraft(registerId),
+      // A draft is a half-rung-up new sale; when correcting an existing one
+      // the saved sale is the source of truth. The parent remounts this
+      // component per sale, so these initial values are always right and
+      // nothing has to be reset in afterwards.
+      ...(editSale
+        ? saleToFormValues(editSale, registerId)
+        : duplicateSale
+          ? {
+              // Same items/customer/notes, but nothing that belongs to the
+              // original transaction: no payments, no tendered amount, and
+              // no sale identity. Line prices are the ones the original was
+              // rung up at, so a duplicate reproduces that sale exactly
+              // rather than silently re-pricing it.
+              ...saleToFormValues(duplicateSale, registerId),
+              payments: [] as any,
+              receivedAmount: 0,
+              changeAmount: 0,
+              netAmount: 0,
+            }
+          : loadDraft(registerId)),
     },
     onSubmit: ({ value: payload }: any) =>
       startTransition(async () => {
         try {
           if (payload.receivedAmount < payload.total) {
             toast.error("Received amount cannot be less than total")
+            return
+          }
+          if (isEditing) {
+            const result = await updateSale({
+              variables: { _id: editSaleId, input: { ...payload } },
+            })
+            if ((result.data as any).updateSale.ok) {
+              toast.success((result.data as any).updateSale.message)
+              setOpenPay(false)
+              router.push("/sale-history")
+            }
             return
           }
           const result = await generateSale({
@@ -231,7 +368,7 @@ export default function Page() {
             setReceiptSaleId((result.data as any).generateSale.data._id)
           }
         } catch (error: any) {
-          console.error(JSON.stringify(error, null, 2))
+          toast.error(error.graphQLErrors?.[0]?.message ?? error.message)
         }
       }),
   })
@@ -239,9 +376,11 @@ export default function Page() {
   const formValues = useStore(form.store, (state) => state.values)
 
   // Mirror the whole cart to localStorage on every change so a refresh or
-  // navigating away and back restores it, keyed per register.
+  // navigating away and back restores it, keyed per register. Skipped while
+  // editing so correcting a past sale doesn't overwrite the cashier's
+  // in-progress new sale on this register.
   useEffect(() => {
-    if (!registerId) return
+    if (!registerId || isEditing) return
     try {
       localStorage.setItem(
         `${DRAFT_STORAGE_PREFIX}${registerId}`,
@@ -250,7 +389,7 @@ export default function Page() {
     } catch {
       // ignore (e.g. storage disabled/full)
     }
-  }, [registerId, formValues])
+  }, [registerId, formValues, isEditing])
 
   useEffect(() => {
     form.setFieldValue("register", register?._id || "")
@@ -317,7 +456,7 @@ export default function Page() {
           e.preventDefault()
           form.handleSubmit()
         }}
-        className="flex h-full w-full"
+        className="flex h-full min-h-0 w-full flex-col overflow-y-auto lg:flex-row lg:overflow-hidden"
       >
         <form.Subscribe
           selector={(state) => state.values}
@@ -325,7 +464,7 @@ export default function Page() {
           children={(state) => {
             return (
               <>
-                <div className="flex-1 flex-col space-y-1.5 bg-muted p-2.5">
+                <div className="flex min-w-0 flex-1 flex-col gap-1.5 bg-muted p-2.5 lg:overflow-y-auto">
                   <div>
                     <SelectRegisterSheet>
                       <Breadcrumb className="w-fit cursor-pointer hover:opacity-80">
@@ -345,7 +484,48 @@ export default function Page() {
                       </Breadcrumb>
                     </SelectRegisterSheet>
                   </div>
-                  <div className="flex">
+                  {isEditing && editSale && (
+                    <div className="flex flex-col items-start justify-between gap-2 border border-primary/30 bg-primary/10 px-3 py-2 sm:flex-row sm:items-center">
+                      <span className="text-sm">
+                        Editing sale{" "}
+                        <span className="font-semibold">
+                          {editSale.saleNumber}
+                        </span>{" "}
+                        — changes replace the original once you confirm payment.
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0 rounded-md border-primary/40 bg-white hover:bg-white/70"
+                        onClick={() => router.push("/sale-history")}
+                      >
+                        <XIcon /> Cancel edit
+                      </Button>
+                    </div>
+                  )}
+                  {isDuplicating && (
+                    <div className="flex flex-col items-start justify-between gap-2 border border-blue-500/30 bg-blue-500/10 px-3 py-2 sm:flex-row sm:items-center">
+                      <span className="text-sm">
+                        Duplicating sale{" "}
+                        <span className="font-semibold">
+                          {duplicateSale.saleNumber}
+                        </span>{" "}
+                        — items are copied at their original prices and rung up
+                        as a brand new sale.
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0 rounded-md border-blue-500/40 bg-white hover:bg-white/70"
+                        onClick={() => router.push("/sale-history")}
+                      >
+                        <XIcon /> Cancel
+                      </Button>
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-1.5 sm:flex-row">
                     <Popover
                       open={openSearchCommand}
                       onOpenChange={setOpenSearchCommand}
@@ -384,7 +564,7 @@ export default function Page() {
                         </Command>
                       </PopoverContent>
                     </Popover>
-                    <ButtonGroup>
+                    <ButtonGroup className="shrink-0 self-start sm:self-auto">
                       <Button
                         variant="outline"
                         disabled
@@ -412,30 +592,34 @@ export default function Page() {
                       </Button>
                     </ButtonGroup>
                   </div>
-                  <ButtonGroup>
-                    {register?.productTypes.map((type: any, index: number) => (
-                      <Button
-                        key={index}
-                        variant="outline"
-                        className={cn(
-                          "font-base cursor-pointer",
-                          selectedType === type._id &&
-                            "bg-blue-400 text-primary-foreground hover:bg-blue-400/80 hover:text-white"
-                        )}
-                        onClick={() => setSelectedType(type._id)}
-                        type="button"
-                      >
-                        {type.name}
-                      </Button>
-                    ))}
-                  </ButtonGroup>
-                  <div className="grid gap-2.5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
+                  <div className="-mb-0.5 overflow-x-auto pb-0.5">
+                    <ButtonGroup className="w-max">
+                      {register?.productTypes.map(
+                        (type: any, index: number) => (
+                          <Button
+                            key={index}
+                            variant="outline"
+                            className={cn(
+                              "font-base cursor-pointer",
+                              selectedType === type._id &&
+                                "bg-blue-400 text-primary-foreground hover:bg-blue-400/80 hover:text-white"
+                            )}
+                            onClick={() => setSelectedType(type._id)}
+                            type="button"
+                          >
+                            {type.name}
+                          </Button>
+                        )
+                      )}
+                    </ButtonGroup>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
                     {register?.products
                       .filter((p: any) => selectedType === p.type._id)
                       .map((product: any) => (
                         <div
                           key={product._id}
-                          className="flex h-45 flex-col border hover:cursor-pointer hover:drop-shadow"
+                          className="flex h-36 flex-col border hover:cursor-pointer hover:drop-shadow sm:h-45"
                           onClick={() => {
                             form.setFieldValue(
                               "items",
@@ -488,7 +672,7 @@ export default function Page() {
                           }}
                         >
                           <div className="flex flex-1 items-center justify-center bg-slate-300">
-                            <span className="text-6xl font-semibold text-muted uppercase">
+                            <span className="text-4xl font-semibold text-muted uppercase sm:text-6xl">
                               {(() => {
                                 const image = product.image?.[0]
                                 if (image)
@@ -508,7 +692,7 @@ export default function Page() {
                             </span>
                           </div>
                           <div className="bg-white">
-                            <span className="block text-center text-sm font-medium">
+                            <span className="block px-1 text-center text-xs leading-tight font-medium break-words sm:text-sm">
                               {product.name}
                             </span>
                             <span className="block text-center text-[0.65rem] text-muted-foreground">
@@ -522,7 +706,7 @@ export default function Page() {
                       ))}
                   </div>
                 </div>
-                <div className="flex w-96 flex-col justify-between gap-2.5 p-2">
+                <div className="flex w-full shrink-0 flex-col justify-between gap-2.5 border-t p-2 lg:w-96 lg:overflow-y-auto lg:border-t-0 lg:border-l">
                   <AddCustomer form={form} />
                   <div className="flex flex-1 flex-col items-start justify-start overflow-y-auto">
                     {state.items.length > 0 && (
@@ -714,7 +898,7 @@ export default function Page() {
                         setOpen={setOpenPay}
                       >
                         <Button
-                          className="flex h-20 w-full justify-between p-3.5 text-2xl"
+                          className="flex h-16 w-full justify-between p-3.5 text-xl sm:h-20 sm:text-2xl"
                           form="sale-form"
                           type="button"
                           disabled={state.items.length === 0}
@@ -745,5 +929,83 @@ export default function Page() {
         }}
       />
     </>
+  )
+}
+
+// Resolves ?edit=<saleId> before the cart mounts, so ProcessSalePage can
+// take the sale as its initial form values instead of having them reset in
+// after the fact (which raced the form's own mount).
+function ProcessSaleRoute() {
+  const params = useParams()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const registerId = params.id as string
+  const editSaleId = searchParams.get("edit")
+  // Both modes load the same sale; only what's done with it differs, so one
+  // query covers them. ?edit corrects the original, ?duplicate copies it.
+  const duplicateSaleId = searchParams.get("duplicate")
+  const sourceSaleId = editSaleId || duplicateSaleId
+
+  const { data, loading } = useQuery(GET_SALE_FOR_EDIT, {
+    variables: { _id: sourceSaleId },
+    fetchPolicy: "network-only",
+    skip: !sourceSaleId,
+  })
+  const sale = (data as any)?.sale || null
+
+  if (sourceSaleId && loading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Spinner className="size-10 text-primary" />
+      </div>
+    )
+  }
+
+  // Mirrors updateSale's own guard - a sale in a closed shift, or a voided
+  // one, can't be corrected, so don't present an editable cart for it.
+  if (editSaleId && sale && !sale.isEditable) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
+        <p className="text-lg font-semibold">
+          Sale {sale.saleNumber} can no longer be edited
+        </p>
+        <p className="max-w-sm text-sm text-muted-foreground">
+          Its register shift has already been closed, or the sale was voided.
+          Closing a shift freezes its counted-cash record, so past sales stay as
+          they were.
+        </p>
+        <Button
+          variant="link"
+          className="cursor-pointer text-muted-foreground"
+          onClick={() => router.push("/sale-history")}
+        >
+          <ArrowLeftIcon size={14} />
+          Back to sale history
+        </Button>
+      </div>
+    )
+  }
+
+  return (
+    <ProcessSalePage
+      key={`${registerId}:${sourceSaleId ?? "new"}`}
+      editSale={editSaleId ? sale : undefined}
+      duplicateSale={duplicateSaleId ? sale : undefined}
+    />
+  )
+}
+
+// useSearchParams (for ?edit=) requires a Suspense boundary above it.
+export default function Page() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-full items-center justify-center">
+          <Spinner className="size-10 text-primary" />
+        </div>
+      }
+    >
+      <ProcessSaleRoute />
+    </Suspense>
   )
 }

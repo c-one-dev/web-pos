@@ -1,6 +1,5 @@
 import { GraphQLError } from "graphql"
 import Payment from "../models/payment.model"
-import { startOfDay, endOfDay } from "date-fns"
 import { Types, type PipelineStage } from "mongoose"
 import type { IDataTableArgs } from "../types/shared.type"
 import { fromCursor, toCursor } from "../helpers/cursor"
@@ -87,8 +86,8 @@ export const paymentResolver = {
                 if (!start || !end) return null
                 return {
                   [key]: {
-                    $gte: startOfDay(start),
-                    $lte: endOfDay(end),
+                    $gte: start,
+                    $lte: end,
                   },
                 }
               case "BOOLEAN":

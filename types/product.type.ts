@@ -16,6 +16,7 @@ export interface IProduct {
   barcode: string
   description: string
   currentPrice: number
+  cost: number
   priceHistory: IProductPriceHistoryItem[]
   brand: Types.ObjectId | string | IBrand
   type: Types.ObjectId | string | IProductType
@@ -30,6 +31,7 @@ export interface IProductInput {
   barcode: string
   description: string
   currentPrice: number
+  cost: number
   brand: Types.ObjectId | string
   type: Types.ObjectId | string
   registers: Types.ObjectId[] | string[]

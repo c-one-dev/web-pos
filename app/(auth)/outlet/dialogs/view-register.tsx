@@ -19,6 +19,7 @@ import RegisterFormDialog from "./register-form"
 type Props = {
   _id: string
   children: React.ReactNode
+  readOnly?: boolean
 }
 
 const GET_REGISTER = gql`
@@ -42,7 +43,7 @@ const GET_REGISTER = gql`
   }
 `
 
-export default function ViewRegisterDialog({ _id, children }: Props) {
+export default function ViewRegisterDialog({ _id, children, readOnly }: Props) {
   const [open, setOpen] = useState(false)
   const { data }: any = useQuery(GET_REGISTER, {
     variables: {
@@ -133,7 +134,7 @@ export default function ViewRegisterDialog({ _id, children }: Props) {
           </div>
         </div>
         <DialogFooter>
-          <RegisterFormDialog _id={_id} />
+          {!readOnly && <RegisterFormDialog _id={_id} />}
           <DialogClose asChild>
             <Button variant="outline">Close</Button>
           </DialogClose>

@@ -171,14 +171,20 @@ export default function Page() {
               <TableRow>
                 <TableHead>Payment type</TableHead>
                 <TableHead className="text-right">Expected</TableHead>
-                <TableHead className="text-right">Counted</TableHead>
+                <TableHead className="text-right">
+                  <div className="ml-auto w-36 text-left">Counted</div>
+                </TableHead>
                 <TableHead className="text-right">Difference</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {expectedTotals.map((item: any) => {
                 const methodId = item.method._id
-                const countedValue = counted[methodId] ?? 0
+                // Defaults to Expected rather than 0 - assumes no
+                // discrepancy until the cashier actually recounts and
+                // overrides it, matching the reminder in the Close Register
+                // dialog to adjust this box only when there's a mismatch.
+                const countedValue = counted[methodId] ?? item.expected
                 const difference = countedValue - item.expected
                 return (
                   <TableRow key={methodId}>

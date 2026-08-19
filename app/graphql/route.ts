@@ -13,11 +13,10 @@ import {
   mutationValidationRegistry,
   NO_VALIDATION,
 } from "@/validators/mutationRegistry"
-import {
-  cashierRestrictedFields,
-  managerRestrictedFields,
-} from "@/validators/roleAccessRegistry"
+import { effectivePermissions } from "@/validators/roleAccessRegistry"
+import { fieldPermissionMap } from "@/validators/permissionRegistry"
 import { logActivity, describeActivity } from "@/helpers/activityLog"
+import User from "@/models/user.model"
 
 // Query/Mutation fields that must remain reachable without a session.
 const PUBLIC_FIELDS = new Set(["Mutation.signIn"])
@@ -77,14 +76,28 @@ export const schema = mapSchema(baseSchema, {
             extensions: { code: "UNAUTHORIZED" },
           })
         const role = context.session.role
-        if (role === "CASHIER" && cashierRestrictedFields.has(fieldKey))
-          throw new GraphQLError("Forbidden", {
-            extensions: { code: "FORBIDDEN" },
-          })
-        if (role === "MANAGER" && managerRestrictedFields.has(fieldKey))
-          throw new GraphQLError("Forbidden", {
-            extensions: { code: "FORBIDDEN" },
-          })
+        // Per-user permissions (validators/permissionRegistry.ts) are the
+        // access check: context.permissions is the user's explicit list when
+        // one has been saved, otherwise their role's default set. A field
+        // reachable from several permissions passes if the user holds any of
+        // them. Fields with no entry at all are shared lookups and stay open.
+        const requiredPermissions = fieldPermissionMap[fieldKey]
+        if (
+          requiredPermissions &&
+          !requiredPermissions.some((key) => context.permissions?.has(key))
+        ) {
+          // Mutation.updateUser doubles as the self-service "My Profile"
+          // save, so editing your own record stays allowed without the
+          // users.user.edit permission - mirrors the isSelf carve-out in
+          // resolvers/user.resolver.ts.
+          const isSelfProfileUpdate =
+            fieldKey === "Mutation.updateUser" &&
+            args?._id?.toString() === context.session._id?.toString()
+          if (!isSelfProfileUpdate)
+            throw new GraphQLError("Forbidden", {
+              extensions: { code: "FORBIDDEN" },
+            })
+        }
         // Query.user is otherwise open (every role needs it for "My
         // Profile"), but for anyone below ADMIN it must not become a way to
         // read a coworker's profile by guessing their _id.
@@ -124,9 +137,24 @@ const handler = startServerAndCreateNextHandler<NextRequest>(server, {
   context: async (req: NextRequest) => {
     await connectDB()
     const session = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
+    // Read permissions straight from the user document rather than the JWT:
+    // an admin granting or revoking a permission has to take effect on the
+    // very next request, not whenever the token happens to be refreshed.
+    // Falls back to the role default when the user has no explicit list.
+    let permissions: Set<string> | null = null
+    if (session?._id) {
+      const user = await User.findById(session._id)
+        .select("permissions")
+        .lean<{ permissions?: string[] }>()
+      permissions = effectivePermissions(
+        session.role as string | undefined,
+        user?.permissions
+      )
+    }
     return {
       req,
       session,
+      permissions,
     }
   },
 })

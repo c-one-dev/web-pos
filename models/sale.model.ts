@@ -19,6 +19,30 @@ const SaleItem = new Schema<ISaleItem>(
     price: { type: Number, required: true },
     subTotal: { type: Number, required: true },
     total: { type: Number, required: true },
+    // How much of this line has already been refunded as store credit, so a
+    // unit can never be refunded twice across several partial refunds.
+    refundedQuantity: { type: Number, required: true, default: 0 },
+  },
+  { _id: false }
+)
+
+const SaleRefundItem = new Schema(
+  {
+    itemIndex: { type: Number, required: true },
+    snapshotName: { type: String, required: true },
+    quantity: { type: Number, required: true },
+    amount: { type: Number, required: true },
+  },
+  { _id: false }
+)
+
+const SaleRefund = new Schema(
+  {
+    items: { type: [SaleRefundItem], required: true },
+    amount: { type: Number, required: true },
+    note: { type: String },
+    date: { type: Date, required: true },
+    by: { type: Schema.Types.ObjectId, ref: "User", required: true },
   },
   { _id: false }
 )
@@ -92,6 +116,10 @@ const Sale = new Schema<ISale>(
     receivedAmount: { type: Number, required: true },
     changeAmount: { type: Number, required: true },
     netAmount: { type: Number, required: true },
+    // Running total of store credit issued back against this sale, and the
+    // individual refunds that make it up.
+    refundedAmount: { type: Number, required: true, default: 0 },
+    refunds: { type: [SaleRefund], required: false, default: [] },
     notes: { type: String },
     currentSalePaymentStatus: {
       type: String,

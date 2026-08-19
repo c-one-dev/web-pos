@@ -30,6 +30,9 @@ type Props<TData, TValue> = {
   data: TData[]
   actionsColumn?: ReactNode
   rowView?: ReactNode
+  // Alternative to rowView for rows that should navigate to their own page
+  // instead of opening a drawer (e.g. Shift Report -> closure summary page).
+  onRowClick?: (row: TData) => void
   noFooter?: boolean
 }
 
@@ -39,6 +42,7 @@ export default function DataTable<TData, TValue>({
   loading,
   actionsColumn,
   rowView,
+  onRowClick,
   noFooter = false,
 }: Props<TData, TValue>) {
   // eslint-disable-next-line react-hooks/incompatible-library
@@ -149,6 +153,10 @@ export default function DataTable<TData, TValue>({
                         cell.column.id === "registers"
                       )
                         return
+                      if (onRowClick) {
+                        onRowClick(row.original)
+                        return
+                      }
                       setViewId((row.original as any)._id)
                       setOpenView((prev) => !prev)
                     }}

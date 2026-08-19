@@ -14,7 +14,6 @@ import { saleResolver } from "./sale.resolver"
 import { paymentResolver } from "./payment.resolver"
 import { dashboardResolver } from "./dashboard.resolver"
 import { salesReportResolver } from "./salesReport.resolver"
-import { timecardResolver } from "./timecard.resolver"
 import { activityLogResolver } from "./activityLog.resolver"
 import { salesTargetResolver } from "./salesTarget.resolver"
 
@@ -33,7 +32,6 @@ export default mergeResolvers([
   paymentResolver,
   dashboardResolver,
   salesReportResolver,
-  timecardResolver,
   activityLogResolver,
   salesTargetResolver,
 ])

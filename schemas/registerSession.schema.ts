@@ -96,9 +96,83 @@ export const registerSessionSchema = gql`
     cursor: String
   }
 
+  # Register Closure Summary (full-page shift detail)
+  type ClosurePaymentDetailItem {
+    date: String
+    _id: ID
+    saleNumber: String
+    saleTotal: Float
+    paymentAmount: Float
+    type: String
+    isOnAccount: Boolean
+    userName: String
+  }
+
+  type ClosureTransactionItem {
+    date: String
+    _id: ID
+    saleNumber: String
+    status: SaleStatus
+    customerName: String
+    discount: Float
+    saleTotal: Float
+    userName: String
+  }
+
+  type ClosureSkuItem {
+    sku: String
+    _id: ID
+    saleNumber: String
+    quantity: Float
+    salesExTax: Float
+    totalTax: Float
+    salesInc: Float
+    discountOffers: Float
+    orderDiscounts: Float
+    saleTotal: Float
+    payments: String
+  }
+
+  type ClosureCogsItem {
+    itemName: String
+    sku: String
+    quantitySold: Float
+    salesInc: Float
+    salesExTax: Float
+    purchaseCost: Float
+    retailPrice: Float
+  }
+
+  type RegisterSessionClosureDetail {
+    _id: ID
+    registerName: String
+    outletName: String
+    openedAt: String
+    openedByName: String
+    closedAt: String
+    closedByName: String
+    paymentReceived: Float
+    refunds: Float
+    netReceipts: Float
+    totalSalesInc: Float
+    totalSalesEx: Float
+    salesTaxCollected: Float
+    itemDiscounts: Float
+    discounts: Float
+    surcharge: Float
+    paymentSummary: [TallyItem]
+    paymentDetails: [ClosurePaymentDetailItem]
+    onAccountSales: [ClosurePaymentDetailItem]
+    addsPayouts: [CashMovement]
+    transactions: [ClosureTransactionItem]
+    transactionsBySku: [ClosureSkuItem]
+    cogs: [ClosureCogsItem]
+  }
+
   type Query {
     activeRegisterSession(register: ID!): RegisterSession
     registerSession(_id: ID!): RegisterSession
+    registerSessionClosureDetail(_id: ID!): RegisterSessionClosureDetail
     registerSessionTable(
       first: Int
       after: String

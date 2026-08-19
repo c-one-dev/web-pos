@@ -245,7 +245,7 @@ export default function AccountLimitDrawer({ _id }: Props) {
       <DrawerContent
         onOpenAutoFocus={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
-        className="lg:min-w-xl"
+        className="w-full data-[vaul-drawer-direction=right]:w-full data-[vaul-drawer-direction=right]:sm:max-w-[min(42rem,96vw)]"
       >
         <DrawerHeader className="flex flex-row justify-between">
           <div>

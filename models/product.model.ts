@@ -24,6 +24,7 @@ const Product = new Schema<IProduct>(
       required: false,
     },
     currentPrice: { type: Number, required: true },
+    cost: { type: Number, required: false, default: 0 },
     priceHistory: { type: [ProductPriceHistoryItem], default: [] },
     brand: { type: Schema.Types.ObjectId, ref: "Brand", required: false },
     registers: {

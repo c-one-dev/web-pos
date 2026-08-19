@@ -1,14 +1,18 @@
 import { GraphQLError } from "graphql"
 import Sale from "../models/sale.model"
-import { startOfDay, endOfDay } from "date-fns"
 import mongoose, { Types, type PipelineStage } from "mongoose"
 import type { IDataTableArgs } from "../types/shared.type"
 import { fromCursor, toCursor } from "../helpers/cursor"
 import { flatten } from "../helpers/flatten"
 import { checkSchema, validate } from "../helpers/validate"
-import { saleSchema } from "../validators/sale.validator"
+import {
+  saleSchema,
+  updateSaleNotesSchema,
+  refundSaleItemsSchema,
+} from "../validators/sale.validator"
 import { isISOString } from "../helpers/isoString"
 import Register from "@/models/register.model"
+import RegisterSession from "@/models/registerSession.model"
 import Payment from "@/models/payment.model"
 import Customer from "@/models/customer.model"
 import { checkSalesPaymentStatus } from "@/helpers/salesFn"
@@ -25,6 +29,55 @@ const generateSaleNode = (sale: any) => ({
   currentSalePaymentStatus: sale.currentSalePaymentStatus,
   notes: sale.notes,
 })
+
+const netPaymentAmount = (payment: any) =>
+  payment.amount - (payment.change || 0)
+
+// Sum of net (tendered minus change) amounts for whichever payment method
+// is passed - used to work out how much a sale draws from a customer's
+// account limit or store credit, both when applying and when reversing.
+const totalForMethod = (payments: any[], methodId?: string) => {
+  if (!methodId) return 0
+  return (payments || [])
+    .filter((payment: any) => {
+      const method = payment.method?._id || payment.method
+      return method?.toString() === methodId
+    })
+    .reduce((sum: number, payment: any) => sum + netPaymentAmount(payment), 0)
+}
+
+// A sale may only be edited while the shift it belongs to is still open.
+// Once a register session closes it freezes a permanent expected/counted
+// tally computed from these sales, so retroactively changing one would make
+// that reconciliation record no longer add up.
+const assertSaleIsEditable = async (sale: any, session?: any) => {
+  if (sale.currentSaleStatus === "VOIDED")
+    throw new GraphQLError("A voided sale can no longer be edited.", {
+      extensions: { code: "SALE_VOIDED" },
+    })
+
+  // Editing rewrites the whole item list, which would orphan the per-item
+  // refund quantities a refund recorded against those exact lines. Once any
+  // store credit has been issued against a sale, its contents are frozen.
+  if ((sale.refundedAmount || 0) > 0)
+    throw new GraphQLError(
+      "This sale has already been refunded as store credit, so its items can no longer be edited.",
+      { extensions: { code: "SALE_REFUNDED" } }
+    )
+
+  const query = RegisterSession.findOne({
+    register: sale.register,
+    status: "OPEN",
+    openedAt: { $lte: sale.createdAt },
+  })
+  const openShift = await (session ? query.session(session) : query).lean()
+
+  if (!openShift)
+    throw new GraphQLError(
+      "This sale belongs to a register shift that has already been closed, so it can no longer be edited.",
+      { extensions: { code: "SHIFT_CLOSED" } }
+    )
+}
 
 export const saleResolver = {
   Query: {
@@ -44,7 +97,18 @@ export const saleResolver = {
           ])
           .lean()
         if (!sale) throw new GraphQLError("Sale not found")
-        return sale
+
+        // Resolved here rather than in the client so the Edit affordance
+        // matches exactly what updateSale would allow - see
+        // assertSaleIsEditable for the rules.
+        const isEditable = await assertSaleIsEditable({
+          ...sale,
+          register: (sale.register as any)?._id || sale.register,
+        })
+          .then(() => true)
+          .catch(() => false)
+
+        return { ...sale, isEditable }
       } catch (error) {
         throw error
       }
@@ -82,8 +146,8 @@ export const saleResolver = {
                 if (!start || !end) return null
                 return {
                   [key]: {
-                    $gte: startOfDay(start),
-                    $lte: endOfDay(end),
+                    $gte: start,
+                    $lte: end,
                   },
                 }
               case "BOOLEAN":
@@ -95,7 +159,10 @@ export const saleResolver = {
 
         const sortKey = sort?.key || "_id"
         const sortOrder = sort?.order === "ASC" ? 1 : -1
-        const total = await Sale.countDocuments(matchStage)
+        // Snapshot the filter-only match before the cursor block below
+        // mutates matchStage - the total must reflect the whole filtered
+        // set, not just the page after the cursor.
+        const filterMatchStage = { ...matchStage }
 
         if (after) {
           const { id, type, value } = fromCursor(after)
@@ -122,7 +189,12 @@ export const saleResolver = {
           ]
         }
 
-        const pipeline: PipelineStage[] = [
+        // The filter can target computed/aliased fields (date, customerName,
+        // saleTotal, paymentNotes) that only exist once $addFields has run,
+        // so both the count and the page query have to go through these
+        // stages - Sale.countDocuments on the raw collection would silently
+        // match nothing and report a total of 0.
+        const baseStages: PipelineStage[] = [
           {
             $lookup: {
               from: "customers",
@@ -173,6 +245,17 @@ export const saleResolver = {
               },
             },
           },
+        ]
+
+        const [countResult] = await Sale.aggregate([
+          ...baseStages,
+          { $match: filterMatchStage },
+          { $count: "total" },
+        ])
+        const total = countResult?.total || 0
+
+        const pipeline: PipelineStage[] = [
+          ...baseStages,
           { $match: matchStage },
           {
             $sort: { [sortKey]: sortOrder, _id: sortOrder },
@@ -567,20 +650,8 @@ export const saleResolver = {
 
           const onAccountId = process.env.NEXT_PUBLIC_ON_ACCOUNT_ID
           const storeCreditId = process.env.NEXT_PUBLIC_STORE_CREDIT_ID
-          const netPaymentAmount = (payment: any) =>
-            payment.amount - (payment.change || 0)
-          const onAccountTotal = input.payments
-            .filter((payment: any) => payment.method === onAccountId)
-            .reduce(
-              (sum: number, payment: any) => sum + netPaymentAmount(payment),
-              0
-            )
-          const storeCreditTotal = input.payments
-            .filter((payment: any) => payment.method === storeCreditId)
-            .reduce(
-              (sum: number, payment: any) => sum + netPaymentAmount(payment),
-              0
-            )
+          const onAccountTotal = totalForMethod(input.payments, onAccountId)
+          const storeCreditTotal = totalForMethod(input.payments, storeCreditId)
 
           let populatedResult
           await session.withTransaction(async () => {
@@ -724,31 +795,585 @@ export const saleResolver = {
         }
       }
     ),
-    voidSale: async (_: any, { _id }: any, ctx: any) => {
-      try {
-        const result = await Sale.findOneAndUpdate(
-          { _id, currentSaleStatus: { $ne: "VOIDED" } },
-          {
-            $set: { currentSaleStatus: "VOIDED" },
-            $push: {
-              saleStatusHistory: {
-                status: "VOIDED",
-                date: new Date(),
-                by: ctx.session._id,
-              },
-            },
-          },
-          { returnDocument: "after" }
-        )
-          .select("_id saleNumber currentSaleStatus")
-          .lean()
-        if (!result) {
+    updateSale: validate(checkSchema(saleSchema))(
+      async (_: any, { _id, input }: any, ctx: any) => {
+        const session = await mongoose.startSession()
+        try {
+          if (!ctx.session)
+            throw new GraphQLError("Unauthorized", {
+              extensions: { code: "UNAUTHORIZED" },
+            })
+
           const existing = await Sale.findById(_id)
-            .select("currentSaleStatus")
+            .select(
+              "saleNumber register customer payments currentSaleStatus createdAt"
+            )
             .lean()
           if (!existing) throw new GraphQLError("Sale not found")
-          throw new GraphQLError("Sale is already voided.")
+          await assertSaleIsEditable(existing)
+
+          const register = await Register.findById(existing.register)
+            .select("isOpen")
+            .lean()
+          if (!register) throw new GraphQLError("Register not found")
+          if (!register.isOpen)
+            throw new GraphQLError(
+              "Register is closed. Open the register before editing sales.",
+              { extensions: { code: "REGISTER_CLOSED" } }
+            )
+
+          // Payments carry over into an edit so the cashier only collects
+          // the difference - but that means trimming a sale down can leave
+          // more tendered than the sale is now worth. There's no refund
+          // mechanism to hand the excess back, so refuse rather than mark it
+          // PAID and silently lose track of money owed to the customer.
+          const netTendered = (input.payments || []).reduce(
+            (sum: number, payment: any) => sum + netPaymentAmount(payment),
+            0
+          )
+          if (netTendered - input.total > 0.001)
+            throw new GraphQLError(
+              `This sale now totals ${input.total.toFixed(2)} but ${netTendered.toFixed(2)} has been tendered. Remove or reduce a payment to match the new total, or void the sale instead.`,
+              { extensions: { code: "OVERPAYMENT" } }
+            )
+
+          const onAccountId = process.env.NEXT_PUBLIC_ON_ACCOUNT_ID
+          const storeCreditId = process.env.NEXT_PUBLIC_STORE_CREDIT_ID
+
+          // What the sale currently draws from the customer, so it can be
+          // handed back before the new figures are applied.
+          const previousOnAccount = totalForMethod(
+            existing.payments,
+            onAccountId
+          )
+          const previousStoreCredit = totalForMethod(
+            existing.payments,
+            storeCreditId
+          )
+          const previousCustomerId = existing.customer?.toString() || null
+
+          const onAccountTotal = totalForMethod(input.payments, onAccountId)
+          const storeCreditTotal = totalForMethod(input.payments, storeCreditId)
+
+          let populatedResult
+          await session.withTransaction(async () => {
+            // 1. Reverse the balances the original sale consumed. Done
+            //    first (and against the sale's *original* customer, which
+            //    the edit may have changed) so the availability check below
+            //    sees a true picture.
+            if (previousCustomerId && previousOnAccount > 0) {
+              const previous = await Customer.findById(previousCustomerId)
+                .select("accountLimit")
+                .session(session)
+                .lean()
+              if (previous)
+                await Customer.updateOne(
+                  { _id: previousCustomerId },
+                  {
+                    $inc: { "accountLimit.current": previousOnAccount },
+                    $push: {
+                      "accountLimit.history": {
+                        remaining:
+                          previous.accountLimit.current + previousOnAccount,
+                        transacted: previousOnAccount,
+                        date: new Date(),
+                        description: `Reversed for edit of sale ${existing.saleNumber}`,
+                      },
+                    },
+                  },
+                  { session }
+                )
+            }
+            if (previousCustomerId && previousStoreCredit > 0) {
+              const previous = await Customer.findById(previousCustomerId)
+                .select("storeCredit")
+                .session(session)
+                .lean()
+              if (previous)
+                await Customer.updateOne(
+                  { _id: previousCustomerId },
+                  {
+                    $inc: { "storeCredit.current": previousStoreCredit },
+                    $push: {
+                      "storeCredit.history": {
+                        remaining:
+                          previous.storeCredit.current + previousStoreCredit,
+                        transacted: previousStoreCredit,
+                        date: new Date(),
+                        description: `Reversed for edit of sale ${existing.saleNumber}`,
+                      },
+                    },
+                  },
+                  { session }
+                )
+            }
+
+            // 2. Validate the new figures against the now-restored balances.
+            let customer: any = null
+            if (onAccountTotal > 0 || storeCreditTotal > 0) {
+              if (!input.customer)
+                throw new GraphQLError(
+                  "A customer must be selected to use On Account or Store Credit.",
+                  { extensions: { code: "CUSTOMER_REQUIRED" } }
+                )
+              customer = await Customer.findById(input.customer)
+                .select("accountLimit storeCredit")
+                .session(session)
+                .lean()
+              if (!customer) throw new GraphQLError("Customer not found.")
+              if (onAccountTotal > customer.accountLimit.current)
+                throw new GraphQLError(
+                  "On Account amount exceeds the customer's available account limit.",
+                  { extensions: { code: "INSUFFICIENT_BALANCE" } }
+                )
+              if (storeCreditTotal > customer.storeCredit.current)
+                throw new GraphQLError(
+                  "Store Credit amount exceeds the customer's available store credit.",
+                  { extensions: { code: "INSUFFICIENT_BALANCE" } }
+                )
+            }
+
+            // 3. Replace the payment records outright - the edit may have
+            //    added, removed or re-tendered any of them.
+            const previousPaymentIds = (existing.payments || [])
+              .map((payment: any) => payment.payment)
+              .filter(Boolean)
+            if (previousPaymentIds.length)
+              await Payment.deleteMany(
+                { _id: { $in: previousPaymentIds } },
+                { session }
+              )
+
+            const payments = await Payment.insertMany(
+              input.payments.map((payment: any) => ({
+                ...payment,
+                by: ctx.session._id,
+                sale: [_id],
+              })),
+              { session }
+            )
+
+            const paymentStatus = checkSalesPaymentStatus(payments, input.total)
+            await Sale.updateOne(
+              { _id },
+              {
+                $set: flatten({
+                  ...input,
+                  payments: payments.map((payment) => ({
+                    method: payment.method,
+                    amount: payment.amount,
+                    change: payment.change,
+                    note: payment.note,
+                    date: payment.date,
+                    payment: payment._id,
+                  })),
+                  isOnAccount: onAccountTotal > 0,
+                  currentSalePaymentStatus: paymentStatus,
+                  salePaymentStatusHistory: payments.map(
+                    (payment, index, array) => ({
+                      status: checkSalesPaymentStatus(
+                        array.slice(0, index + 1),
+                        input.total
+                      ),
+                      paymentRef: payment._id,
+                      date: new Date(),
+                      by: ctx.session._id,
+                    })
+                  ),
+                }),
+                // saleNumber, register, by and createdAt are deliberately
+                // left untouched - an edit corrects a sale, it doesn't
+                // reissue it under a new number or reassign who rang it up.
+              },
+              { session }
+            )
+
+            // 4. Apply the new draw against the customer.
+            if (customer && onAccountTotal > 0) {
+              await Customer.updateOne(
+                { _id: customer._id },
+                {
+                  $inc: { "accountLimit.current": -onAccountTotal },
+                  $push: {
+                    "accountLimit.history": {
+                      remaining: customer.accountLimit.current - onAccountTotal,
+                      transacted: -onAccountTotal,
+                      date: new Date(),
+                      description: `Applied to edited sale ${existing.saleNumber}`,
+                    },
+                  },
+                },
+                { session }
+              )
+            }
+            if (customer && storeCreditTotal > 0) {
+              await Customer.updateOne(
+                { _id: customer._id },
+                {
+                  $inc: { "storeCredit.current": -storeCreditTotal },
+                  $push: {
+                    "storeCredit.history": {
+                      remaining:
+                        customer.storeCredit.current - storeCreditTotal,
+                      transacted: -storeCreditTotal,
+                      date: new Date(),
+                      description: `Applied to edited sale ${existing.saleNumber}`,
+                    },
+                  },
+                },
+                { session }
+              )
+            }
+
+            populatedResult = await Sale.findById(_id)
+              .session(session)
+              .populate([{ path: "customer" }])
+              .lean()
+          })
+
+          return {
+            ok: true,
+            message: `Sale ${existing.saleNumber} updated successfully.`,
+            data: generateSaleNode(populatedResult),
+          }
+        } catch (error) {
+          throw error
+        } finally {
+          await session.endSession()
         }
+      }
+    ),
+    // Refunds are issued as STORE CREDIT only - no cash ever leaves the
+    // drawer and no payment is reversed, so the register tally for the shift
+    // that made the sale stays intact. The customer gets the refunded value
+    // back as credit they can spend later, which is why a walk-in sale can't
+    // be refunded: there is no account to credit.
+    //
+    // Refunds are per line item and can be taken in several passes, so each
+    // item tracks how much of it has already been refunded.
+    refundSaleItems: validate(checkSchema(refundSaleItemsSchema))(
+      async (_: any, { _id, items, note }: any, ctx: any) => {
+        const session = await mongoose.startSession()
+        try {
+          let result: any
+          await session.withTransaction(async () => {
+            const sale = await Sale.findById(_id).session(session).lean()
+            if (!sale) throw new GraphQLError("Sale not found")
+            if (sale.currentSaleStatus === "VOIDED")
+              throw new GraphQLError("A voided sale cannot be refunded.", {
+                extensions: { code: "FORBIDDEN" },
+              })
+            if (!sale.customer)
+              throw new GraphQLError(
+                "A walk-in sale can't be refunded - store credit needs a customer to credit. Add a customer to the sale first, or void it instead.",
+                { extensions: { code: "REFUND_NEEDS_CUSTOMER" } }
+              )
+
+            // Per-item discounts are already inside item.total; a sale-level
+            // discount is not, so spread it across the lines proportionally.
+            // Without this, refunding every line would hand back more than
+            // the customer actually paid.
+            const grossItemTotal = sale.items.reduce(
+              (sum: number, item: any) => sum + item.total,
+              0
+            )
+            const discountRatio =
+              grossItemTotal > 0 ? sale.total / grossItemTotal : 0
+
+            // Collapse duplicate lines for the same item into one entry.
+            const quantityByIndex = new Map<number, number>()
+            for (const requested of items)
+              quantityByIndex.set(
+                requested.itemIndex,
+                (quantityByIndex.get(requested.itemIndex) || 0) +
+                  requested.quantity
+              )
+
+            const refundItems: any[] = []
+            let refundAmount = 0
+            for (const [itemIndex, quantity] of quantityByIndex) {
+              const item = sale.items[itemIndex]
+              if (!item)
+                throw new GraphQLError(
+                  "That item is not part of this sale anymore."
+                )
+              const remaining = item.quantity - (item.refundedQuantity || 0)
+              if (quantity > remaining)
+                throw new GraphQLError(
+                  "Only " +
+                    remaining +
+                    ' of "' +
+                    item.snapshotName +
+                    '" can still be refunded.',
+                  { extensions: { code: "REFUND_EXCEEDS_REMAINING" } }
+                )
+              const amount = parseFloat(
+                (
+                  (item.total / item.quantity) *
+                  quantity *
+                  discountRatio
+                ).toFixed(2)
+              )
+              refundAmount += amount
+              refundItems.push({
+                itemIndex,
+                snapshotName: item.snapshotName,
+                quantity,
+                amount,
+              })
+            }
+            refundAmount = parseFloat(refundAmount.toFixed(2))
+            if (refundAmount <= 0)
+              throw new GraphQLError("Nothing to refund on this sale.")
+
+            // Belt and braces against rounding drift: a sale can never give
+            // back more store credit than it was worth.
+            const alreadyRefunded = sale.refundedAmount || 0
+            if (alreadyRefunded + refundAmount - sale.total > 0.001)
+              throw new GraphQLError(
+                "This sale totals " +
+                  sale.total.toFixed(2) +
+                  " and " +
+                  alreadyRefunded.toFixed(2) +
+                  " has already been refunded.",
+                { extensions: { code: "REFUND_EXCEEDS_TOTAL" } }
+              )
+
+            // Claim the refund with the current refunded quantities in the
+            // filter, so two cashiers refunding the same line at the same
+            // moment can't both succeed and double-credit the customer.
+            const setOps: Record<string, any> = {}
+            const filter: Record<string, any> = { _id }
+            for (const refundItem of refundItems) {
+              const already =
+                sale.items[refundItem.itemIndex].refundedQuantity || 0
+              setOps["items." + refundItem.itemIndex + ".refundedQuantity"] =
+                already + refundItem.quantity
+              filter["items." + refundItem.itemIndex + ".refundedQuantity"] =
+                already
+            }
+
+            const fullyRefunded = sale.items.every(
+              (item: any, index: number) =>
+                (item.refundedQuantity || 0) +
+                  (quantityByIndex.get(index) || 0) >=
+                item.quantity
+            )
+            if (fullyRefunded) setOps.currentSaleStatus = "REFUNDED"
+
+            const now = new Date()
+            const updated = await Sale.findOneAndUpdate(
+              filter,
+              {
+                $set: setOps,
+                $inc: { refundedAmount: refundAmount },
+                $push: {
+                  refunds: {
+                    items: refundItems,
+                    amount: refundAmount,
+                    note: note || "",
+                    date: now,
+                    by: ctx.session._id,
+                  },
+                  ...(fullyRefunded
+                    ? {
+                        saleStatusHistory: {
+                          status: "REFUNDED",
+                          date: now,
+                          by: ctx.session._id,
+                        },
+                      }
+                    : {}),
+                },
+              },
+              { returnDocument: "after", session }
+            ).lean()
+            if (!updated)
+              throw new GraphQLError(
+                "This sale was refunded by someone else just now. Reopen it to see what's left.",
+                { extensions: { code: "CONFLICT" } }
+              )
+
+            const customerId = (sale.customer as any)?._id || sale.customer
+            const customer = await Customer.findById(customerId)
+              .select("storeCredit")
+              .session(session)
+              .lean()
+            if (!customer) throw new GraphQLError("Customer not found")
+
+            await Customer.findByIdAndUpdate(
+              customerId,
+              {
+                $inc: { "storeCredit.current": refundAmount },
+                $push: {
+                  "storeCredit.history": {
+                    remaining: customer.storeCredit.current + refundAmount,
+                    transacted: refundAmount,
+                    date: now,
+                    description:
+                      "Refund for sale " +
+                      sale.saleNumber +
+                      (note ? " - " + note : ""),
+                  },
+                },
+              },
+              { session }
+            )
+
+            result = {
+              _id: updated._id,
+              saleNumber: updated.saleNumber,
+              refundedAmount: updated.refundedAmount,
+              currentSaleStatus: updated.currentSaleStatus,
+            }
+          })
+
+          return {
+            ok: true,
+            message:
+              "Refund issued as store credit for sale " +
+              result.saleNumber +
+              ".",
+            data: result,
+          }
+        } catch (error) {
+          throw error
+        } finally {
+          await session.endSession()
+        }
+      }
+    ),
+    // Notes are the one part of a completed sale that stays editable from the
+    // Sale Order dialog - items and payments still go through updateSale and
+    // its assertSaleIsEditable rules. A voided sale is a closed record, so its
+    // notes are frozen too.
+    updateSaleNotes: validate(checkSchema(updateSaleNotesSchema))(
+      async (_: any, { _id, notes }: any) => {
+        try {
+          const sale = await Sale.findById(_id)
+            .select("currentSaleStatus")
+            .lean()
+          if (!sale) throw new GraphQLError("Sale not found")
+          if (sale.currentSaleStatus === "VOIDED")
+            throw new GraphQLError("A voided sale's notes cannot be changed.", {
+              extensions: { code: "FORBIDDEN" },
+            })
+
+          const result = await Sale.findByIdAndUpdate(
+            _id,
+            { $set: { notes: notes ?? "" } },
+            { returnDocument: "after" }
+          )
+            .select("_id saleNumber notes")
+            .lean()
+          if (!result) throw new GraphQLError("Sale not found")
+
+          return {
+            ok: true,
+            message: "Sale notes updated successfully.",
+            data: {
+              _id: result._id,
+              saleNumber: result.saleNumber,
+              notes: result.notes ?? "",
+            },
+          }
+        } catch (error) {
+          throw error
+        }
+      }
+    ),
+    voidSale: async (_: any, { _id }: any, ctx: any) => {
+      const session = await mongoose.startSession()
+      try {
+        let result: any
+        await session.withTransaction(async () => {
+          const existing = await Sale.findById(_id)
+            .select("saleNumber customer payments")
+            .session(session)
+            .lean()
+          if (!existing) throw new GraphQLError("Sale not found")
+
+          // Claim the void first so two concurrent requests can't both get
+          // past this point and reverse the customer's balance twice.
+          result = await Sale.findOneAndUpdate(
+            { _id, currentSaleStatus: { $ne: "VOIDED" } },
+            {
+              $set: { currentSaleStatus: "VOIDED" },
+              $push: {
+                saleStatusHistory: {
+                  status: "VOIDED",
+                  date: new Date(),
+                  by: ctx.session._id,
+                },
+              },
+            },
+            { returnDocument: "after", session }
+          )
+            .select("_id saleNumber currentSaleStatus")
+            .lean()
+          if (!result) throw new GraphQLError("Sale is already voided.")
+
+          // Cancelling the sale hands back whatever it drew from the
+          // customer's account limit / store credit. Cash and other tenders
+          // are settled at the drawer, not here - voided sales are already
+          // excluded from the register tally and reports.
+          const onAccountTotal = totalForMethod(
+            existing.payments,
+            process.env.NEXT_PUBLIC_ON_ACCOUNT_ID
+          )
+          const storeCreditTotal = totalForMethod(
+            existing.payments,
+            process.env.NEXT_PUBLIC_STORE_CREDIT_ID
+          )
+          if (!existing.customer) return
+
+          if (onAccountTotal > 0) {
+            const customer = await Customer.findById(existing.customer)
+              .select("accountLimit")
+              .session(session)
+              .lean()
+            if (customer)
+              await Customer.updateOne(
+                { _id: existing.customer },
+                {
+                  $inc: { "accountLimit.current": onAccountTotal },
+                  $push: {
+                    "accountLimit.history": {
+                      remaining: customer.accountLimit.current + onAccountTotal,
+                      transacted: onAccountTotal,
+                      date: new Date(),
+                      description: `Reversed - sale ${existing.saleNumber} voided`,
+                    },
+                  },
+                },
+                { session }
+              )
+          }
+          if (storeCreditTotal > 0) {
+            const customer = await Customer.findById(existing.customer)
+              .select("storeCredit")
+              .session(session)
+              .lean()
+            if (customer)
+              await Customer.updateOne(
+                { _id: existing.customer },
+                {
+                  $inc: { "storeCredit.current": storeCreditTotal },
+                  $push: {
+                    "storeCredit.history": {
+                      remaining:
+                        customer.storeCredit.current + storeCreditTotal,
+                      transacted: storeCreditTotal,
+                      date: new Date(),
+                      description: `Reversed - sale ${existing.saleNumber} voided`,
+                    },
+                  },
+                },
+                { session }
+              )
+          }
+        })
+
         return {
           ok: true,
           message: `Sale ${result.saleNumber} voided successfully.`,
@@ -759,6 +1384,8 @@ export const saleResolver = {
         }
       } catch (error) {
         throw error
+      } finally {
+        await session.endSession()
       }
     },
   },

@@ -4,6 +4,7 @@ import FormDialog from "./dialogs/form"
 import { useCallback, useMemo, useState } from "react"
 import gql from "graphql-tag"
 import { useQuery } from "@apollo/client/react"
+import { usePermissions } from "@/hooks/use-permissions"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Button } from "@/components/ui/button"
 import { ButtonGroup, ButtonGroupText } from "@/components/ui/button-group"
@@ -82,7 +83,7 @@ const GET_OUTLETS = gql`
   }
 `
 
-function Actions({ row }: { row?: IOutletNode }) {
+function Actions({ row, readOnly }: { row?: IOutletNode; readOnly?: boolean }) {
   const [open, setOpen] = useState(false)
   const data = useMemo(() => row, [row])
   const status = data?.isActive
@@ -99,29 +100,45 @@ function Actions({ row }: { row?: IOutletNode }) {
           _id={data?._id?.toString() || ""}
           onClose={() => setOpen(false)}
         />
-        <FormDialog
-          _id={data?._id?.toString()}
-          onClose={() => setOpen(false)}
-        />
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>Register</DropdownMenuSubTrigger>
-          <DropdownMenuPortal>
-            <DropdownMenuSubContent>
-              <RegisterFormDialog outlet={data?._id?.toString()} />
-            </DropdownMenuSubContent>
-          </DropdownMenuPortal>
-        </DropdownMenuSub>
-        <StatusDialog
-          _id={data?._id?.toString() || ""}
-          status={status || false}
-          onClose={() => setOpen(false)}
-        />
+        {!readOnly && (
+          <>
+            <FormDialog
+              _id={data?._id?.toString()}
+              onClose={() => setOpen(false)}
+            />
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>Register</DropdownMenuSubTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuSubContent>
+                  <RegisterFormDialog outlet={data?._id?.toString()} />
+                </DropdownMenuSubContent>
+              </DropdownMenuPortal>
+            </DropdownMenuSub>
+            <StatusDialog
+              _id={data?._id?.toString() || ""}
+              status={status || false}
+              onClose={() => setOpen(false)}
+            />
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )
 }
 
 export default function Page() {
+  // Someone can be allowed to see the outlets list without being allowed to
+  // change it, so the create/edit/status controls follow the outlet write
+  // permissions rather than the role. The mutations are GraphQL-blocked
+  // either way (app/graphql/route.ts) - this just avoids leaving buttons
+  // clickable that would only fail.
+  const { can } = usePermissions()
+  const isReadOnly = !can(
+    "store.outlet.create",
+    "store.outlet.edit",
+    "store.outlet.status"
+  )
+
   // Pagination state
   const [rows, setRows] = useState<number>(10)
   const [page, setPage] = useState<{
@@ -217,7 +234,11 @@ export default function Page() {
         cell: ({ row }) => (
           <div className="flex flex-col gap-1.5">
             {row.original.registers.map((reg: any) => (
-              <ViewRegisterDialog key={reg._id} _id={reg._id.toString()}>
+              <ViewRegisterDialog
+                key={reg._id}
+                _id={reg._id.toString()}
+                readOnly={isReadOnly}
+              >
                 <span className="cursor-pointer text-xs text-primary hover:text-primary/80 hover:underline">
                   {reg.name}
                 </span>
@@ -261,7 +282,7 @@ export default function Page() {
         ),
       },
     ],
-    [sort, filter]
+    [sort, filter, isReadOnly]
   )
 
   const resetPage = () => setPage({ current: 1, loaded: 1, max: 1 })
@@ -329,7 +350,7 @@ export default function Page() {
     <div className="flex h-full w-full flex-col gap-1.5 p-2.5">
       <div className="flex items-center justify-between gap-1.5">
         <Label className="text-xl font-medium">Outlet</Label>
-        <FormDialog />
+        {!isReadOnly && <FormDialog />}
       </div>
       <div className="flex justify-between">
         <InputGroup>
@@ -401,7 +422,7 @@ export default function Page() {
         loading={loading}
         columns={columns}
         data={nodes.slice((page.current - 1) * rows, page.current * rows)}
-        actionsColumn={<Actions />}
+        actionsColumn={<Actions readOnly={isReadOnly} />}
         rowView={<RowViewDialog />}
       />
     </div>

@@ -25,6 +25,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import ViewDialog from "./dialogs/view"
+import PermissionsDialog from "./dialogs/permissions"
+import { useSession } from "next-auth/react"
 import SortHeader from "@/components/custom/sort-header"
 import StatusDialog from "./dialogs/status"
 import Image from "next/image"
@@ -78,6 +80,15 @@ function Actions({ row }: { row?: IUserNode }) {
   const [open, setOpen] = useState(false)
   const data = useMemo(() => row, [row])
   const status = data?.isActive
+  const { data: session } = useSession()
+  // Permissions is an ADMIN/MANAGER-only action - the real enforcement is the
+  // role check in resolvers/user.resolver.ts (assertCanManagePermissions),
+  // this just keeps the item out of a Cashier's menu. Nobody edits their own
+  // permissions, so it's hidden on your own row too.
+  const role = (session as any)?.user?.role
+  const canManagePermissions =
+    (role === "ADMIN" || role === "MANAGER") &&
+    (session as any)?.user?._id?.toString() !== data?._id?.toString()
 
   return (
     <DropdownMenu modal open={open} onOpenChange={setOpen}>
@@ -95,6 +106,12 @@ function Actions({ row }: { row?: IUserNode }) {
           _id={data?._id?.toString()}
           onClose={() => setOpen(false)}
         />
+        {canManagePermissions && (
+          <PermissionsDialog
+            _id={data?._id?.toString() || ""}
+            onClose={() => setOpen(false)}
+          />
+        )}
         <StatusDialog
           _id={data?._id?.toString() || ""}
           status={status || false}

@@ -108,16 +108,16 @@ export default function SwitchUserSheet({ children }: Props) {
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetTrigger asChild>{children}</SheetTrigger>
-      <SheetContent className="w-full sm:max-w-none lg:min-w-275">
+      <SheetContent className="w-full data-[side=right]:w-full data-[side=right]:sm:max-w-[min(72rem,95vw)]">
         <SheetHeader>
           <SheetTitle className="text-left text-xl font-bold">
             Switch User
           </SheetTitle>
         </SheetHeader>
-        <div className="grid grid-cols-1 gap-6 px-4 sm:grid-cols-[260px_1fr]">
-          <div className="flex flex-col items-center gap-4 text-center">
+        <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-4 pb-6 lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:items-start">
+          <div className="flex min-w-0 flex-col items-center gap-4 text-center">
             <div>
-              <span className="block font-heading text-lg font-bold text-primary">
+              <span className="block font-heading text-lg font-bold break-words text-primary">
                 {currentUser
                   ? `${currentUser.name} ${currentUser.surname}`
                   : session?.user?.name}
@@ -126,20 +126,20 @@ export default function SwitchUserSheet({ children }: Props) {
                 {(currentUser?.role || session?.user?.role || "").toLowerCase()}
               </span>
             </div>
-            <Avatar className="size-40">
+            <Avatar className="size-24 sm:size-32 lg:size-40">
               <AvatarImage src={currentUser?.image || undefined} />
               <AvatarFallback className="bg-zinc-300 text-4xl">
                 {currentUser?.name?.[0]}
                 {currentUser?.surname?.[0]}
               </AvatarFallback>
             </Avatar>
-            <div className="space-y-0.5 text-xs text-muted-foreground">
+            <div className="w-full space-y-0.5 text-xs break-words text-muted-foreground">
               {currentUser?.username && <div>@{currentUser.username}</div>}
               {currentUser?.email && <div>{currentUser.email}</div>}
             </div>
           </div>
 
-          <div>
+          <div className="min-w-0">
             {!selected ? (
               usersLoading ? (
                 <span className="text-sm text-muted-foreground">Loading…</span>
@@ -148,7 +148,7 @@ export default function SwitchUserSheet({ children }: Props) {
                   No other active users found.
                 </span>
               ) : (
-                <div className="grid grid-cols-3 gap-x-6 gap-y-8 sm:grid-cols-4">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
                   {otherUsers.map((user: any) => (
                     <button
                       key={user._id}
@@ -156,15 +156,15 @@ export default function SwitchUserSheet({ children }: Props) {
                       onClick={() =>
                         setSelected({ _id: user._id, fullName: user.fullName })
                       }
-                      className="flex flex-col items-center gap-2 transition-opacity hover:opacity-75"
+                      className="flex min-w-0 flex-col items-center gap-2 transition-opacity hover:opacity-75"
                     >
-                      <Avatar className="size-16">
+                      <Avatar className="size-14 shrink-0 sm:size-16">
                         <AvatarImage src={user.image || undefined} />
                         <AvatarFallback className="bg-zinc-300">
                           {user.fullName?.[0]}
                         </AvatarFallback>
                       </Avatar>
-                      <span className="text-center text-sm font-medium">
+                      <span className="w-full text-center text-xs leading-tight font-medium break-words sm:text-sm">
                         {user.fullName}
                       </span>
                     </button>
@@ -172,9 +172,9 @@ export default function SwitchUserSheet({ children }: Props) {
                 </div>
               )
             ) : (
-              <div className="flex flex-col items-center gap-4 py-6">
-                <div className="flex w-full items-center justify-between">
-                  <span className="font-medium">
+              <div className="flex min-w-0 flex-col items-center gap-4 py-6">
+                <div className="flex w-full flex-col items-center gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <span className="text-center font-medium break-words sm:text-left">
                     Enter PIN for {selected.fullName}
                   </span>
                   <Button

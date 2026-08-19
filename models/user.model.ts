@@ -17,6 +17,12 @@ const User = new Schema<IUser>(
     },
     pin: { type: String, required: true, select: false },
     mustChangePassword: { type: Boolean, default: true },
+    // Fine-grained access permissions (validators/permissionRegistry.ts).
+    // Deliberately has NO default: an unset field means "no explicit
+    // permissions saved for this user yet", which keeps pure role-based
+    // access. An empty array is a real, meaningful value - it means an admin
+    // saved the Permissions dialog with nothing ticked.
+    permissions: { type: [String], default: undefined },
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }

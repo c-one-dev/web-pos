@@ -1,6 +1,10 @@
 import type { z } from "zod"
 import { signInSchema, switchUserSchema } from "./auth.validator"
-import { userSchema, changePasswordSchema } from "./user.validator"
+import {
+  userSchema,
+  changePasswordSchema,
+  updateUserPermissionsSchema,
+} from "./user.validator"
 import { productTypeSchema } from "./productType.validator"
 import { updatePaymentNoteSchema } from "./payment.validator"
 import { productSchema } from "./product.validator"
@@ -19,7 +23,11 @@ import {
 } from "./customer.validator"
 import { settleAccountBalanceSchema } from "./customer.server.validator"
 import { outletSchema } from "./outlet.validator"
-import { saleSchema } from "./sale.validator"
+import {
+  saleSchema,
+  updateSaleNotesSchema,
+  refundSaleItemsSchema,
+} from "./sale.validator"
 import { salesTargetSchema } from "./salesTarget.validator"
 
 // Sentinel for mutations that take no input worth validating beyond what
@@ -45,6 +53,7 @@ export const mutationValidationRegistry: Record<
   createUser: userSchema,
   updateUser: userSchema,
   changeUserStatus: NO_VALIDATION,
+  updateUserPermissions: updateUserPermissionsSchema,
   changePassword: changePasswordSchema,
 
   createProductType: productTypeSchema,
@@ -86,9 +95,10 @@ export const mutationValidationRegistry: Record<
   changeOutletStatus: NO_VALIDATION,
 
   generateSale: saleSchema,
+  updateSale: saleSchema,
   voidSale: NO_VALIDATION,
+  updateSaleNotes: updateSaleNotesSchema,
+  refundSaleItems: refundSaleItemsSchema,
 
-  clockIn: NO_VALIDATION,
-  clockOut: NO_VALIDATION,
   setSalesTarget: salesTargetSchema,
 }

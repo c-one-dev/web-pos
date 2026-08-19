@@ -148,9 +148,9 @@ function CustomerSummary({
   return (
     <Popover open={openCustomerCommand} onOpenChange={setOpenCustomerCommand}>
       <div className="border bg-white p-3">
-        <div className="flex items-center justify-between">
-          <span className="font-medium">{customer?.name}</span>
-          <div className="flex items-center gap-1">
+        <div className="flex items-center justify-between gap-2">
+          <span className="min-w-0 truncate font-medium">{customer?.name}</span>
+          <div className="flex shrink-0 items-center gap-1">
             <PopoverTrigger asChild>
               <Button variant="ghost" size="icon-sm" type="button">
                 <PencilSimpleIcon />
@@ -265,15 +265,15 @@ function Pay({
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>{children}</SheetTrigger>
-      <SheetContent className="lg:min-w-275">
+      <SheetContent className="w-full data-[side=right]:w-full data-[side=right]:sm:max-w-[min(72rem,95vw)]">
         <SheetHeader>
           <SheetTitle className="text-left text-xl font-bold">
             Sale Summary
           </SheetTitle>
         </SheetHeader>
-        <div className="flex h-full gap-2.5 px-4">
-          <div className="flex max-w-80 flex-1 gap-4">
-            <div className="flex h-full w-full flex-col gap-2 bg-muted p-2.5">
+        <div className="flex flex-1 flex-col gap-2.5 overflow-y-auto px-4 pb-2 lg:h-full lg:flex-row lg:overflow-hidden">
+          <div className="flex w-full shrink-0 gap-4 lg:max-w-80 lg:flex-1">
+            <div className="flex h-auto w-full flex-col gap-2 bg-muted p-2.5 lg:h-full lg:overflow-y-auto">
               <div className="flex justify-between gap-2">
                 <Label>Subtotal</Label>
                 <Label>
@@ -410,7 +410,7 @@ function Pay({
               )}
             </div>
           </div>
-          <div className="flex w-full flex-1 flex-col gap-2.5 bg-muted p-2.5">
+          <div className="flex w-full min-w-0 flex-1 flex-col gap-2.5 bg-muted p-2.5 lg:overflow-y-auto">
             <Label>Amount Tendered</Label>
             <InputGroup className="h-18 bg-white">
               <InputGroupInput
@@ -418,12 +418,12 @@ function Pay({
                 value={amountTendered}
                 onChange={(e) => setAmountTendered(parseFloat(e.target.value))}
                 onFocus={(e) => e.currentTarget.select()}
-                className="h-full text-center md:text-5xl"
+                className="h-full text-center text-3xl md:text-5xl"
               />
             </InputGroup>
             {state.total > state.receivedAmount && (
               <>
-                <ButtonGroup>
+                <ButtonGroup className="flex w-full flex-wrap gap-1.5 lg:flex-nowrap [&>*:not(:first-child)]:border-l">
                   {amountShortcuts.map((amount) => {
                     if (amount > amountTendered)
                       return (
@@ -440,22 +440,22 @@ function Pay({
                       )
                   })}
                 </ButtonGroup>
-                <ButtonGroup>
+                <ButtonGroup className="grid w-full grid-cols-2 gap-1.5 sm:grid-cols-3 lg:flex lg:gap-0 [&>*:not(:first-child)]:border-l lg:[&>*:not(:first-child)]:rounded-l-none lg:[&>*:not(:first-child)]:border-l-0">
                   {register?.paymentMethods?.map((method: any) => (
                     <Button
                       size="lg"
                       key={method._id}
-                      className="p-3 text-xl"
+                      className="p-2 text-base sm:p-3 sm:text-xl"
                       onClick={() => addPayment(method._id)}
                     >
                       {method.name}
                     </Button>
                   ))}
                 </ButtonGroup>
-                <ButtonGroup>
+                <ButtonGroup className="grid w-full grid-cols-2 gap-1.5 sm:grid-cols-3 lg:flex lg:gap-0 [&>*:not(:first-child)]:border-l lg:[&>*:not(:first-child)]:rounded-l-none lg:[&>*:not(:first-child)]:border-l-0">
                   <Button
                     size="lg"
-                    className="p-3 text-xl"
+                    className="p-2 text-base sm:p-3 sm:text-xl"
                     disabled={!state.customer}
                     onClick={() =>
                       addPayment(process.env.NEXT_PUBLIC_STORE_CREDIT_ID)
@@ -465,7 +465,7 @@ function Pay({
                   </Button>
                   <Button
                     size="lg"
-                    className="p-3 text-xl"
+                    className="p-2 text-base sm:p-3 sm:text-xl"
                     disabled={!state.customer}
                     onClick={() =>
                       addPayment(process.env.NEXT_PUBLIC_ON_ACCOUNT_ID)

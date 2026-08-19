@@ -25,9 +25,13 @@ import { FilterType } from "@/types/shared.type"
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import SortHeader from "@/components/custom/sort-header"
+import { useRouter } from "next/navigation"
+import RefundDialog from "./_dialogs/refund"
+import { usePermissions } from "@/hooks/use-permissions"
 import {
   Select,
   SelectContent,
@@ -44,7 +48,7 @@ import {
   SalePaymentStatus,
   SaleStatus,
 } from "@/types/sale.type"
-import { format } from "date-fns"
+import { format, startOfToday, endOfDay } from "date-fns"
 import { ArrowElbowRightIcon } from "@phosphor-icons/react/dist/ssr"
 
 const GET_SALE_HISTORY = gql`
@@ -86,19 +90,88 @@ const GET_SALE_HISTORY = gql`
   }
 `
 
+// The table node carries no register or editability info, so the row's sale is
+// fetched when its menu opens - same as the Sale Order dialog does. isEditable
+// is resolved server-side (assertSaleIsEditable), so the menu shows exactly
+// what updateSale would actually accept.
+const GET_SALE_ACTIONS = gql`
+  query SaleRowActions($_id: ID!) {
+    sale(_id: $_id) {
+      _id
+      saleNumber
+      isEditable
+      currentSaleStatus
+      refundedAmount
+      customer {
+        _id
+      }
+      register {
+        _id
+      }
+    }
+  }
+`
+
 function Actions({ row }: { row?: ISaleHistoryNode }) {
   const [open, setOpen] = useState(false)
+  const [refundOpen, setRefundOpen] = useState(false)
+  const router = useRouter()
+  const { can } = usePermissions()
   const data = useMemo(() => row, [row])
+  const _id = data?._id?.toString() || ""
+  const { data: saleData }: any = useQuery(GET_SALE_ACTIONS, {
+    variables: { _id },
+    fetchPolicy: "cache-and-network",
+    skip: !_id || !open,
+  })
+  const sale = saleData?.sale
+  const isEditable = !!sale?.isEditable
+  // Refunds go back as store credit, so they need a customer to credit and a
+  // sale that isn't voided. The dialog explains whichever rule is blocking;
+  // the server enforces all of it again in refundSaleItems.
+  const canRefund =
+    can("pos.sale.refund") &&
+    !!sale?.customer &&
+    sale?.currentSaleStatus !== "VOIDED"
 
   return (
-    <DropdownMenu modal open={open} onOpenChange={setOpen}>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-sm">
-          <GearIcon />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent side="left" align="start"></DropdownMenuContent>
-    </DropdownMenu>
+    <>
+      <DropdownMenu modal open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon-sm">
+            <GearIcon />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="left" align="start">
+          <DropdownMenuItem
+            disabled={!isEditable}
+            onSelect={() => {
+              if (!isEditable) return
+              setOpen(false)
+              // Same destination as the Sale Order dialog's Edit button: back
+              // to Process Sale with the sale preloaded, so the cashier
+              // confirms payment again to replace the original.
+              router.push(`/process/${sale?.register?._id}?edit=${_id}`)
+            }}
+          >
+            Edit
+          </DropdownMenuItem>
+          {can("pos.sale.refund") && (
+            <DropdownMenuItem
+              disabled={!canRefund}
+              onSelect={() => {
+                if (!canRefund) return
+                setOpen(false)
+                setRefundOpen(true)
+              }}
+            >
+              Refund
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <RefundDialog _id={_id} open={refundOpen} setOpen={setRefundOpen} />
+    </>
   )
 }
 
@@ -122,10 +195,19 @@ export default function Page() {
     key: string
     order: "ASC" | "DESC"
   } | null>(null)
-  // Filter state
+  // Filter state - defaults to today's sales, which is what a cashier or
+  // manager almost always wants on landing. The Date column filter renders
+  // from this same state, so it shows "Today" pre-applied and stays fully
+  // editable (change the range, or Reset to see all sales).
   const [filter, setFilter] = useState<
     { key: string; value: string; type: FilterType }[]
-  >([])
+  >(() => [
+    {
+      key: "date",
+      value: `${startOfToday().toISOString()}_${endOfDay(new Date()).toISOString()}`,
+      type: FilterType.DATE,
+    },
+  ])
   const { data, fetchMore, loading } = useQuery(GET_SALE_HISTORY, {
     variables: {
       first: rows,
@@ -204,7 +286,10 @@ export default function Page() {
             <span className="block font-medium">{row.original.saleNumber}</span>
             {row.original.notes && (
               <span className="flex gap-1 text-xs text-muted-foreground">
-                <ArrowElbowDownRightIcon /> {row.original.notes}
+                <ArrowElbowDownRightIcon />{" "}
+                <span className="whitespace-pre-line">
+                  {row.original.notes}
+                </span>
               </span>
             )}
             {row.original.paymentNotes != "" &&

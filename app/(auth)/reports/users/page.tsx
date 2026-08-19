@@ -57,13 +57,6 @@ const currency = (value?: number | null) =>
     currency: "PHP",
   }).format(value || 0)
 
-const formatHours = (hours?: number | null) => {
-  const totalMinutes = Math.max(0, Math.round((hours || 0) * 60))
-  const h = Math.floor(totalMinutes / 60)
-  const m = totalMinutes % 60
-  return `${h}:${m.toString().padStart(2, "0")}`
-}
-
 type SalesTargetPeriod = "DAILY" | "WEEKLY" | "MONTHLY"
 
 // Mirrors resolvers/salesTarget.resolver.ts's rangeForPeriod, so the export's
@@ -79,7 +72,7 @@ const periodDateRange = (period: SalesTargetPeriod, date: Date): DateRange => {
   }
 }
 
-// Users report has no outlet dimension (timecards/activity/targets aren't
+// Users report has no outlet dimension (activity/targets aren't
 // outlet-scoped), so this is a lighter title block than the Sales/Payments
 // reports' addExcelTitleRows - title + period only, no outlet line.
 function addTitleRows(
@@ -332,144 +325,6 @@ function SearchBox({
   )
 }
 
-const GET_TIMECARD_BY_USER = gql`
-  query TimeCardByUserTable($start: String!, $end: String!, $search: String) {
-    timeCardByUserTable(start: $start, end: $end, search: $search) {
-      _id
-      userName
-      hoursLogged
-    }
-  }
-`
-
-type TimeCardByUserNode = { _id: string; userName: string; hoursLogged: number }
-
-function TimecardsByUserTab({ range }: { range: DateRange }) {
-  const [search, setSearch] = useState("")
-
-  const { data, loading } = useQuery(GET_TIMECARD_BY_USER, {
-    variables: {
-      start: startOfDay(range.from || startOfToday()).toISOString(),
-      end: endOfDay(range.to || range.from || startOfToday()).toISOString(),
-      search,
-    },
-    fetchPolicy: "network-only",
-  })
-  const nodes: TimeCardByUserNode[] = (data as any)?.timeCardByUserTable || []
-
-  const columns: ColumnDef<TimeCardByUserNode>[] = useMemo(
-    () => [
-      {
-        id: "userName",
-        header: "Staff Member",
-        cell: ({ row }) => (
-          <span className="font-medium text-primary">
-            {row.original.userName}
-          </span>
-        ),
-      },
-      {
-        id: "hoursLogged",
-        header: "Hours logged",
-        cell: ({ row }) => formatHours(row.original.hoursLogged),
-      },
-    ],
-    []
-  )
-
-  return (
-    <div className="flex flex-col gap-1.5 pt-4">
-      <SearchBox placeholder="Find staff member" onSearch={setSearch} />
-      <TotalsTable
-        data={nodes}
-        loading={loading}
-        columns={columns}
-        emptyLabel="No timecards in this period."
-      />
-    </div>
-  )
-}
-
-const GET_TIMECARD_BY_DATE = gql`
-  query TimeCardByDateTable($start: String!, $end: String!, $search: String) {
-    timeCardByDateTable(start: $start, end: $end, search: $search) {
-      _id
-      date
-      clockIn
-      clockOut
-      userName
-      hoursLogged
-    }
-  }
-`
-
-type TimeCardByDateNode = {
-  _id: string
-  date: string
-  clockIn: string
-  clockOut: string | null
-  userName: string
-  hoursLogged: number
-}
-
-function TimecardsByDateTab({ range }: { range: DateRange }) {
-  const [search, setSearch] = useState("")
-
-  const { data, loading } = useQuery(GET_TIMECARD_BY_DATE, {
-    variables: {
-      start: startOfDay(range.from || startOfToday()).toISOString(),
-      end: endOfDay(range.to || range.from || startOfToday()).toISOString(),
-      search,
-    },
-    fetchPolicy: "network-only",
-  })
-  const nodes: TimeCardByDateNode[] = (data as any)?.timeCardByDateTable || []
-
-  const columns: ColumnDef<TimeCardByDateNode>[] = useMemo(
-    () => [
-      {
-        id: "date",
-        header: "Date",
-        cell: ({ row }) =>
-          row.original.date ? format(Number(row.original.date), "PP") : "-",
-      },
-      {
-        id: "timeInOut",
-        header: "Time in/out",
-        cell: ({ row }) =>
-          `${format(Number(row.original.clockIn), "p")} - ${
-            row.original.clockOut
-              ? format(Number(row.original.clockOut), "p")
-              : "-"
-          }`,
-      },
-      {
-        id: "userName",
-        header: "Staff Member",
-        cell: ({ row }) => row.original.userName,
-      },
-      {
-        id: "hoursLogged",
-        header: "Hours logged",
-        cell: ({ row }) => formatHours(row.original.hoursLogged),
-      },
-    ],
-    []
-  )
-
-  return (
-    <div className="flex flex-col gap-1.5 pt-4">
-      <SearchBox placeholder="Find staff member" onSearch={setSearch} />
-      <TotalsTable
-        data={nodes}
-        loading={loading}
-        columns={columns}
-        emptyLabel="No timecards in this period."
-      />
-    </div>
-  )
-}
-
 const GET_ACTIVITY_LOG = gql`
   query ActivityLogTable($start: String!, $end: String!, $search: String) {
     activityLogTable(start: $start, end: $end, search: $search) {
@@ -718,66 +573,6 @@ function SalesTargetsTab({
   )
 }
 
-async function exportTimecardsByUserExcel(
-  client: ReturnType<typeof useApolloClient>,
-  range: DateRange
-) {
-  const start = startOfDay(range.from || startOfToday()).toISOString()
-  const end = endOfDay(range.to || range.from || startOfToday()).toISOString()
-  const { data } = await client.query({
-    query: GET_TIMECARD_BY_USER,
-    variables: { start, end },
-    fetchPolicy: "network-only",
-  })
-  const nodes: TimeCardByUserNode[] = (data as any)?.timeCardByUserTable || []
-
-  const workbook = new ExcelJS.Workbook()
-  const sheet = workbook.addWorksheet("Timecards by User")
-  addTitleRows(sheet, "Timecards by User", range, 2)
-  sheet.columns = [{ width: 28 }, { width: 16 }]
-  const headerRow = sheet.addRow(["Staff Member", "Hours logged"])
-  styleExcelHeaderRow(headerRow)
-  nodes.forEach((n) => sheet.addRow([n.userName, formatHours(n.hoursLogged)]))
-
-  await downloadExcelWorkbook(workbook, "Timecards by User", range)
-}
-
-async function exportTimecardsByDateExcel(
-  client: ReturnType<typeof useApolloClient>,
-  range: DateRange
-) {
-  const start = startOfDay(range.from || startOfToday()).toISOString()
-  const end = endOfDay(range.to || range.from || startOfToday()).toISOString()
-  const { data } = await client.query({
-    query: GET_TIMECARD_BY_DATE,
-    variables: { start, end },
-    fetchPolicy: "network-only",
-  })
-  const nodes: TimeCardByDateNode[] = (data as any)?.timeCardByDateTable || []
-
-  const workbook = new ExcelJS.Workbook()
-  const sheet = workbook.addWorksheet("Timecards by Date")
-  addTitleRows(sheet, "Timecards by Date", range, 4)
-  sheet.columns = [{ width: 16 }, { width: 22 }, { width: 26 }, { width: 16 }]
-  const headerRow = sheet.addRow([
-    "Date",
-    "Time in/out",
-    "Staff Member",
-    "Hours logged",
-  ])
-  styleExcelHeaderRow(headerRow)
-  nodes.forEach((n) =>
-    sheet.addRow([
-      n.date ? format(Number(n.date), "dd MMM yyyy") : "-",
-      `${format(Number(n.clockIn), "p")} - ${n.clockOut ? format(Number(n.clockOut), "p") : "-"}`,
-      n.userName,
-      formatHours(n.hoursLogged),
-    ])
-  )
-
-  await downloadExcelWorkbook(workbook, "Timecards by Date", range)
-}
-
 async function exportActivityLogExcel(
   client: ReturnType<typeof useApolloClient>,
   range: DateRange
@@ -886,11 +681,7 @@ function ExportButton({
   const handleExport = async () => {
     setIsExporting(true)
     try {
-      if (activeTab === "timecards-user")
-        await exportTimecardsByUserExcel(client, range)
-      else if (activeTab === "timecards-date")
-        await exportTimecardsByDateExcel(client, range)
-      else if (activeTab === "activity-log")
+      if (activeTab === "activity-log")
         await exportActivityLogExcel(client, range)
       else await exportSalesTargetsExcel(client, period, date)
     } catch (error: any) {
@@ -913,7 +704,7 @@ function ExportButton({
 }
 
 export default function Page() {
-  const [activeTab, setActiveTab] = useState("timecards-user")
+  const [activeTab, setActiveTab] = useState("activity-log")
   const [appliedRange, setAppliedRange] = useState<DateRange>({
     from: subDays(new Date(), 6),
     to: new Date(),
@@ -983,17 +774,9 @@ export default function Page() {
       </div>
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList variant="line">
-          <TabsTrigger value="timecards-user">Timecards by User</TabsTrigger>
-          <TabsTrigger value="timecards-date">Timecards by Date</TabsTrigger>
           <TabsTrigger value="activity-log">Major Activity Log</TabsTrigger>
           <TabsTrigger value="sales-targets">Sales Targets</TabsTrigger>
         </TabsList>
-        <TabsContent value="timecards-user">
-          <TimecardsByUserTab range={appliedRange} />
-        </TabsContent>
-        <TabsContent value="timecards-date">
-          <TimecardsByDateTab range={appliedRange} />
-        </TabsContent>
         <TabsContent value="activity-log">
           <MajorActivityLogTab range={appliedRange} />
         </TabsContent>

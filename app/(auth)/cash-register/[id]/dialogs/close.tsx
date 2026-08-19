@@ -20,7 +20,7 @@ import { toast } from "sonner"
 type Props = {
   sessionId: string
   counted: Record<string, number>
-  expectedTotals: { method: { _id: string } }[]
+  expectedTotals: { method: { _id: string }; expected: number }[]
 }
 
 const CLOSE_REGISTER_SESSION = gql`
@@ -47,9 +47,12 @@ export default function CloseDialog({
     try {
       const tally = expectedTotals.map((item) => ({
         method: item.method._id,
+        // Same "defaults to Expected" fallback as the on-screen Counted
+        // box, so a field the cashier never touched closes out as a match
+        // rather than silently recording a 0.
         counted: Number.isFinite(counted[item.method._id])
           ? counted[item.method._id]
-          : 0,
+          : item.expected,
       }))
       const result: any = await closeSession({
         variables: { _id: sessionId, input: { tally } },

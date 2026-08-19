@@ -47,3 +47,38 @@ export const saleSchema = z
     message: "Discount cannot exceed the subtotal",
     path: ["discount"],
   })
+
+// Notes are edited on their own from the Sale Order dialog, without touching
+// items or payments, so they get their own small schema rather than reusing
+// saleSchema (which would demand the whole sale back).
+export const updateSaleNotesSchema = z.object({
+  _id: z.string().nonempty("Sale id is required"),
+  notes: z
+    .string()
+    .max(1000, "Notes must be at most 1000 characters")
+    .optional()
+    .nullable(),
+})
+
+// Refunds are issued as store credit, per line item - see refundSaleItems in
+// resolvers/sale.resolver.ts for the balance rules this can't express
+// (remaining quantity per line, walk-in sales, voided sales).
+export const refundSaleItemsSchema = z.object({
+  _id: z.string().nonempty("Sale id is required"),
+  items: z
+    .array(
+      z.object({
+        itemIndex: z.number().int().nonnegative(),
+        quantity: z
+          .number()
+          .int()
+          .positive("Refund quantity must be at least 1"),
+      })
+    )
+    .nonempty("Select at least one item to refund"),
+  note: z
+    .string()
+    .max(500, "Note must be at most 500 characters")
+    .optional()
+    .nullable(),
+})

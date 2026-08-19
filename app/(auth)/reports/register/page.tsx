@@ -2,6 +2,7 @@
 import { useCallback, useMemo, useState } from "react"
 import gql from "graphql-tag"
 import { useQuery } from "@apollo/client/react"
+import { useRouter } from "next/navigation"
 import { format } from "date-fns"
 import {
   startOfToday,
@@ -48,7 +49,6 @@ import SortHeader from "@/components/custom/sort-header"
 import { StatusBadge } from "@/components/custom/status-badge"
 import { IRegisterSessionTableNode } from "@/types/registerSession.type"
 import { IVoidedSaleNode } from "@/types/sale.type"
-import ShiftDetailDrawer from "./_dialogs/shift-detail"
 import SaleRowViewDialog from "@/app/(auth)/sale-history/_dialogs/row-view"
 
 const GET_SHIFT_REPORT = gql`
@@ -252,6 +252,7 @@ function DateRangeFilter({
 }
 
 function ShiftReportTab() {
+  const router = useRouter()
   const [rows, setRows] = useState<number>(8)
   const [page, setPage] = useState<{
     current: number
@@ -542,7 +543,7 @@ function ShiftReportTab() {
         columns={columns}
         data={nodes.slice((page.current - 1) * rows, page.current * rows)}
         noFooter
-        rowView={<ShiftDetailDrawer />}
+        onRowClick={(row: any) => router.push(`/reports/register/${row._id}`)}
       />
     </div>
   )

@@ -4,6 +4,7 @@ import React from "react"
 import { SidebarProvider } from "@/components/ui/sidebar"
 import RequirePasswordChange from "@/components/custom/layouts/require-password-change"
 import IdleLockScreen from "@/components/custom/layouts/idle-lock-screen"
+import RequirePermission from "@/components/custom/layouts/require-permission"
 
 export default function AuthLayout({
   children,
@@ -17,7 +18,9 @@ export default function AuthLayout({
           <AppSidebar />
           <main className="flex flex-1 flex-col">
             <Header />
-            <div className="flex-1">{children}</div>
+            <div className="flex-1">
+              <RequirePermission>{children}</RequirePermission>
+            </div>
           </main>
         </SidebarProvider>
       </RequirePasswordChange>

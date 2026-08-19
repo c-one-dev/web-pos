@@ -18,6 +18,9 @@ export interface IUser {
   role: Role
   pin: string
   mustChangePassword: boolean
+  // Undefined when no explicit permissions have ever been saved for this
+  // user - see validators/permissionRegistry.ts.
+  permissions?: string[]
   isActive: boolean
 }
 

@@ -90,6 +90,7 @@ const FETCH_PRODUCT = gql`
         name
       }
       currentPrice
+      cost
     }
   }
 `
@@ -189,6 +190,7 @@ export default function FormDialog({ _id, onClose }: Props) {
       barcode: "",
       description: "",
       currentPrice: 0,
+      cost: 0,
       type: "",
       brand: "",
       registers: [] as any[],
@@ -216,6 +218,7 @@ export default function FormDialog({ _id, onClose }: Props) {
             barcode: value.barcode,
             description: value.description,
             currentPrice: value.currentPrice,
+            cost: value.cost,
             type: value.type || null,
             brand: value.brand || null,
             registers: value.registers || [],
@@ -255,6 +258,7 @@ export default function FormDialog({ _id, onClose }: Props) {
       form.setFieldValue("barcode", data.product.barcode)
       form.setFieldValue("description", data.product.description)
       form.setFieldValue("currentPrice", data.product.currentPrice)
+      form.setFieldValue("cost", data.product.cost || 0)
       form.setFieldValue("type", data.product.type?._id || "")
       form.setFieldValue("brand", data.product.brand?._id || "")
       form.setFieldValue(
@@ -399,6 +403,47 @@ export default function FormDialog({ _id, onClose }: Props) {
                           type="number"
                         />
                       </InputGroup>
+                      {isInvalid && (
+                        <FieldError errors={field.state.meta.errors} />
+                      )}
+                    </Field>
+                  )
+                }}
+              </form.Field>
+              <form.Field name="cost">
+                {(field) => {
+                  const isInvalid =
+                    field.state.meta.isTouched && !field.state.meta.isValid
+                  return (
+                    <Field data-invalid={isInvalid}>
+                      <FieldLabel htmlFor={field.name}>
+                        Cost (optional)
+                      </FieldLabel>
+                      <InputGroup className="-my-1">
+                        <InputGroupAddon>₱</InputGroupAddon>
+                        <InputGroupInput
+                          placeholder="Cost"
+                          disabled={isPending}
+                          id={field.name}
+                          name={field.name}
+                          value={
+                            Number.isNaN(field.state.value)
+                              ? ""
+                              : field.state.value
+                          }
+                          onBlur={field.handleBlur}
+                          onChange={(e) =>
+                            field.handleChange(parseFloat(e.target.value))
+                          }
+                          onFocus={(e) => e.currentTarget.select()}
+                          aria-invalid={isInvalid}
+                          type="number"
+                        />
+                      </InputGroup>
+                      <FieldDescription>
+                        Purchase cost per unit, used for the Cost of Goods
+                        Sold report. Leave at 0 if unknown.
+                      </FieldDescription>
                       {isInvalid && (
                         <FieldError errors={field.state.meta.errors} />
                       )}

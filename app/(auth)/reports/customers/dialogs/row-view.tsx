@@ -264,7 +264,7 @@ export default function RowViewDrawer({ _id, open, setOpen, onClose }: Props) {
       <DrawerContent
         onOpenAutoFocus={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
-        className="lg:min-w-6xl"
+        className="w-full data-[vaul-drawer-direction=right]:w-full data-[vaul-drawer-direction=right]:sm:max-w-[min(80rem,96vw)]"
       >
         <DrawerHeader className="flex flex-row justify-between">
           <div>
