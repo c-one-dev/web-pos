@@ -139,7 +139,7 @@ export default function Page() {
   // Responsiveness
   const isMobile = useIsMobile()
 
-  console.log("Product types data:", data)
+  // console.log("Product types data:", data)
 
   const { total, nodes, endCursor } = useMemo(() => {
     const result = data as any
