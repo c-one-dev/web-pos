@@ -24,7 +24,6 @@ import {
 import { cn } from "@/lib/utils"
 import CashMovementDialog from "./dialogs/cash-movement"
 import CloseDialog from "./dialogs/close"
-import ClosureReportDialog from "./dialogs/closure-report"
 
 const GET_REGISTER = gql`
   query RegisterDetail($_id: ID!) {
@@ -107,8 +106,6 @@ export default function Page() {
   const register = (registerData as any)?.register
   const session = (sessionData as any)?.activeRegisterSession
   const [counted, setCounted] = useState<Record<string, number>>({})
-  // Set once the shift is closed, which is what shows the summary report.
-  const [closedSessionId, setClosedSessionId] = useState<string | null>(null)
 
   let body: React.ReactNode
 
@@ -353,27 +350,11 @@ export default function Page() {
             sessionId={session._id}
             counted={counted}
             expectedTotals={expectedTotals}
-            onClosed={setClosedSessionId}
           />
         </div>
       </div>
     )
   }
 
-  return (
-    <>
-      {body}
-      {/*
-        Rendered here rather than inside CloseDialog: closing the shift makes
-        activeRegisterSession null, which swaps the page for the "register is
-        closed" state - anything mounted inside that branch disappears before
-        it can be read.
-      */}
-      <ClosureReportDialog
-        sessionId={closedSessionId || ""}
-        open={!!closedSessionId}
-        setOpen={(next) => !next && setClosedSessionId(null)}
-      />
-    </>
-  )
+  return body
 }

@@ -11,18 +11,17 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { WarningIcon } from "@phosphor-icons/react"
-import { useMutation } from "@apollo/client/react"
+import { useLazyQuery, useMutation } from "@apollo/client/react"
 import gql from "graphql-tag"
 import { useState } from "react"
 import { toast } from "sonner"
+import { useRouter } from "next/navigation"
+import { GET_CLOSURE_DETAIL, printRegisterSummary } from "./closure-report"
 
 type Props = {
   sessionId: string
   counted: Record<string, number>
   expectedTotals: { method: { _id: string }; expected: number }[]
-  // Handing the closed session id up to the page, which owns the summary
-  // report - this component is unmounted the moment the shift closes.
-  onClosed: (sessionId: string) => void
 }
 
 const CLOSE_REGISTER_SESSION = gql`
@@ -38,9 +37,12 @@ export default function CloseDialog({
   sessionId,
   counted,
   expectedTotals,
-  onClosed,
 }: Props) {
   const [open, setOpen] = useState(false)
+  const router = useRouter()
+  const [fetchClosureDetail] = useLazyQuery(GET_CLOSURE_DETAIL, {
+    fetchPolicy: "network-only",
+  })
   const [closeSession, { loading }] = useMutation(CLOSE_REGISTER_SESSION, {
     refetchQueries: ["ActiveRegisterSession", "Registers", "RegisterDetail"],
   })
@@ -62,9 +64,21 @@ export default function CloseDialog({
       if (result.data.closeRegisterSession.ok) {
         toast.success(result.data.closeRegisterSession.message)
         setOpen(false)
-        // The summary report replaces the immediate redirect; leaving it is
-        // what takes the user back to the register list.
-        onClosed(sessionId)
+        // Closing a shift ends in paperwork, so the summary goes straight to
+        // the print preview. A failure to print must not read as a failure to
+        // close - the shift is already closed either way.
+        try {
+          const { data }: any = await fetchClosureDetail({
+            variables: { _id: sessionId },
+          })
+          await printRegisterSummary(data?.registerSessionClosureDetail)
+        } catch (printError) {
+          console.warn("Register summary print failed:", printError)
+          toast.warning(
+            "The shift is closed, but the summary couldn't be printed. Reprint it from Reports → Register."
+          )
+        }
+        router.push("/cash-register")
       }
     } catch (error: any) {
       toast.error(error.graphQLErrors?.[0]?.message ?? error.message)
