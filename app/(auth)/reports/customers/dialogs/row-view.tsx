@@ -40,6 +40,17 @@ type Props = {
   onClose?: () => void
 }
 
+// Just enough to know whether there is anything to settle - the drawer only
+// needs the count, the settle dialog fetches the full list when it opens.
+const GET_OUTSTANDING_COUNT = gql`
+  query CustomerOutstandingCount($customer: ID!) {
+    customerOutstandingSales(customer: $customer) {
+      _id
+      outstandingAmount
+    }
+  }
+`
+
 const GET_CUSTOMER = gql`
   query CustomerReport($_id: ID!) {
     customerReport(_id: $_id) {
@@ -263,7 +274,15 @@ export default function RowViewDrawer({ _id, open, setOpen, onClose }: Props) {
     onClose?.()
   }
 
+  const { can } = usePermissions()
+  const canSettle = can("pos.sale.settle")
   const [settleOpen, setSettleOpen] = useState(false)
+  const { data: outstandingData }: any = useQuery(GET_OUTSTANDING_COUNT, {
+    variables: { customer: _id },
+    fetchPolicy: "cache-and-network",
+    skip: !open || !_id || !canSettle,
+  })
+  const outstandingSales = outstandingData?.customerOutstandingSales ?? []
   const maxLimit = customer?.accountLimit?.max || 0
   const usedLimit = Math.max(
     maxLimit - (customer?.accountLimit?.current || 0),
@@ -271,8 +290,6 @@ export default function RowViewDrawer({ _id, open, setOpen, onClose }: Props) {
   )
   const limitUsedPercent =
     maxLimit > 0 ? Math.min((usedLimit / maxLimit) * 100, 100) : 0
-  const { can } = usePermissions()
-  const canSettle = can("pos.sale.settle")
 
   return (
     <Drawer direction="right" modal open={open} onOpenChange={handleClose}>
@@ -305,15 +322,17 @@ export default function RowViewDrawer({ _id, open, setOpen, onClose }: Props) {
               Settles this customer's unpaid on-account sales in one pass -
               pick any combination, choose how they are paying, done.
             */}
-            {canSettle && (
+            {canSettle && outstandingSales.length > 0 && (
               <Button
-                variant="outline"
-                size="sm"
-                className="rounded-md"
+                size="lg"
+                className="rounded-md bg-primary font-semibold hover:bg-primary/90"
                 onClick={() => setSettleOpen(true)}
                 disabled={!_id}
               >
                 <HandCoinsIcon /> Bulk Payment
+                <span className="ml-0.5 rounded-full bg-primary-foreground/20 px-1.5 text-xs">
+                  {outstandingSales.length}
+                </span>
               </Button>
             )}
           </div>

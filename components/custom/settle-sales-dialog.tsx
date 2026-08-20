@@ -149,6 +149,7 @@ export default function SettleSalesDialog({
       "CustomerSalesTable",
       "CustomerReport",
       "CustomerOutstandingSales",
+      "CustomerOutstandingCount",
     ],
     onQueryUpdated: refetchOnlyReadyQueries,
     // Deliberately NOT awaiting the refetches. A settled sale stops being

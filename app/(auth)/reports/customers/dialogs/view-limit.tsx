@@ -238,7 +238,10 @@ export default function AccountLimitDrawer({ _id }: Props) {
   return (
     <Drawer direction="right" modal open={open} onOpenChange={setOpen}>
       <DrawerTrigger asChild>
-        <Button variant="outline" size="sm" className="rounded-md">
+        <Button
+          size="lg"
+          className="rounded-md bg-blue-700 font-semibold text-white hover:bg-blue-700/90"
+        >
           <CreditCardIcon /> Account Limit
         </Button>
       </DrawerTrigger>

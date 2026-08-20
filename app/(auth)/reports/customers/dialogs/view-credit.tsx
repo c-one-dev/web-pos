@@ -229,7 +229,10 @@ export default function StoreCreditDrawer({ _id }: Props) {
   return (
     <Drawer direction="right" modal open={open} onOpenChange={setOpen}>
       <DrawerTrigger asChild>
-        <Button variant="outline" size="sm" className="rounded-md">
+        <Button
+          size="lg"
+          className="rounded-md bg-emerald-600 font-semibold text-white hover:bg-emerald-600/90"
+        >
           <GiftIcon /> Store Credit
         </Button>
       </DrawerTrigger>
