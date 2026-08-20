@@ -27,6 +27,7 @@ import { useMutation, useQuery } from "@apollo/client/react"
 import gql from "graphql-tag"
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
+import { refetchOnlyReadyQueries } from "@/lib/refetch"
 import { format } from "date-fns"
 import { useRegisterStore } from "@/hooks/use-register"
 
@@ -146,6 +147,7 @@ export default function SettleSalesDialog({
       "CustomerReport",
       "CustomerOutstandingSales",
     ],
+    onQueryUpdated: refetchOnlyReadyQueries,
     awaitRefetchQueries: true,
   })
 

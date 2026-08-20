@@ -80,6 +80,7 @@ import TotalDiscount from "./_dialogs/total-discount"
 import Pay from "./_dialogs/pay"
 import ReceiptDialog from "./_dialogs/receipt"
 import { toast } from "sonner"
+import { refetchOnlyReadyQueries } from "@/lib/refetch"
 import { Spinner } from "@/components/ui/spinner"
 import OpenRegisterDialog from "@/components/custom/open-register-dialog"
 
@@ -298,6 +299,7 @@ function ProcessSalePage({
   const [generateSale] = useMutation(GENERATE_SALE)
   const [updateSale] = useMutation(UPDATE_SALE, {
     refetchQueries: ["SaleHistoryTable", "Sale"],
+    onQueryUpdated: refetchOnlyReadyQueries,
   })
   const [openPay, setOpenPay] = useState(false)
   const [receiptSaleId, setReceiptSaleId] = useState<string | null>(null)

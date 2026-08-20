@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/table"
 import { Spinner } from "@/components/ui/spinner"
 import { toast } from "sonner"
+import { refetchOnlyReadyQueries } from "@/lib/refetch"
 import {
   Tooltip,
   TooltipContent,
@@ -285,12 +286,14 @@ export default function RowViewDialog({
   const [isPending, startTransition] = useTransition()
   const [voidSale] = useMutation(VOID_SALE, {
     refetchQueries: ["Sale", "SaleHistoryTable"],
+    onQueryUpdated: refetchOnlyReadyQueries,
     awaitRefetchQueries: true,
   })
   const [updateSaleNotes, { loading: savingNotes }] = useMutation(
     UPDATE_SALE_NOTES,
     {
       refetchQueries: ["Sale", "SaleHistoryTable"],
+      onQueryUpdated: refetchOnlyReadyQueries,
       awaitRefetchQueries: true,
     }
   )

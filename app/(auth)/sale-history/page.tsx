@@ -91,6 +91,46 @@ const GET_SALE_HISTORY = gql`
   }
 `
 
+// Settling is the main thing you do with an unpaid on-account sale, so it gets
+// a button right in the Payment Status cell rather than only living in the row
+// menu. Keyed off the status alone - the table node already carries it, so no
+// extra query per row - and the dialog re-checks what's actually outstanding.
+function PaymentStatusCell({ row }: { row: ISaleHistoryNode }) {
+  const [settleOpen, setSettleOpen] = useState(false)
+  const { can } = usePermissions()
+  const status = row.currentSalePaymentStatus
+  const owesMoney = status === "PENDING" || status === "PARTIALLY_PAID"
+  const canSettle =
+    can("pos.sale.settle") && owesMoney && row.currentSaleStatus !== "VOIDED"
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <StatusBadge status={status} />
+      {canSettle && (
+        <>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-6 rounded-md px-2 text-xs"
+            onClick={(e) => {
+              // The row itself opens the Sale Order drawer on click.
+              e.stopPropagation()
+              setSettleOpen(true)
+            }}
+          >
+            Pay
+          </Button>
+          <SettleSalesDialog
+            saleId={row._id?.toString() || ""}
+            open={settleOpen}
+            setOpen={setSettleOpen}
+          />
+        </>
+      )}
+    </div>
+  )
+}
+
 // The table node carries no register or editability info, so the row's sale is
 // fetched when its menu opens - same as the Sale Order dialog does. isEditable
 // is resolved server-side (assertSaleIsEditable), so the menu shows exactly
@@ -399,9 +439,7 @@ export default function Page() {
             onSortChange={setSort}
           />
         ),
-        cell: ({ row }) => (
-          <StatusBadge status={row.original.currentSalePaymentStatus} />
-        ),
+        cell: ({ row }) => <PaymentStatusCell row={row.original} />,
         footer: () => (
           <ColumnFilter
             label="Payment Status"

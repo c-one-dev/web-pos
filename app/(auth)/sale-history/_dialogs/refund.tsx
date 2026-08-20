@@ -17,6 +17,7 @@ import { useMutation, useQuery } from "@apollo/client/react"
 import gql from "graphql-tag"
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
+import { refetchOnlyReadyQueries } from "@/lib/refetch"
 
 type Props = {
   _id: string
@@ -81,6 +82,7 @@ export default function RefundDialog({ _id, open, setOpen }: Props) {
     REFUND_SALE_ITEMS,
     {
       refetchQueries: ["Sale", "SaleHistoryTable", "SaleRowActions"],
+      onQueryUpdated: refetchOnlyReadyQueries,
       awaitRefetchQueries: true,
     }
   )
