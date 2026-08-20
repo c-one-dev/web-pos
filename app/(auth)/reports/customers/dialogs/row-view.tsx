@@ -64,9 +64,6 @@ const GET_CUSTOMER = gql`
       storeCredit {
         current
       }
-      currentBalance {
-        current
-      }
       createdAt
     }
   }
@@ -371,30 +368,15 @@ export default function RowViewDrawer({ _id, open, setOpen, onClose }: Props) {
 
             <section className="border bg-muted/40 p-3">
               <Label className="text-base font-semibold text-primary">
-                Wallets
+                Store credit
               </Label>
-              <div className="mt-2 grid grid-cols-2 gap-3 lg:grid-cols-1">
-                <div>
-                  {/*
-                    Change the customer left on their account at checkout - a
-                    separate wallet from store credit, spendable as its own
-                    tender in Process Sale.
-                  */}
-                  <span className="block text-xs text-muted-foreground">
-                    Current balance
-                  </span>
-                  <span className="block text-xl font-semibold text-blue-700 tabular-nums">
-                    {currency(customer?.currentBalance?.current)}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-xs text-muted-foreground">
-                    Store credit
-                  </span>
-                  <span className="block text-xl font-semibold text-green-700 tabular-nums">
-                    {currency(customer?.storeCredit?.current)}
-                  </span>
-                </div>
+              <div className="mt-2">
+                <span className="block text-xs text-muted-foreground">
+                  Available
+                </span>
+                <span className="block text-xl font-semibold text-green-700 tabular-nums">
+                  {currency(customer?.storeCredit?.current)}
+                </span>
               </div>
             </section>
           </div>

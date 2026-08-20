@@ -72,9 +72,6 @@ const GET_CUSTOMER_REPORT = gql`
       storeCredit {
         current
       }
-      currentBalance {
-        current
-      }
     }
   }
 `
@@ -178,15 +175,7 @@ function CustomerSummary({
           </div>
         </div>
         <Separator className="my-2" />
-        <div className="grid grid-cols-3 gap-2">
-          <div>
-            <span className="block text-xs text-muted-foreground">
-              Current balance
-            </span>
-            <span className="block font-medium text-blue-700">
-              {formatCurrency(customer?.currentBalance?.current || 0)}
-            </span>
-          </div>
+        <div className="grid grid-cols-2 gap-2">
           <div>
             <span className="block text-xs text-muted-foreground">
               Store credit
@@ -256,10 +245,6 @@ function Pay({
       })) || []),
       { _id: process.env.NEXT_PUBLIC_STORE_CREDIT_ID, name: "Store Credit" },
       { _id: process.env.NEXT_PUBLIC_ON_ACCOUNT_ID, name: "On Account" },
-      {
-        _id: process.env.NEXT_PUBLIC_CURRENT_BALANCE_ID,
-        name: "Current Balance",
-      },
     ],
     [register]
   )
@@ -521,26 +506,6 @@ function Pay({
                   >
                     On Account
                   </Button>
-                  <Button
-                    size="lg"
-                    className="p-2 text-base sm:p-3 sm:text-xl"
-                    // Also disabled when the payment method hasn't been set up
-                    // yet, so the button can't look available and do nothing.
-                    disabled={
-                      !state.customer ||
-                      !process.env.NEXT_PUBLIC_CURRENT_BALANCE_ID
-                    }
-                    title={
-                      process.env.NEXT_PUBLIC_CURRENT_BALANCE_ID
-                        ? undefined
-                        : "Set NEXT_PUBLIC_CURRENT_BALANCE_ID to the Current Balance payment method's id."
-                    }
-                    onClick={() =>
-                      addPayment(process.env.NEXT_PUBLIC_CURRENT_BALANCE_ID)
-                    }
-                  >
-                    Current Balance
-                  </Button>
                 </ButtonGroup>
                 <div className="space-y-2">
                   <Label>Note (optional)</Label>
@@ -581,7 +546,7 @@ function Pay({
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>
-                Keep the change on the customer&apos;s balance?
+                Keep the change as store credit?
               </AlertDialogTitle>
               <AlertDialogDescription>
                 This sale has{" "}
@@ -591,7 +556,7 @@ function Pay({
                     currency: "PHP",
                   }).format(state.changeAmount)}
                 </span>{" "}
-                in change. Add it to the customer&apos;s Current Balance for a
+                in change. Add it to the customer&apos;s store credit for a
                 future purchase, or hand it back in cash?
               </AlertDialogDescription>
             </AlertDialogHeader>
@@ -604,7 +569,7 @@ function Pay({
                 No, give the cash
               </Button>
               <Button type="button" onClick={() => submitSale(true)}>
-                Yes, keep on balance
+                Yes, keep as credit
               </Button>
             </AlertDialogFooter>
           </AlertDialogContent>

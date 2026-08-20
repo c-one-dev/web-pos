@@ -1,6 +1,7 @@
 "use client"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { Kbd } from "@/components/ui/kbd"
 import { useMutation, useQuery } from "@apollo/client/react"
 import { gql } from "@apollo/client"
 import { ButtonGroup } from "@/components/ui/button-group"
@@ -398,6 +399,34 @@ function ProcessSalePage({
     },
   })
 
+  // Keyboard shortcuts for the two things a cashier does on every sale.
+  // Both keys carry a browser default that has to be suppressed - F3 opens
+  // the browser's find bar, and F5 would reload the page and drop the cart
+  // mid-sale - so preventDefault runs before anything else.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "F3" && event.key !== "F5") return
+      event.preventDefault()
+
+      if (event.key === "F3") {
+        setOpenSearchCommand(true)
+        return
+      }
+
+      // F5 opens the Pay sheet, exactly like clicking the green button -
+      // it doesn't ring the sale up; confirming inside the sheet still does.
+      if (isPending || openPay) return
+      if ((form.state.values.items?.length ?? 0) === 0) {
+        toast.error("Add an item to the cart before taking payment.")
+        return
+      }
+      setOpenPay(true)
+    }
+
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [form, isPending, openPay])
+
   const formValues = useStore(form.store, (state) => state.values)
 
   // Mirror the whole cart to localStorage on every change so a refresh or
@@ -619,6 +648,7 @@ function ProcessSalePage({
                             type="button"
                           >
                             Search SKU, Barcode / Product Name
+                            <Kbd>F3</Kbd>
                           </Button>
                         </ButtonGroup>
                       </PopoverTrigger>
@@ -944,7 +974,12 @@ function ProcessSalePage({
                           disabled={state.items.length === 0}
                           loading={isPending}
                         >
-                          <span>Pay</span>
+                          <span className="flex items-center gap-2">
+                            Pay
+                            <Kbd className="bg-primary-foreground/20 text-primary-foreground">
+                              F5
+                            </Kbd>
+                          </span>
                           <span>
                             {new Intl.NumberFormat("en-PH", {
                               style: "currency",

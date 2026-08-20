@@ -36,7 +36,6 @@ const generateCustomerNode = (customer: any) => ({
   email: customer.email,
   remainingAccountLimit: customer.accountLimit.current,
   remainingStoreCredit: customer.storeCredit.current,
-  currentBalance: customer.currentBalance?.current || 0,
   isActive: customer.isActive,
   createdAt: customer.createdAt,
   updatedAt: customer.updatedAt,
@@ -48,7 +47,7 @@ export const customerResolver = {
       try {
         const customer = await Customer.findById(_id)
           .select(
-            "_id name email accountLimit storeCredit currentBalance isActive createdAt updatedAt"
+            "_id name email accountLimit storeCredit isActive createdAt updatedAt"
           )
           .lean()
         if (!customer) throw new GraphQLError("Customer not found")
@@ -60,7 +59,7 @@ export const customerResolver = {
     customerReport: async (_: any, { _id }: any) => {
       try {
         const customer = await Customer.findById(_id)
-          .select("_id name email accountLimit storeCredit currentBalance createdAt")
+          .select("_id name email accountLimit storeCredit createdAt")
           .lean()
         if (!customer) throw new GraphQLError("Customer not found")
         return customer

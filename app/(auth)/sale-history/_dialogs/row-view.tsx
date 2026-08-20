@@ -565,11 +565,11 @@ export default function RowViewDialog({
                   Without this row a kept-change sale reads as "Received 500,
                   Change 0" and looks like the customer was short-changed. The
                   cash stayed in the drawer on purpose - it moved onto the
-                  customer's balance instead.
+                  customer's store credit instead.
                 */}
                 {creditedChange > 0 && (
                   <Amount
-                    label="Kept on current balance"
+                    label="Kept as store credit"
                     value={creditedChange}
                     className="text-blue-700"
                   />

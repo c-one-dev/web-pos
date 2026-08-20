@@ -113,8 +113,8 @@ export const saleSchema = gql`
     receivedAmount: Float
     changeAmount: Float
     netAmount: Float
-    # Change the customer left on their Current Balance instead of taking in
-    # cash. changeAmount is 0 on such a sale - the cash stayed in the drawer.
+    # Change the customer kept as store credit instead of taking in cash.
+    # changeAmount is 0 on such a sale - the cash stayed in the drawer.
     changeCreditedAmount: Float
     notes: String
     currentSalePaymentStatus: SalePaymentStatus

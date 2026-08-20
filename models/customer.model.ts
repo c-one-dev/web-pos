@@ -4,8 +4,6 @@ import {
   IAccountLimitHistoryItem,
   IStoreCredit,
   IStoreCreditHistoryItem,
-  ICurrentBalance,
-  ICurrentBalanceHistoryItem,
   type ICustomer,
 } from "../types/customer.type"
 
@@ -42,24 +40,6 @@ const StoreCredit = new Schema<IStoreCredit>(
   }
 )
 
-// Change the customer left on their account at checkout. Kept apart from
-// store credit so each wallet has a single source: this one only ever grows
-// from kept change and shrinks when spent as a tender.
-const CurrentBalanceHistoryItem = new Schema<ICurrentBalanceHistoryItem>({
-  remaining: { type: Number, required: true },
-  transacted: { type: Number, required: true },
-  date: { type: Date, required: true },
-  description: { type: String, required: true },
-})
-
-const CurrentBalance = new Schema<ICurrentBalance>(
-  {
-    current: { type: Number, required: true, default: 0 },
-    history: { type: [CurrentBalanceHistoryItem], required: false },
-  },
-  { _id: false }
-)
-
 const Customer = new Schema<ICustomer>(
   {
     firstName: { type: String, required: true },
@@ -79,13 +59,6 @@ const Customer = new Schema<ICustomer>(
     email: { type: String, required: false },
     accountLimit: { type: AccountLimit, required: true },
     storeCredit: { type: StoreCredit, required: true },
-    // Not required: customers created before Current Balance existed simply
-    // have no wallet yet, and read as 0 until their first kept change.
-    currentBalance: {
-      type: CurrentBalance,
-      required: false,
-      default: () => ({ current: 0, history: [] }),
-    },
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }
