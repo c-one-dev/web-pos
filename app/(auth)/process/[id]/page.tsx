@@ -37,12 +37,7 @@ import {
 import Image from "next/image"
 import { cn } from "@/lib/utils"
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
-import {
-  Command,
+  CommandDialog,
   CommandEmpty,
   CommandGroup,
   CommandInput,
@@ -632,56 +627,26 @@ function ProcessSalePage({
                     </div>
                   )}
                   <div className="flex flex-col gap-1.5 sm:flex-row">
-                    <Popover
-                      open={openSearchCommand}
-                      onOpenChange={setOpenSearchCommand}
-                    >
-                      <PopoverTrigger asChild>
-                        <ButtonGroup className="w-full bg-white">
-                          <Button
-                            variant="outline"
-                            role="combobox"
-                            aria-expanded={openSearchCommand}
-                            className={cn(
-                              "font-base flex-1 justify-between border-r-transparent bg-white text-muted-foreground capitalize hover:bg-transparent hover:text-muted-foreground"
-                            )}
-                            type="button"
-                          >
-                            Search SKU, Barcode / Product Name
-                            <Kbd>F3</Kbd>
-                          </Button>
-                        </ButtonGroup>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-(--radix-popover-trigger-width) p-0">
-                        <Command>
-                          <CommandInput placeholder="Search products" />
-                          <CommandList>
-                            <CommandEmpty>No option/s found.</CommandEmpty>
-                            <CommandGroup>
-                              {register?.products?.map((product: IProduct) => (
-                                <CommandItem
-                                  key={product._id.toString()}
-                                  // cmdk scores the typed query against `value`,
-                                  // so it has to carry the fields the placeholder
-                                  // promises — an ObjectId matches nothing.
-                                  value={`${product.name} ${product.sku} ${product.barcode}`}
-                                  className="cursor-pointer"
-                                  onSelect={() => {
-                                    addProductToCart(product)
-                                    setOpenSearchCommand(false)
-                                  }}
-                                >
-                                  <span className="block">{product.name}</span>
-                                  <span className="text-muted-foreground">
-                                    {product.sku}
-                                  </span>
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
+                    {/*
+                      The field is a button, not an input: typing happens in
+                      the centred palette F3 opens, so there's only one search
+                      surface to learn and it works the same either way.
+                    */}
+                    <ButtonGroup className="w-full bg-white">
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={openSearchCommand}
+                        onClick={() => setOpenSearchCommand(true)}
+                        className={cn(
+                          "font-base flex-1 justify-between border-r-transparent bg-white text-muted-foreground capitalize hover:bg-transparent hover:text-muted-foreground"
+                        )}
+                        type="button"
+                      >
+                        Search SKU, Barcode / Product Name
+                        <Kbd>F3</Kbd>
+                      </Button>
+                    </ButtonGroup>
                     <ButtonGroup className="shrink-0 self-start sm:self-auto">
                       <Button
                         variant="outline"
@@ -996,6 +961,59 @@ function ProcessSalePage({
           }}
         />
       </form>
+      {/*
+        Product search as a centred command palette (F3), rather than a
+        dropdown pinned under the field - at a register the cashier is looking
+        at the middle of the screen, not at the toolbar.
+      */}
+      <CommandDialog
+        open={openSearchCommand}
+        onOpenChange={setOpenSearchCommand}
+        title="Search products"
+        description="Find a product by name, SKU or barcode and add it to the cart."
+        className="sm:max-w-2xl"
+      >
+        <CommandInput placeholder="Search SKU, Barcode / Product Name" />
+        <CommandList className="max-h-[60vh]">
+          <CommandEmpty>No product found.</CommandEmpty>
+          <CommandGroup heading="Products">
+            {register?.products?.map((product: IProduct) => (
+              <CommandItem
+                key={product._id.toString()}
+                // cmdk scores the typed query against `value`, so it has to
+                // carry the fields the placeholder promises - an ObjectId
+                // matches nothing.
+                value={`${product.name} ${product.sku} ${product.barcode}`}
+                className="cursor-pointer gap-3 py-2.5"
+                onSelect={() => {
+                  addProductToCart(product)
+                  setOpenSearchCommand(false)
+                }}
+              >
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-slate-200 text-sm font-semibold text-slate-600">
+                  {product.name.slice(0, 2).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">
+                    {product.name}
+                  </span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {[product.sku, product.barcode]
+                      .filter(Boolean)
+                      .join(" · ") || "No SKU"}
+                  </span>
+                </div>
+                <span className="shrink-0 font-medium tabular-nums">
+                  {new Intl.NumberFormat("en-PH", {
+                    style: "currency",
+                    currency: "PHP",
+                  }).format(product.currentPrice)}
+                </span>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        </CommandList>
+      </CommandDialog>
       <ReceiptDialog
         saleId={receiptSaleId}
         onClose={() => {
