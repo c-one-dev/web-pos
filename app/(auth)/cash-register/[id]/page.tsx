@@ -24,6 +24,7 @@ import {
 import { cn } from "@/lib/utils"
 import CashMovementDialog from "./dialogs/cash-movement"
 import CloseDialog from "./dialogs/close"
+import ClosureReportDialog from "./dialogs/closure-report"
 
 const GET_REGISTER = gql`
   query RegisterDetail($_id: ID!) {
@@ -106,25 +107,25 @@ export default function Page() {
   const register = (registerData as any)?.register
   const session = (sessionData as any)?.activeRegisterSession
   const [counted, setCounted] = useState<Record<string, number>>({})
+  // Set once the shift is closed, which is what shows the summary report.
+  const [closedSessionId, setClosedSessionId] = useState<string | null>(null)
+
+  let body: React.ReactNode
 
   if (registerLoading || sessionLoading) {
-    return (
+    body = (
       <div className="flex h-full items-center justify-center">
         <Spinner className="size-10 text-primary" />
       </div>
     )
-  }
-
-  if (!register) {
-    return (
+  } else if (!register) {
+    body = (
       <div className="flex h-full items-center justify-center text-muted-foreground">
         Register not found.
       </div>
     )
-  }
-
-  if (!session) {
-    return (
+  } else if (!session) {
+    body = (
       <div className="flex h-full flex-col items-center justify-center gap-3">
         <div className="text-center">
           <p className="text-lg font-medium">{register.name}</p>
@@ -144,211 +145,235 @@ export default function Page() {
         */}
       </div>
     )
-  }
+  } else {
+    const summary = session.summary
+    const expectedTotals = summary?.expectedTotals || []
 
-  const summary = session.summary
-  const expectedTotals = summary?.expectedTotals || []
-
-  return (
-    <div className="flex h-full w-full flex-col gap-2.5 p-2.5">
-      <div className="flex items-center justify-between">
-        <div>
-          <Label className="text-xl font-medium">{register.name}</Label>
-          <span className="block text-sm text-muted-foreground">
-            {register.outlet?.name}
+    body = (
+      <div className="flex h-full w-full flex-col gap-2.5 p-2.5">
+        <div className="flex items-center justify-between">
+          <div>
+            <Label className="text-xl font-medium">{register.name}</Label>
+            <span className="block text-sm text-muted-foreground">
+              {register.outlet?.name}
+            </span>
+          </div>
+          <span className="text-sm font-medium">
+            Opened: {format(Number(session.openedAt), "PPp")}
           </span>
         </div>
-        <span className="text-sm font-medium">
-          Opened: {format(Number(session.openedAt), "PPp")}
-        </span>
-      </div>
 
-      <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
-        <div className="flex flex-col gap-2 bg-muted p-3">
-          <Label className="font-semibold text-primary">Payment Tally</Label>
-          <Table className="bg-white">
-            <TableHeader>
-              <TableRow>
-                <TableHead>Payment type</TableHead>
-                <TableHead className="text-right">Expected</TableHead>
-                <TableHead className="text-right">
-                  <div className="ml-auto w-36 text-left">Counted</div>
-                </TableHead>
-                <TableHead className="text-right">Difference</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {expectedTotals.map((item: any) => {
-                const methodId = item.method._id
-                // Defaults to Expected rather than 0 - assumes no
-                // discrepancy until the cashier actually recounts and
-                // overrides it, matching the reminder in the Close Register
-                // dialog to adjust this box only when there's a mismatch.
-                const countedValue = counted[methodId] ?? item.expected
-                const difference = countedValue - item.expected
-                return (
-                  <TableRow key={methodId}>
-                    <TableCell className="font-medium">
-                      {item.method.name}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {currency(item.expected)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <InputGroup className="ml-auto w-36">
-                        <InputGroupAddon>
-                          <InputGroupText>₱</InputGroupText>
-                        </InputGroupAddon>
-                        <InputGroupInput
-                          type="number"
-                          inputMode="decimal"
-                          step="any"
-                          value={Number.isNaN(countedValue) ? "" : countedValue}
-                          onChange={(e) =>
-                            setCounted((prev) => ({
-                              ...prev,
-                              [methodId]: parseFloat(e.target.value),
-                            }))
-                          }
-                          onFocus={(e) => e.currentTarget.select()}
-                        />
-                      </InputGroup>
-                    </TableCell>
-                    <TableCell
-                      className={cn(
-                        "text-right font-medium",
-                        difference !== 0 && "text-destructive"
-                      )}
-                    >
-                      {currency(difference)}
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        </div>
-
-        <div className="flex flex-col gap-2 bg-muted p-3">
-          <div className="flex items-center justify-between">
-            <Label className="font-semibold text-primary">Cash In / Out</Label>
-            <div className="flex gap-1.5">
-              <CashMovementDialog sessionId={session._id} type="IN" />
-              <CashMovementDialog sessionId={session._id} type="OUT" />
-            </div>
-          </div>
-          <Table className="bg-white">
-            <TableHeader>
-              <TableRow>
-                <TableHead>Transaction</TableHead>
-                <TableHead>User</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {session.cashMovements.length > 0 ? (
-                session.cashMovements.map((movement: any, index: number) => (
-                  <TableRow key={index}>
-                    <TableCell>
-                      {movement.note ||
-                        (movement.type === "IN" ? "Cash in" : "Cash out")}
-                    </TableCell>
-                    <TableCell>
-                      {movement.by
-                        ? `${movement.by.name} ${movement.by.surname}`
-                        : "-"}
-                    </TableCell>
-                    <TableCell
-                      className={cn(
-                        "text-right",
-                        movement.type === "OUT" && "text-destructive"
-                      )}
-                    >
-                      {movement.type === "OUT" ? "-" : ""}
-                      {currency(movement.amount)}
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
+        <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
+          <div className="flex flex-col gap-2 bg-muted p-3">
+            <Label className="font-semibold text-primary">Payment Tally</Label>
+            <Table className="bg-white">
+              <TableHeader>
                 <TableRow>
-                  <TableCell
-                    colSpan={3}
-                    className="text-center text-muted-foreground"
-                  >
-                    No cash movements yet.
+                  <TableHead>Payment type</TableHead>
+                  <TableHead className="text-right">Expected</TableHead>
+                  <TableHead className="text-right">
+                    <div className="ml-auto w-36 text-left">Counted</div>
+                  </TableHead>
+                  <TableHead className="text-right">Difference</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {expectedTotals.map((item: any) => {
+                  const methodId = item.method._id
+                  // Defaults to Expected rather than 0 - assumes no
+                  // discrepancy until the cashier actually recounts and
+                  // overrides it, matching the reminder in the Close Register
+                  // dialog to adjust this box only when there's a mismatch.
+                  const countedValue = counted[methodId] ?? item.expected
+                  const difference = countedValue - item.expected
+                  return (
+                    <TableRow key={methodId}>
+                      <TableCell className="font-medium">
+                        {item.method.name}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {currency(item.expected)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <InputGroup className="ml-auto w-36">
+                          <InputGroupAddon>
+                            <InputGroupText>₱</InputGroupText>
+                          </InputGroupAddon>
+                          <InputGroupInput
+                            type="number"
+                            inputMode="decimal"
+                            step="any"
+                            value={
+                              Number.isNaN(countedValue) ? "" : countedValue
+                            }
+                            onChange={(e) =>
+                              setCounted((prev) => ({
+                                ...prev,
+                                [methodId]: parseFloat(e.target.value),
+                              }))
+                            }
+                            onFocus={(e) => e.currentTarget.select()}
+                          />
+                        </InputGroup>
+                      </TableCell>
+                      <TableCell
+                        className={cn(
+                          "text-right font-medium",
+                          difference !== 0 && "text-destructive"
+                        )}
+                      >
+                        {currency(difference)}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </div>
+
+          <div className="flex flex-col gap-2 bg-muted p-3">
+            <div className="flex items-center justify-between">
+              <Label className="font-semibold text-primary">
+                Cash In / Out
+              </Label>
+              <div className="flex gap-1.5">
+                <CashMovementDialog sessionId={session._id} type="IN" />
+                <CashMovementDialog sessionId={session._id} type="OUT" />
+              </div>
+            </div>
+            <Table className="bg-white">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Transaction</TableHead>
+                  <TableHead>User</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {session.cashMovements.length > 0 ? (
+                  session.cashMovements.map((movement: any, index: number) => (
+                    <TableRow key={index}>
+                      <TableCell>
+                        {movement.note ||
+                          (movement.type === "IN" ? "Cash in" : "Cash out")}
+                      </TableCell>
+                      <TableCell>
+                        {movement.by
+                          ? `${movement.by.name} ${movement.by.surname}`
+                          : "-"}
+                      </TableCell>
+                      <TableCell
+                        className={cn(
+                          "text-right",
+                          movement.type === "OUT" && "text-destructive"
+                        )}
+                      >
+                        {movement.type === "OUT" ? "-" : ""}
+                        {currency(movement.amount)}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell
+                      colSpan={3}
+                      className="text-center text-muted-foreground"
+                    >
+                      No cash movements yet.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+              <TableFooter>
+                <TableRow>
+                  <TableCell colSpan={2}>Total cash in</TableCell>
+                  <TableCell className="text-right">
+                    {currency(summary?.totalCashIn)}
                   </TableCell>
                 </TableRow>
-              )}
-            </TableBody>
-            <TableFooter>
-              <TableRow>
-                <TableCell colSpan={2}>Total cash in</TableCell>
-                <TableCell className="text-right">
-                  {currency(summary?.totalCashIn)}
-                </TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell colSpan={2}>Total cash out</TableCell>
-                <TableCell className="text-right">
-                  {currency(summary?.totalCashOut)}
-                </TableCell>
-              </TableRow>
-            </TableFooter>
-          </Table>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-1.5 bg-muted p-3">
-        <Label className="font-semibold text-primary">Sales Summary</Label>
-        <div className="grid grid-cols-2 gap-x-8 gap-y-1.5 bg-white p-3 text-sm sm:grid-cols-4">
-          <div className="flex flex-col">
-            <span className="text-muted-foreground">Total sales</span>
-            <span className="font-medium">{currency(summary?.totalSales)}</span>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-muted-foreground">On account sales</span>
-            <span className="font-medium">
-              {currency(summary?.totalOnAccountSales)}
-            </span>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-muted-foreground">Item discounts</span>
-            <span className="font-medium">
-              {currency(summary?.itemDiscounts)}
-            </span>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-muted-foreground">Order discounts</span>
-            <span className="font-medium">
-              {currency(summary?.orderDiscounts)}
-            </span>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-muted-foreground">Avg. sale value</span>
-            <span className="font-medium">
-              {currency(summary?.avgSaleValue)}
-            </span>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-muted-foreground">Transactions</span>
-            <span className="font-medium">
-              {summary?.numberOfTransactions ?? 0}
-            </span>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-muted-foreground">New customers</span>
-            <span className="font-medium">{summary?.newCustomers ?? 0}</span>
+                <TableRow>
+                  <TableCell colSpan={2}>Total cash out</TableCell>
+                  <TableCell className="text-right">
+                    {currency(summary?.totalCashOut)}
+                  </TableCell>
+                </TableRow>
+              </TableFooter>
+            </Table>
           </div>
         </div>
-      </div>
 
-      <div className="flex justify-end">
-        <CloseDialog
-          sessionId={session._id}
-          counted={counted}
-          expectedTotals={expectedTotals}
-        />
+        <div className="flex flex-col gap-1.5 bg-muted p-3">
+          <Label className="font-semibold text-primary">Sales Summary</Label>
+          <div className="grid grid-cols-2 gap-x-8 gap-y-1.5 bg-white p-3 text-sm sm:grid-cols-4">
+            <div className="flex flex-col">
+              <span className="text-muted-foreground">Total sales</span>
+              <span className="font-medium">
+                {currency(summary?.totalSales)}
+              </span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-muted-foreground">On account sales</span>
+              <span className="font-medium">
+                {currency(summary?.totalOnAccountSales)}
+              </span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-muted-foreground">Item discounts</span>
+              <span className="font-medium">
+                {currency(summary?.itemDiscounts)}
+              </span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-muted-foreground">Order discounts</span>
+              <span className="font-medium">
+                {currency(summary?.orderDiscounts)}
+              </span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-muted-foreground">Avg. sale value</span>
+              <span className="font-medium">
+                {currency(summary?.avgSaleValue)}
+              </span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-muted-foreground">Transactions</span>
+              <span className="font-medium">
+                {summary?.numberOfTransactions ?? 0}
+              </span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-muted-foreground">New customers</span>
+              <span className="font-medium">{summary?.newCustomers ?? 0}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-end">
+          <CloseDialog
+            sessionId={session._id}
+            counted={counted}
+            expectedTotals={expectedTotals}
+            onClosed={setClosedSessionId}
+          />
+        </div>
       </div>
-    </div>
+    )
+  }
+
+  return (
+    <>
+      {body}
+      {/*
+        Rendered here rather than inside CloseDialog: closing the shift makes
+        activeRegisterSession null, which swaps the page for the "register is
+        closed" state - anything mounted inside that branch disappears before
+        it can be read.
+      */}
+      <ClosureReportDialog
+        sessionId={closedSessionId || ""}
+        open={!!closedSessionId}
+        setOpen={(next) => !next && setClosedSessionId(null)}
+      />
+    </>
   )
 }

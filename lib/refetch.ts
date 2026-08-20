@@ -33,9 +33,9 @@ export const refetchOnlyReadyQueries = (observableQuery: any) => {
     if (isRequired && isMissing(variables[name])) return false
   }
 
-  // A nullable variable explicitly set to null is still a parked query in
-  // practice - nothing useful comes back for it.
-  if (Object.values(variables).some(isMissing)) return false
-
+  // Only REQUIRED variables are checked. A list query legitimately runs with
+  // empty optional ones - SaleHistoryTable starts life with `search: ""` and
+  // `sort: null` - and skipping those would leave the table showing stale
+  // rows after a mutation.
   return observableQuery.refetch()
 }

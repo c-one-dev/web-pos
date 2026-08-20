@@ -15,12 +15,14 @@ import { useMutation } from "@apollo/client/react"
 import gql from "graphql-tag"
 import { useState } from "react"
 import { toast } from "sonner"
-import ClosureReportDialog from "./closure-report"
 
 type Props = {
   sessionId: string
   counted: Record<string, number>
   expectedTotals: { method: { _id: string }; expected: number }[]
+  // Handing the closed session id up to the page, which owns the summary
+  // report - this component is unmounted the moment the shift closes.
+  onClosed: (sessionId: string) => void
 }
 
 const CLOSE_REGISTER_SESSION = gql`
@@ -36,11 +38,9 @@ export default function CloseDialog({
   sessionId,
   counted,
   expectedTotals,
+  onClosed,
 }: Props) {
   const [open, setOpen] = useState(false)
-  // Held back until the shift is actually closed - the summary is the closing
-  // paperwork, so it's shown once here and only then.
-  const [reportOpen, setReportOpen] = useState(false)
   const [closeSession, { loading }] = useMutation(CLOSE_REGISTER_SESSION, {
     refetchQueries: ["ActiveRegisterSession", "Registers", "RegisterDetail"],
   })
@@ -62,9 +62,9 @@ export default function CloseDialog({
       if (result.data.closeRegisterSession.ok) {
         toast.success(result.data.closeRegisterSession.message)
         setOpen(false)
-        // The report replaces the immediate redirect; leaving it is what
-        // takes the user back to the register list.
-        setReportOpen(true)
+        // The summary report replaces the immediate redirect; leaving it is
+        // what takes the user back to the register list.
+        onClosed(sessionId)
       }
     } catch (error: any) {
       toast.error(error.graphQLErrors?.[0]?.message ?? error.message)
@@ -101,11 +101,6 @@ export default function CloseDialog({
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
-      <ClosureReportDialog
-        sessionId={sessionId}
-        open={reportOpen}
-        setOpen={setReportOpen}
-      />
     </AlertDialog>
   )
 }
