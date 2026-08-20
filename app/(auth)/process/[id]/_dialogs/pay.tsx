@@ -297,17 +297,6 @@ function Pay({
       )
       return
     }
-    if (
-      methodId === process.env.NEXT_PUBLIC_ON_ACCOUNT_ID &&
-      amountTendered > availableAccountLimit
-    ) {
-      toast.error(
-        availableAccountLimit > 0
-          ? `Only ${formatCurrency(availableAccountLimit)} of account limit is available.`
-          : "This customer has no account limit. Set one from the customer's Account Limit drawer first."
-      )
-      return
-    }
     const receivedAmount = state.receivedAmount + amountTendered
     const changeAmount = Math.max(receivedAmount - state.total, 0)
     const netAmount = receivedAmount - changeAmount
@@ -541,7 +530,10 @@ function Pay({
                   <Button
                     size="lg"
                     className="h-auto flex-col gap-0 p-2 text-base sm:p-3 sm:text-xl"
-                    disabled={!state.customer || availableAccountLimit <= 0}
+                    // Never disabled by the balance: an on-account sale is a
+                    // debt the customer settles later, so it stays available
+                    // even with no limit left.
+                    disabled={!state.customer}
                     onClick={() =>
                       addPayment(process.env.NEXT_PUBLIC_ON_ACCOUNT_ID)
                     }
@@ -549,7 +541,9 @@ function Pay({
                     On Account
                     {!!state.customer && (
                       <span className="text-[0.65rem] font-normal opacity-80">
-                        {formatCurrency(availableAccountLimit)}
+                        {availableAccountLimit > 0
+                          ? `${formatCurrency(availableAccountLimit)} left`
+                          : "Over limit"}
                       </span>
                     )}
                   </Button>

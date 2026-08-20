@@ -765,11 +765,12 @@ export const saleResolver = {
                 .session(session)
                 .lean()
               if (!customer) throw new GraphQLError("Customer not found.")
-              if (onAccountTotal > customer.accountLimit.current)
-                throw new GraphQLError(
-                  "On Account amount exceeds the customer's available account limit.",
-                  { extensions: { code: "INSUFFICIENT_BALANCE" } }
-                )
+              // No limit check on purpose: On Account records a debt, not a
+              // payment, so a customer with no limit left (or none set) can
+              // still take goods away and settle afterwards. The sale lands
+              // PENDING and accountLimit.current simply goes negative, which
+              // is what "over their limit" looks like. Store Credit below is
+              // different - that is prepaid value, and it cannot go negative.
               if (storeCreditTotal > customer.storeCredit.current)
                 throw new GraphQLError(
                   "Store Credit amount exceeds the customer's available store credit.",
@@ -1045,11 +1046,12 @@ export const saleResolver = {
                 .session(session)
                 .lean()
               if (!customer) throw new GraphQLError("Customer not found.")
-              if (onAccountTotal > customer.accountLimit.current)
-                throw new GraphQLError(
-                  "On Account amount exceeds the customer's available account limit.",
-                  { extensions: { code: "INSUFFICIENT_BALANCE" } }
-                )
+              // No limit check on purpose: On Account records a debt, not a
+              // payment, so a customer with no limit left (or none set) can
+              // still take goods away and settle afterwards. The sale lands
+              // PENDING and accountLimit.current simply goes negative, which
+              // is what "over their limit" looks like. Store Credit below is
+              // different - that is prepaid value, and it cannot go negative.
               if (storeCreditTotal > customer.storeCredit.current)
                 throw new GraphQLError(
                   "Store Credit amount exceeds the customer's available store credit.",
