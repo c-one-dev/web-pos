@@ -69,6 +69,11 @@ import { Calendar } from "@/components/ui/calendar"
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
 import { ChartContainer, ChartTooltip } from "@/components/ui/chart"
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import {
   startOfToday,
   startOfDay,
   endOfDay,
@@ -1253,10 +1258,22 @@ function SalesTransactionsTab({ range }: { range: DateRange }) {
       {
         id: "itemsSummary",
         header: "Items (Quantity)",
+        // A multi-item sale runs long enough to push the columns after it off
+        // screen, so the list is clamped and the full text moved to the
+        // tooltip. The PDF export still writes it out in full.
         cell: ({ row }) => (
-          <span className="text-muted-foreground">
-            {row.original.itemsSummary || "-"}
-          </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="block max-w-[22rem] truncate text-muted-foreground">
+                {row.original.itemsSummary || "-"}
+              </span>
+            </TooltipTrigger>
+            {!!row.original.itemsSummary && (
+              <TooltipContent className="max-w-sm">
+                <p>{row.original.itemsSummary}</p>
+              </TooltipContent>
+            )}
+          </Tooltip>
         ),
       },
       {
