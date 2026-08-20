@@ -74,6 +74,7 @@ const GET_SALE = gql`
       receivedAmount
       changeAmount
       netAmount
+      changeCreditedAmount
       refundedAmount
       notes
       currentSaleStatus
@@ -342,6 +343,7 @@ export default function RowViewDialog({
 
   const sale = data?.sale
   const refundedAmount = sale?.refundedAmount || 0
+  const creditedChange = sale?.changeCreditedAmount || 0
   const refunds = sale?.refunds || []
   const isVoided = sale?.currentSaleStatus === "VOIDED"
 
@@ -559,6 +561,19 @@ export default function RowViewDialog({
                 <Amount label="Total" value={sale?.total} />
                 <Amount label="Received" value={sale?.receivedAmount} />
                 <Amount label="Change" value={sale?.changeAmount} />
+                {/*
+                  Without this row a kept-change sale reads as "Received 500,
+                  Change 0" and looks like the customer was short-changed. The
+                  cash stayed in the drawer on purpose - it moved onto the
+                  customer's balance instead.
+                */}
+                {creditedChange > 0 && (
+                  <Amount
+                    label="Kept on current balance"
+                    value={creditedChange}
+                    className="text-blue-700"
+                  />
+                )}
                 {refundedAmount > 0 && (
                   <Amount
                     label="Refunded as store credit"
