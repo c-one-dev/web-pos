@@ -231,6 +231,17 @@ function Pay({
   const [amountTendered, setAmountTendered] = useState<number>(total)
   const [note, setNote] = useState<string>("")
   const [askKeepChange, setAskKeepChange] = useState<boolean>(false)
+  // Store Credit and On Account spend a balance the customer already has, so
+  // the buttons need to know what that balance is. Without this the cashier
+  // only finds out the wallet is empty after generateSale rejects the sale.
+  const { data: customerData } = useQuery(GET_CUSTOMER_REPORT, {
+    variables: { _id: state.customer },
+    skip: !state.customer,
+    fetchPolicy: "cache-and-network",
+  })
+  const payingCustomer = (customerData as any)?.customerReport
+  const availableStoreCredit = payingCustomer?.storeCredit?.current || 0
+  const availableAccountLimit = payingCustomer?.accountLimit?.current || 0
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -269,6 +280,32 @@ function Pay({
     }
     if (amountTendered <= 0) {
       toast.error("Amount must be greater than zero.")
+      return
+    }
+    // These two tenders draw on a balance rather than taking money in, so
+    // they're capped by what the customer actually has. Same rule the server
+    // enforces in generateSale - checked here so the cart isn't left in a
+    // state that can never be paid.
+    if (
+      methodId === process.env.NEXT_PUBLIC_STORE_CREDIT_ID &&
+      amountTendered > availableStoreCredit
+    ) {
+      toast.error(
+        availableStoreCredit > 0
+          ? `Only ${formatCurrency(availableStoreCredit)} of store credit is available.`
+          : "This customer has no store credit to spend. Change kept at checkout or a refund adds to it."
+      )
+      return
+    }
+    if (
+      methodId === process.env.NEXT_PUBLIC_ON_ACCOUNT_ID &&
+      amountTendered > availableAccountLimit
+    ) {
+      toast.error(
+        availableAccountLimit > 0
+          ? `Only ${formatCurrency(availableAccountLimit)} of account limit is available.`
+          : "This customer has no account limit. Set one from the customer's Account Limit drawer first."
+      )
       return
     }
     const receivedAmount = state.receivedAmount + amountTendered
@@ -488,23 +525,33 @@ function Pay({
                 <ButtonGroup className="grid w-full grid-cols-2 gap-1.5 sm:grid-cols-3 lg:flex lg:gap-0 [&>*:not(:first-child)]:border-l lg:[&>*:not(:first-child)]:rounded-l-none lg:[&>*:not(:first-child)]:border-l-0">
                   <Button
                     size="lg"
-                    className="p-2 text-base sm:p-3 sm:text-xl"
-                    disabled={!state.customer}
+                    className="h-auto flex-col gap-0 p-2 text-base sm:p-3 sm:text-xl"
+                    disabled={!state.customer || availableStoreCredit <= 0}
                     onClick={() =>
                       addPayment(process.env.NEXT_PUBLIC_STORE_CREDIT_ID)
                     }
                   >
                     Store Credit
+                    {!!state.customer && (
+                      <span className="text-[0.65rem] font-normal opacity-80">
+                        {formatCurrency(availableStoreCredit)}
+                      </span>
+                    )}
                   </Button>
                   <Button
                     size="lg"
-                    className="p-2 text-base sm:p-3 sm:text-xl"
-                    disabled={!state.customer}
+                    className="h-auto flex-col gap-0 p-2 text-base sm:p-3 sm:text-xl"
+                    disabled={!state.customer || availableAccountLimit <= 0}
                     onClick={() =>
                       addPayment(process.env.NEXT_PUBLIC_ON_ACCOUNT_ID)
                     }
                   >
                     On Account
+                    {!!state.customer && (
+                      <span className="text-[0.65rem] font-normal opacity-80">
+                        {formatCurrency(availableAccountLimit)}
+                      </span>
+                    )}
                   </Button>
                 </ButtonGroup>
                 <div className="space-y-2">
