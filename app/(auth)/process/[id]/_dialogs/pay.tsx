@@ -48,6 +48,7 @@ import {
   CommandList,
 } from "@/components/ui/command"
 import { IOption } from "@/types/shared.type"
+import CustomerFormDialog from "@/app/(auth)/customer/_dialogs/form"
 
 const amountShortcuts = [20, 50, 100, 200, 500, 1000]
 
@@ -90,6 +91,7 @@ function CustomerSummary({
   customerId: string
 }) {
   const [openCustomerCommand, setOpenCustomerCommand] = useState(false)
+  const [openCreateCustomer, setOpenCreateCustomer] = useState(false)
   const { data: optionsData } = useQuery(GET_CUSTOMER_OPTIONS, {
     fetchPolicy: "cache-and-network",
     nextFetchPolicy: "cache-first",
@@ -115,10 +117,13 @@ function CustomerSummary({
             {customerOptions.map((o: IOption) => (
               <CommandItem
                 key={o.value}
-                value={o.value}
-                onSelect={(val) => {
-                  if (val === customerId) form.setFieldValue("customer", "")
-                  else form.setFieldValue("customer", val.trim())
+                // cmdk scores the query against `value`, so the name has to be
+                // it - an ObjectId matches nothing the cashier types.
+                value={o.label}
+                className="cursor-pointer"
+                onSelect={() => {
+                  if (o.value === customerId) form.setFieldValue("customer", "")
+                  else form.setFieldValue("customer", o.value.toString())
                   setOpenCustomerCommand(false)
                 }}
               >
@@ -128,6 +133,19 @@ function CustomerSummary({
             ))}
           </CommandGroup>
         </CommandList>
+        <div className="border-t p-1">
+          <Button
+            variant="ghost"
+            type="button"
+            className="w-full justify-start font-normal"
+            onClick={() => {
+              setOpenCustomerCommand(false)
+              setOpenCreateCustomer(true)
+            }}
+          >
+            <PlusCircleIcon /> Create Customer
+          </Button>
+        </div>
       </Command>
     </PopoverContent>
   )
@@ -149,6 +167,18 @@ function CustomerSummary({
           </PopoverTrigger>
         </div>
         {picker}
+        {/* Sibling of the popover, not a child - see the controlled open note
+          in the customer form dialog. */}
+        <CustomerFormDialog
+          open={openCreateCustomer}
+          onOpenChange={setOpenCreateCustomer}
+          onCreated={(customer) => {
+            // Attach the customer that was just created, so the cashier can go
+            // straight on to payment.
+            if (customer?._id)
+              form.setFieldValue("customer", customer._id.toString())
+          }}
+        />
       </Popover>
     )
   }
@@ -198,6 +228,18 @@ function CustomerSummary({
         </div>
       </div>
       {picker}
+      {/* Sibling of the popover, not a child - see the controlled open note
+          in the customer form dialog. */}
+      <CustomerFormDialog
+        open={openCreateCustomer}
+        onOpenChange={setOpenCreateCustomer}
+        onCreated={(customer) => {
+          // Attach the customer that was just created, so the cashier can go
+          // straight on to payment.
+          if (customer?._id)
+            form.setFieldValue("customer", customer._id.toString())
+        }}
+      />
     </Popover>
   )
 }
