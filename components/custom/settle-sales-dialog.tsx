@@ -148,7 +148,12 @@ export default function SettleSalesDialog({
       "CustomerOutstandingSales",
     ],
     onQueryUpdated: refetchOnlyReadyQueries,
-    awaitRefetchQueries: true,
+    // Deliberately NOT awaiting the refetches. A settled sale stops being
+    // settleable, so the row that owns this dialog re-renders the moment the
+    // table refetch lands - and if the mutation promise were still waiting on
+    // its own refetches at that point, Apollo would abort them on unmount and
+    // reject an operation that already succeeded ("The operation was
+    // aborted."). The refetches still run; they just don't gate the result.
   })
 
   const loading = saleLoading || customerLoading

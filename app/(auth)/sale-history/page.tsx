@@ -101,26 +101,34 @@ function PaymentStatusCell({ row }: { row: ISaleHistoryNode }) {
   const { can } = usePermissions()
   const status = row.currentSalePaymentStatus
   const owesMoney = status === "PENDING" || status === "PARTIALLY_PAID"
+  const canManageSettlement = can("pos.sale.settle")
   const canSettle =
-    can("pos.sale.settle") && owesMoney && row.currentSaleStatus !== "VOIDED"
+    canManageSettlement && owesMoney && row.currentSaleStatus !== "VOIDED"
 
   return (
     <div className="flex items-center gap-2">
       <StatusBadge status={status} />
-      {canSettle && (
+      {canManageSettlement && (
         // React portals bubble their events through the React tree, not the
         // DOM one, so without this wrapper every click inside the dialog -
         // its overlay included - reaches the cell's row handler and reopens
         // the Sale Order drawer behind it.
         <span onClick={(e) => e.stopPropagation()}>
-          <Button
-            size="sm"
-            className="h-7 gap-1 rounded-md px-2.5 text-xs font-semibold"
-            onClick={() => setSettleOpen(true)}
-          >
-            <HandCoinsIcon />
-            Pay
-          </Button>
+          {canSettle && (
+            <Button
+              size="sm"
+              className="h-7 gap-1 rounded-md px-2.5 text-xs font-semibold"
+              onClick={() => setSettleOpen(true)}
+            >
+              <HandCoinsIcon />
+              Pay
+            </Button>
+          )}
+          {/*
+            Mounted on the permission alone, never on the status: settling
+            makes the row PAID, and tearing the dialog down in that same
+            render would abort the mutation's own in-flight refetches.
+          */}
           <SettleSalesDialog
             saleId={row._id?.toString() || ""}
             open={settleOpen}
