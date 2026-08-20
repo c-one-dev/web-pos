@@ -27,6 +27,23 @@ export interface IStoreCredit {
   history: IStoreCreditHistoryItem[]
 }
 
+// Current Balance is a wallet fed exclusively by change the customer chose to
+// leave on their account at checkout. Store credit is the separate pot fed by
+// refunds and manual issuance - the two never mix, so each has exactly one
+// source and one reconciliation story.
+export interface ICurrentBalanceHistoryItem {
+  _id: Types.ObjectId | string
+  remaining: number
+  transacted: number
+  date: Date
+  description: string
+}
+
+export interface ICurrentBalance {
+  current: number
+  history: ICurrentBalanceHistoryItem[]
+}
+
 export type CustomerType = "CUSTOMER" | "EMPLOYEE"
 
 export interface ICustomer {
@@ -40,6 +57,7 @@ export interface ICustomer {
   email: string
   accountLimit: IAccountLimit
   storeCredit: IStoreCredit
+  currentBalance?: ICurrentBalance
   isActive: boolean
 }
 

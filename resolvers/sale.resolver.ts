@@ -67,6 +67,14 @@ const assertSaleIsEditable = async (sale: any, session?: any) => {
       { extensions: { code: "SALE_REFUNDED" } }
     )
 
+  // Change kept on the customer's Current Balance has already been spent on
+  // later sales as far as this one knows, so an edit can't re-decide it.
+  if ((sale.changeCreditedAmount || 0) > 0)
+    throw new GraphQLError(
+      "This sale's change was kept on the customer's balance, so it can no longer be edited. Void it instead.",
+      { extensions: { code: "SALE_CHANGE_CREDITED" } }
+    )
+
   const query = RegisterSession.findOne({
     register: sale.register,
     status: "OPEN",
@@ -714,20 +722,26 @@ export const saleResolver = {
 
           const onAccountId = process.env.NEXT_PUBLIC_ON_ACCOUNT_ID
           const storeCreditId = process.env.NEXT_PUBLIC_STORE_CREDIT_ID
+          const currentBalanceId = process.env.NEXT_PUBLIC_CURRENT_BALANCE_ID
           const onAccountTotal = totalForMethod(input.payments, onAccountId)
           const storeCreditTotal = totalForMethod(input.payments, storeCreditId)
+          const currentBalanceTotal = totalForMethod(
+            input.payments,
+            currentBalanceId
+          )
 
-          // Change retained as store credit. The cash never leaves the
-          // drawer, so the sale must record no change and a net equal to the
-          // full tender - otherwise the shift would expect less cash than is
-          // physically there. The customer is owed the difference as credit.
+          // Change retained on the customer's Current Balance. The cash never
+          // leaves the drawer, so the sale must record no change and a net
+          // equal to the full tender - otherwise the shift would expect less
+          // cash than is physically there. The customer is owed the
+          // difference as balance.
           const creditedChange =
             input.changeToStoreCredit && input.changeAmount > 0
               ? input.changeAmount
               : 0
           if (creditedChange > 0 && !input.customer)
             throw new GraphQLError(
-              "A customer must be selected to keep the change as store credit.",
+              "A customer must be selected to keep the change on their account.",
               { extensions: { code: "CUSTOMER_REQUIRED" } }
             )
           // Zero the change on the tenders themselves so the sale, its Payment
@@ -746,18 +760,26 @@ export const saleResolver = {
             if (
               onAccountTotal > 0 ||
               storeCreditTotal > 0 ||
+              currentBalanceTotal > 0 ||
               creditedChange > 0
             ) {
               if (!input.customer)
                 throw new GraphQLError(
-                  "A customer must be selected to use On Account or Store Credit.",
+                  "A customer must be selected to use On Account, Store Credit or Current Balance.",
                   { extensions: { code: "CUSTOMER_REQUIRED" } }
                 )
               customer = await Customer.findById(input.customer)
-                .select("accountLimit storeCredit")
+                .select("accountLimit storeCredit currentBalance")
                 .session(session)
                 .lean()
               if (!customer) throw new GraphQLError("Customer not found.")
+              if (
+                currentBalanceTotal > (customer.currentBalance?.current || 0)
+              )
+                throw new GraphQLError(
+                  "Current Balance amount exceeds the customer's available balance.",
+                  { extensions: { code: "INSUFFICIENT_BALANCE" } }
+                )
               if (onAccountTotal > customer.accountLimit.current)
                 throw new GraphQLError(
                   "On Account amount exceeds the customer's available account limit.",
@@ -862,18 +884,38 @@ export const saleResolver = {
                 { session }
               )
             }
-            // Change kept on account. Netted against any store credit spent on
-            // this same sale so the running "remaining" stays truthful when a
-            // customer both spends credit and leaves change in one visit.
-            if (customer && creditedChange > 0) {
-              const balanceBefore =
-                customer.storeCredit.current - storeCreditTotal
+            if (customer && currentBalanceTotal > 0) {
               await Customer.updateOne(
                 { _id: customer._id },
                 {
-                  $inc: { "storeCredit.current": creditedChange },
+                  $inc: { "currentBalance.current": -currentBalanceTotal },
                   $push: {
-                    "storeCredit.history": {
+                    "currentBalance.history": {
+                      remaining:
+                        (customer.currentBalance?.current || 0) -
+                        currentBalanceTotal,
+                      transacted: -currentBalanceTotal,
+                      date: new Date(),
+                      description: `Applied to sale ${newSale.saleNumber}`,
+                    },
+                  },
+                },
+                { session }
+              )
+            }
+            // Change kept on the customer's Current Balance. Netted against
+            // any balance spent on this same sale so the running "remaining"
+            // stays truthful when a customer both spends from the wallet and
+            // leaves change in one visit.
+            if (customer && creditedChange > 0) {
+              const balanceBefore =
+                (customer.currentBalance?.current || 0) - currentBalanceTotal
+              await Customer.updateOne(
+                { _id: customer._id },
+                {
+                  $inc: { "currentBalance.current": creditedChange },
+                  $push: {
+                    "currentBalance.history": {
                       remaining: balanceBefore + creditedChange,
                       transacted: creditedChange,
                       date: new Date(),
@@ -969,9 +1011,17 @@ export const saleResolver = {
             storeCreditId
           )
           const previousCustomerId = existing.customer?.toString() || null
-
+          const currentBalanceId = process.env.NEXT_PUBLIC_CURRENT_BALANCE_ID
+          const previousCurrentBalance = totalForMethod(
+            existing.payments,
+            currentBalanceId
+          )
           const onAccountTotal = totalForMethod(input.payments, onAccountId)
           const storeCreditTotal = totalForMethod(input.payments, storeCreditId)
+          const currentBalanceTotal = totalForMethod(
+            input.payments,
+            currentBalanceId
+          )
 
           let populatedResult
           await session.withTransaction(async () => {
@@ -1026,19 +1076,55 @@ export const saleResolver = {
                 )
             }
 
+            if (previousCustomerId && previousCurrentBalance > 0) {
+              const previous = await Customer.findById(previousCustomerId)
+                .select("currentBalance")
+                .session(session)
+                .lean()
+              if (previous)
+                await Customer.updateOne(
+                  { _id: previousCustomerId },
+                  {
+                    $inc: { "currentBalance.current": previousCurrentBalance },
+                    $push: {
+                      "currentBalance.history": {
+                        remaining:
+                          (previous.currentBalance?.current || 0) +
+                          previousCurrentBalance,
+                        transacted: previousCurrentBalance,
+                        date: new Date(),
+                        description: `Reversed for edit of sale ${existing.saleNumber}`,
+                      },
+                    },
+                  },
+                  { session }
+                )
+            }
+
             // 2. Validate the new figures against the now-restored balances.
             let customer: any = null
-            if (onAccountTotal > 0 || storeCreditTotal > 0) {
+            if (
+              onAccountTotal > 0 ||
+              storeCreditTotal > 0 ||
+              currentBalanceTotal > 0
+            ) {
               if (!input.customer)
                 throw new GraphQLError(
-                  "A customer must be selected to use On Account or Store Credit.",
+                  "A customer must be selected to use On Account, Store Credit or Current Balance.",
                   { extensions: { code: "CUSTOMER_REQUIRED" } }
                 )
               customer = await Customer.findById(input.customer)
-                .select("accountLimit storeCredit")
+                .select("accountLimit storeCredit currentBalance")
                 .session(session)
                 .lean()
               if (!customer) throw new GraphQLError("Customer not found.")
+              if (
+                currentBalanceTotal > (customer.currentBalance?.current || 0)
+              )
+                throw new GraphQLError(
+                  "Current Balance amount exceeds the customer's available balance.",
+                  { extensions: { code: "INSUFFICIENT_BALANCE" } }
+                )
               if (onAccountTotal > customer.accountLimit.current)
                 throw new GraphQLError(
                   "On Account amount exceeds the customer's available account limit.",
@@ -1134,6 +1220,26 @@ export const saleResolver = {
                       remaining:
                         customer.storeCredit.current - storeCreditTotal,
                       transacted: -storeCreditTotal,
+                      date: new Date(),
+                      description: `Applied to edited sale ${existing.saleNumber}`,
+                    },
+                  },
+                },
+                { session }
+              )
+            }
+
+            if (customer && currentBalanceTotal > 0) {
+              await Customer.updateOne(
+                { _id: customer._id },
+                {
+                  $inc: { "currentBalance.current": -currentBalanceTotal },
+                  $push: {
+                    "currentBalance.history": {
+                      remaining:
+                        (customer.currentBalance?.current || 0) -
+                        currentBalanceTotal,
+                      transacted: -currentBalanceTotal,
                       date: new Date(),
                       description: `Applied to edited sale ${existing.saleNumber}`,
                     },
@@ -1610,7 +1716,7 @@ export const saleResolver = {
         let result: any
         await session.withTransaction(async () => {
           const existing = await Sale.findById(_id)
-            .select("saleNumber customer payments")
+            .select("saleNumber customer payments changeCreditedAmount")
             .session(session)
             .lean()
           if (!existing) throw new GraphQLError("Sale not found")
@@ -1636,7 +1742,7 @@ export const saleResolver = {
           if (!result) throw new GraphQLError("Sale is already voided.")
 
           // Cancelling the sale hands back whatever it drew from the
-          // customer's account limit / store credit. Cash and other tenders
+          // customer's account limit, store credit or current balance. Cash and other tenders
           // are settled at the drawer, not here - voided sales are already
           // excluded from the register tally and reports.
           const onAccountTotal = totalForMethod(
@@ -1647,6 +1753,14 @@ export const saleResolver = {
             existing.payments,
             process.env.NEXT_PUBLIC_STORE_CREDIT_ID
           )
+          const currentBalanceTotal = totalForMethod(
+            existing.payments,
+            process.env.NEXT_PUBLIC_CURRENT_BALANCE_ID
+          )
+          // Change the customer left on their balance goes back out with the
+          // sale - the cash was never handed over, so voiding owes it to the
+          // drawer, not to the wallet.
+          const creditedChange = existing.changeCreditedAmount || 0
           if (!existing.customer) return
 
           if (onAccountTotal > 0) {
@@ -1686,6 +1800,30 @@ export const saleResolver = {
                       remaining:
                         customer.storeCredit.current + storeCreditTotal,
                       transacted: storeCreditTotal,
+                      date: new Date(),
+                      description: `Reversed - sale ${existing.saleNumber} voided`,
+                    },
+                  },
+                },
+                { session }
+              )
+          }
+          const balanceDelta = currentBalanceTotal - creditedChange
+          if (balanceDelta !== 0) {
+            const customer = await Customer.findById(existing.customer)
+              .select("currentBalance")
+              .session(session)
+              .lean()
+            if (customer)
+              await Customer.updateOne(
+                { _id: existing.customer },
+                {
+                  $inc: { "currentBalance.current": balanceDelta },
+                  $push: {
+                    "currentBalance.history": {
+                      remaining:
+                        (customer.currentBalance?.current || 0) + balanceDelta,
+                      transacted: balanceDelta,
                       date: new Date(),
                       description: `Reversed - sale ${existing.saleNumber} voided`,
                     },

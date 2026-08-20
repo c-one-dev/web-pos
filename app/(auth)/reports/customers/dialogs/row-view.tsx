@@ -54,6 +54,9 @@ const GET_CUSTOMER = gql`
       storeCredit {
         current
       }
+      currentBalance {
+        current
+      }
       createdAt
     }
   }
@@ -316,6 +319,17 @@ export default function RowViewDrawer({ _id, open, setOpen, onClose }: Props) {
               <Label>Store Credit</Label>
               <span className="block text-lg font-medium">
                 {currency(customer?.storeCredit?.current)}
+              </span>
+            </div>
+            <div className="col-span-2">
+              {/*
+                Change the customer left on their account at checkout. A
+                separate wallet from store credit, spendable as its own
+                tender in Process Sale.
+              */}
+              <Label>Current Balance</Label>
+              <span className="block text-lg font-medium">
+                {currency(customer?.currentBalance?.current)}
               </span>
             </div>
           </div>

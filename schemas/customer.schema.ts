@@ -32,6 +32,22 @@ export const customerSchema = gql`
     EMPLOYEE
   }
 
+  # Change the customer chose to leave on their account at checkout. A
+  # separate wallet from store credit, which comes from refunds and manual
+  # issuance instead.
+  type CurrentBalanceHistoryItem {
+    _id: ID
+    remaining: Float
+    transacted: Float
+    date: String
+    description: String
+  }
+
+  type CurrentBalance {
+    current: Float
+    history: [CurrentBalanceHistoryItem]
+  }
+
   type Customer {
     _id: ID
     firstName: String
@@ -42,6 +58,7 @@ export const customerSchema = gql`
     email: String
     accountLimit: AccountLimit
     storeCredit: StoreCredit
+    currentBalance: CurrentBalance
     isActive: Boolean
     createdAt: String
     updatedAt: String
@@ -53,6 +70,7 @@ export const customerSchema = gql`
     email: String
     accountLimit: AccountLimit
     storeCredit: StoreCredit
+    currentBalance: CurrentBalance
     createdAt: String
   }
 
@@ -89,6 +107,7 @@ export const customerSchema = gql`
     name: String
     remainingAccountLimit: Float
     remainingStoreCredit: Float
+    currentBalance: Float
     isActive: Boolean
   }
 
