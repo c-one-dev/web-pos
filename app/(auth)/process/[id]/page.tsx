@@ -37,6 +37,7 @@ import {
 import Image from "next/image"
 import { cn } from "@/lib/utils"
 import {
+  Command,
   CommandDialog,
   CommandEmpty,
   CommandGroup,
@@ -973,46 +974,50 @@ function ProcessSalePage({
         description="Find a product by name, SKU or barcode and add it to the cart."
         className="sm:max-w-2xl"
       >
-        <CommandInput placeholder="Search SKU, Barcode / Product Name" />
-        <CommandList className="max-h-[60vh]">
-          <CommandEmpty>No product found.</CommandEmpty>
-          <CommandGroup heading="Products">
-            {register?.products?.map((product: IProduct) => (
-              <CommandItem
-                key={product._id.toString()}
-                // cmdk scores the typed query against `value`, so it has to
-                // carry the fields the placeholder promises - an ObjectId
-                // matches nothing.
-                value={`${product.name} ${product.sku} ${product.barcode}`}
-                className="cursor-pointer gap-3 py-2.5"
-                onSelect={() => {
-                  addProductToCart(product)
-                  setOpenSearchCommand(false)
-                }}
-              >
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-slate-200 text-sm font-semibold text-slate-600">
-                  {product.name.slice(0, 2).toUpperCase()}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">
-                    {product.name}
+        <Command>
+          <CommandInput placeholder="Search SKU, Barcode / Product Name" />
+          <CommandList className="max-h-[60vh]">
+            <CommandEmpty>No product found.</CommandEmpty>
+            <CommandGroup heading="Products">
+              {register?.products?.map((product: IProduct) => (
+                <CommandItem
+                  key={product._id.toString()}
+                  // cmdk scores the typed query against `value`, so it has to
+                  // carry the fields the placeholder promises - an ObjectId
+                  // matches nothing.
+                  value={[product.name, product.sku, product.barcode]
+                    .filter(Boolean)
+                    .join(" ")}
+                  className="cursor-pointer gap-3 py-2.5"
+                  onSelect={() => {
+                    addProductToCart(product)
+                    setOpenSearchCommand(false)
+                  }}
+                >
+                  <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-slate-200 text-sm font-semibold text-slate-600">
+                    {(product.name || "?").slice(0, 2).toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">
+                      {product.name}
+                    </span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {[product.sku, product.barcode]
+                        .filter(Boolean)
+                        .join(" · ") || "No SKU"}
+                    </span>
+                  </div>
+                  <span className="shrink-0 font-medium tabular-nums">
+                    {new Intl.NumberFormat("en-PH", {
+                      style: "currency",
+                      currency: "PHP",
+                    }).format(product.currentPrice)}
                   </span>
-                  <span className="block truncate text-xs text-muted-foreground">
-                    {[product.sku, product.barcode]
-                      .filter(Boolean)
-                      .join(" · ") || "No SKU"}
-                  </span>
-                </div>
-                <span className="shrink-0 font-medium tabular-nums">
-                  {new Intl.NumberFormat("en-PH", {
-                    style: "currency",
-                    currency: "PHP",
-                  }).format(product.currentPrice)}
-                </span>
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        </CommandList>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
       </CommandDialog>
       <ReceiptDialog
         saleId={receiptSaleId}
