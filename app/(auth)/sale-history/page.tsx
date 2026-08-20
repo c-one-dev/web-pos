@@ -31,6 +31,7 @@ import {
 import SortHeader from "@/components/custom/sort-header"
 import { useRouter } from "next/navigation"
 import RefundDialog from "./_dialogs/refund"
+import SettleSalesDialog from "@/components/custom/settle-sales-dialog"
 import { usePermissions } from "@/hooks/use-permissions"
 import {
   Select,
@@ -102,6 +103,7 @@ const GET_SALE_ACTIONS = gql`
       isEditable
       currentSaleStatus
       refundedAmount
+      outstandingAmount
       customer {
         _id
       }
@@ -115,6 +117,7 @@ const GET_SALE_ACTIONS = gql`
 function Actions({ row }: { row?: ISaleHistoryNode }) {
   const [open, setOpen] = useState(false)
   const [refundOpen, setRefundOpen] = useState(false)
+  const [settleOpen, setSettleOpen] = useState(false)
   const router = useRouter()
   const { can } = usePermissions()
   const data = useMemo(() => row, [row])
@@ -129,6 +132,12 @@ function Actions({ row }: { row?: ISaleHistoryNode }) {
   // Refunds go back as store credit, so they need a customer to credit and a
   // sale that isn't voided. The dialog explains whichever rule is blocking;
   // the server enforces all of it again in refundSaleItems.
+  // Only on-account sales that still owe something can be settled.
+  const outstanding = sale?.outstandingAmount || 0
+  const canSettle =
+    can("pos.sale.settle") &&
+    outstanding > 0 &&
+    sale?.currentSaleStatus !== "VOIDED"
   const canRefund =
     can("pos.sale.refund") &&
     !!sale?.customer &&
@@ -156,6 +165,18 @@ function Actions({ row }: { row?: ISaleHistoryNode }) {
           >
             Edit
           </DropdownMenuItem>
+          {can("pos.sale.settle") && (
+            <DropdownMenuItem
+              disabled={!canSettle}
+              onSelect={() => {
+                if (!canSettle) return
+                setOpen(false)
+                setSettleOpen(true)
+              }}
+            >
+              Settle payment
+            </DropdownMenuItem>
+          )}
           {can("pos.sale.refund") && (
             <DropdownMenuItem
               disabled={!canRefund}
@@ -171,6 +192,11 @@ function Actions({ row }: { row?: ISaleHistoryNode }) {
         </DropdownMenuContent>
       </DropdownMenu>
       <RefundDialog _id={_id} open={refundOpen} setOpen={setRefundOpen} />
+      <SettleSalesDialog
+        saleId={_id}
+        open={settleOpen}
+        setOpen={setSettleOpen}
+      />
     </>
   )
 }

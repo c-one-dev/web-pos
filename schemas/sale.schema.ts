@@ -11,6 +11,8 @@ export const saleSchema = gql`
   enum SalePaymentStatus {
     PAID
     UNPAID
+    # An On Account sale whose debt hasn't been settled yet.
+    PENDING
     PARTIALLY_PAID
     REFUNDED
   }
@@ -25,6 +27,20 @@ export const saleSchema = gql`
     subTotal: Float
     total: Float
     refundedQuantity: Int
+  }
+
+  type SaleSettlement {
+    amount: Float
+    method: PaymentMethod
+    note: String
+    date: String
+    by: User
+    register: Register
+  }
+
+  input SettleSaleInput {
+    _id: ID!
+    amount: Float!
   }
 
   type SaleRefundItem {
@@ -69,6 +85,16 @@ export const saleSchema = gql`
     paymentRef: Payment
   }
 
+  type OutstandingSaleNode {
+    _id: ID!
+    saleNumber: String
+    date: String
+    total: Float
+    settledAmount: Float
+    outstandingAmount: Float
+    currentSalePaymentStatus: SalePaymentStatus
+  }
+
   type Sale {
     _id: ID
     saleNumber: String
@@ -78,6 +104,10 @@ export const saleSchema = gql`
     subTotal: Float
     discount: Float
     total: Float
+    settledAmount: Float
+    settlements: [SaleSettlement]
+    # The On Account portion still owed on this sale.
+    outstandingAmount: Float
     refundedAmount: Float
     refunds: [SaleRefund]
     receivedAmount: Float
@@ -238,6 +268,10 @@ export const saleSchema = gql`
       first: Int
       after: String
     ): CustomerSaleConnection
+    # Every sale of this customer that still owes money, for the bulk
+    # payment drawer. Not paginated - a customer's unsettled list is short by
+    # nature, and the drawer needs the full total to be meaningful.
+    customerOutstandingSales(customer: ID!): [OutstandingSaleNode]
     voidedSaleTable(
       first: Int
       after: String
@@ -254,6 +288,12 @@ export const saleSchema = gql`
     updateSale(_id: ID!, input: SaleInput): Response
     voidSale(_id: ID!): Response
     updateSaleNotes(_id: ID!, notes: String): Response
+    settleSales(
+      sales: [SettleSaleInput!]!
+      method: ID!
+      register: ID!
+      note: String
+    ): Response
     refundSaleItems(
       _id: ID!
       items: [RefundItemInput!]!

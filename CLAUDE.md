@@ -20,19 +20,19 @@ Refunds are **store credit only**: `refundSaleItems` credits the customer's stor
 
 ## Tech stack
 
-| Layer | Choice |
-|---|---|
-| Framework | Next.js 16 App Router |
-| API | GraphQL via Apollo Server (`@as-integrations/next`) |
-| ORM | Mongoose (MongoDB) |
-| Auth | NextAuth v4 — JWT sessions |
-| UI | shadcn/ui + Radix UI + Tailwind CSS |
-| Icons | Phosphor Icons (`@phosphor-icons/react`) |
-| Tables | TanStack Table v8 |
-| Forms | TanStack Form |
-| Validation | Zod (server-side, schema-level middleware) |
-| Date utils | date-fns + little-date |
-| State | React local state only — no Zustand/Redux |
+| Layer      | Choice                                              |
+| ---------- | --------------------------------------------------- |
+| Framework  | Next.js 16 App Router                               |
+| API        | GraphQL via Apollo Server (`@as-integrations/next`) |
+| ORM        | Mongoose (MongoDB)                                  |
+| Auth       | NextAuth v4 — JWT sessions                          |
+| UI         | shadcn/ui + Radix UI + Tailwind CSS                 |
+| Icons      | Phosphor Icons (`@phosphor-icons/react`)            |
+| Tables     | TanStack Table v8                                   |
+| Forms      | TanStack Form                                       |
+| Validation | Zod (server-side, schema-level middleware)          |
+| Date utils | date-fns + little-date                              |
+| State      | React local state only — no Zustand/Redux           |
 
 ---
 
@@ -79,7 +79,7 @@ Maps every mutation to either a Zod schema or the `NO_VALIDATION` sentinel symbo
 ```ts
 export const NO_VALIDATION = Symbol("NO_VALIDATION")
 export const mutationValidationRegistry = {
-  myNewMutation: myNewMutationSchema,  // or NO_VALIDATION if truly no input
+  myNewMutation: myNewMutationSchema, // or NO_VALIDATION if truly no input
   // ...
 }
 ```
@@ -92,7 +92,7 @@ All `change*Status` mutations use MongoDB aggregation pipeline updates to atomic
 Model.findByIdAndUpdate(
   _id,
   [{ $set: { isActive: { $not: "$isActive" } } }],
-  { returnDocument: "after", updatePipeline: true }   // ← required or Mongoose throws
+  { returnDocument: "after", updatePipeline: true } // ← required or Mongoose throws
 )
 ```
 
@@ -103,7 +103,7 @@ Never remove `updatePipeline: true`.
 The sale creation resolver wraps everything in `session.withTransaction()`. Key gotcha: `Model.create()` with a session requires the **array form**:
 
 ```ts
-const [result] = await Sale.create([newSale], { session })  // array form — required
+const [result] = await Sale.create([newSale], { session }) // array form — required
 ```
 
 ### `mustChangePassword` flow
@@ -150,34 +150,10 @@ Eye/eye-closed toggle built on `InputGroup`. Use for all password fields — nev
 - **Discounts**: always stored as numbers (`Float`), never strings. `.toFixed(2)` returns a string — always wrap in `parseFloat()`.
 - **Void**: `voidSale` sets `currentSaleStatus: "VOIDED"` and appends to `saleStatusHistory`.
 - **Refunds are store credit only**: `refundSaleItems` refunds chosen line items (partial or full) by crediting `storeCredit.current` on the customer, inside a transaction. It never reverses a payment, so a closed register's tally stays intact. Rules it enforces: a walk-in sale can't be refunded (no account to credit), a voided sale can't be refunded, a line can't be refunded past its remaining quantity (`items[].refundedQuantity`), and total refunds can't exceed `sale.total`. A sale-level discount is prorated across lines so a full refund returns exactly what was paid. Refunding every unit sets `currentSaleStatus: "REFUNDED"`; a partial refund leaves the status alone and only raises `refundedAmount`. Once any refund exists the sale's items are frozen — `assertSaleIsEditable` rejects further edits. Do not add a cash-back refund path.
-- **PARTIALLY_PAID**: only applicable to `ON_ACCOUNT` and `STORE_CREDIT` payment types. `currentSalePaymentStatus` is computed the same way for every method (`checkSalesPaymentStatus` in `helpers/salesFn.ts`) — On Account/Store Credit tenders count toward "paid" immediately, same as Cash. `generateSale` deducts the net tendered amount (`amount - change`) from the customer's `accountLimit.current` / `storeCredit.current` in the same transaction as the sale, and rejects the sale (`INSUFFICIENT_BALANCE`) if it would exceed the available balance. See `TASKS.md` for what's still open (a dedicated settlement/repayment mutation).
+- **Payment status** is computed in `checkSalesPaymentStatus` (`helpers/salesFn.ts`) and is about _money actually received_:
+  - An **On Account** tender is a debt, not a payment, so it does NOT count toward "paid". A sale tendered entirely on account is `PENDING`; part-settled is `PARTIALLY_PAID`; fully settled is `PAID`.
+  - **Store Credit** is prepaid value the customer already owns, so it settles a sale immediately, same as Cash.
+  - `PENDING` is a value in _both_ `SaleStatus` (unused) and `SalePaymentStatus` (an unsettled on-account sale). Read the field name.
+- **Account limit**: `generateSale` deducts the net on-account amount (`amount - change`) from `accountLimit.current` in the same transaction as the sale, and **rejects** the sale (`INSUFFICIENT_BALANCE`) if it would exceed the available balance. There is deliberately no over-limit override.
+- **Settlement**: `settleSales` repays the on-account debt of one or many sales in a single transaction — the per-sale "Settle payment" action and the customer's "Bulk Payment" drawer both call it. It requires an **open register session** for the given register and stamps each settlement with that session, so cash repayments are counted in that shift's closure tally (`resolveSummary` in `resolvers/registerSession.resolver.ts` folds them into the expected totals). Settling frees the same amount back onto `accountLimit.current` (never `accountLimit.max`), writes a `Payment` document per sale so payment reports see it, and recomputes `currentSalePaymentStatus`. On Account can't be used to settle. `settleAccountBalance` still exists for a lump-sum adjustment that isn't tied to specific sales.
 - **No stock management**: products have no quantity/stock fields. Do not add them.
-
----
-
-## Environment variables
-
-See `.env.example`. Key vars:
-
-```
-NEXTAUTH_SECRET   — JWT signing secret (generate with crypto.randomBytes(32))
-JWT_SECRET        — separate JWT secret
-DB_URI            — MongoDB Atlas connection string
-NEXT_PUBLIC_CASH_ID          — ObjectId of the "Cash" PaymentMethod document
-NEXT_PUBLIC_ON_ACCOUNT_ID    — ObjectId of the "On Account" PaymentMethod document
-NEXT_PUBLIC_STORE_CREDIT_ID  — ObjectId of the "Store Credit" PaymentMethod document
-```
-
----
-
-## Dev commands
-
-```bash
-npm run dev        # development server
-npm run typecheck  # tsc --noEmit
-npm run lint       # eslint
-npm run format     # prettier --write
-npm run build      # production build
-```
-
-Always run `typecheck` before committing. Run `format` before committing to keep diffs clean.

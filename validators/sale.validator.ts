@@ -83,3 +83,24 @@ export const refundSaleItemsSchema = z.object({
     .optional()
     .nullable(),
 })
+
+// Settling the On Account debt on one or more sales. The per-sale rules the
+// server enforces on top of this shape (how much is still owed, whether the
+// register session is open) live in settleSales.
+export const settleSalesSchema = z.object({
+  sales: z
+    .array(
+      z.object({
+        _id: z.string().nonempty("Sale is required"),
+        amount: z.number().positive("Settlement amount must be more than 0"),
+      })
+    )
+    .nonempty("Select at least one sale to settle"),
+  method: z.string().nonempty("Payment method is required"),
+  register: z.string().nonempty("Register is required"),
+  note: z
+    .string()
+    .max(500, "Note must be at most 500 characters")
+    .optional()
+    .nullable(),
+})

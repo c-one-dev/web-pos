@@ -9,13 +9,15 @@ import {
   saleSchema,
   updateSaleNotesSchema,
   refundSaleItemsSchema,
+  settleSalesSchema,
 } from "../validators/sale.validator"
 import { isISOString } from "../helpers/isoString"
 import Register from "@/models/register.model"
 import RegisterSession from "@/models/registerSession.model"
 import Payment from "@/models/payment.model"
 import Customer from "@/models/customer.model"
-import { checkSalesPaymentStatus } from "@/helpers/salesFn"
+import { checkSalesPaymentStatus, outstandingAmount } from "@/helpers/salesFn"
+import PaymentMethod from "@/models/paymentMethod.model"
 
 const CURSOR_TYPE = "sale"
 
@@ -108,7 +110,14 @@ export const saleResolver = {
           .then(() => true)
           .catch(() => false)
 
-        return { ...sale, isEditable }
+        return {
+          ...sale,
+          isEditable,
+          outstandingAmount: outstandingAmount(
+            sale.payments,
+            sale.settledAmount || 0
+          ),
+        }
       } catch (error) {
         throw error
       }
@@ -316,6 +325,9 @@ export const saleResolver = {
       try {
         const CUSTOMER_SALE_CURSOR_TYPE = "customerSale"
         const customerObjectId = new Types.ObjectId(customer)
+        const onAccountObjectId = process.env.NEXT_PUBLIC_ON_ACCOUNT_ID
+          ? new Types.ObjectId(process.env.NEXT_PUBLIC_ON_ACCOUNT_ID)
+          : null
         const matchStage: Record<string, any> = { customer: customerObjectId }
 
         const total = await Sale.countDocuments({ customer: customerObjectId })
@@ -353,22 +365,40 @@ export const saleResolver = {
             $addFields: {
               date: "$createdAt",
               outletName: { $ifNull: ["$outlet.name", "-"] },
+              // An On Account tender is a debt, not money received, so it
+              // doesn't count as paid until it's settled (helpers/salesFn.ts
+              // applies the same rule for the status badge).
               paid: {
-                $reduce: {
-                  input: "$payments",
-                  initialValue: 0,
-                  in: {
-                    $add: [
-                      "$$value",
-                      {
-                        $subtract: [
-                          "$$this.amount",
-                          { $ifNull: ["$$this.change", 0] },
+                $add: [
+                  {
+                    $reduce: {
+                      input: {
+                        $filter: {
+                          input: "$payments",
+                          as: "payment",
+                          cond: onAccountObjectId
+                            ? {
+                                $ne: ["$$payment.method", onAccountObjectId],
+                              }
+                            : true,
+                        },
+                      },
+                      initialValue: 0,
+                      in: {
+                        $add: [
+                          "$$value",
+                          {
+                            $subtract: [
+                              "$$this.amount",
+                              { $ifNull: ["$$this.change", 0] },
+                            ],
+                          },
                         ],
                       },
-                    ],
+                    },
                   },
-                },
+                  { $ifNull: ["$settledAmount", 0] },
+                ],
               },
             },
           },
@@ -417,6 +447,40 @@ export const saleResolver = {
             hasNextPage: result.length > first,
           },
         }
+      } catch (error) {
+        throw error
+      }
+    },
+    customerOutstandingSales: async (_: any, { customer }: any) => {
+      try {
+        const sales = await Sale.find({
+          customer: new Types.ObjectId(customer),
+          currentSaleStatus: { $ne: "VOIDED" },
+          isOnAccount: true,
+        })
+          .select(
+            "saleNumber createdAt total payments settledAmount currentSalePaymentStatus"
+          )
+          .sort({ createdAt: 1 })
+          .lean()
+
+        // Filtered in JS rather than the query because what's still owed
+        // depends on which tenders were On Account - the same rule the status
+        // badge uses, kept in one place (helpers/salesFn.ts).
+        return sales
+          .map((sale: any) => ({
+            _id: sale._id,
+            saleNumber: sale.saleNumber,
+            date: sale.createdAt,
+            total: sale.total,
+            settledAmount: sale.settledAmount || 0,
+            outstandingAmount: outstandingAmount(
+              sale.payments,
+              sale.settledAmount || 0
+            ),
+            currentSalePaymentStatus: sale.currentSalePaymentStatus,
+          }))
+          .filter((sale: any) => sale.outstandingAmount > 0)
       } catch (error) {
         throw error
       }
@@ -1089,6 +1153,210 @@ export const saleResolver = {
             ok: true,
             message: `Sale ${existing.saleNumber} updated successfully.`,
             data: generateSaleNode(populatedResult),
+          }
+        } catch (error) {
+          throw error
+        } finally {
+          await session.endSession()
+        }
+      }
+    ),
+    // Repays the On Account debt on one or more sales in a single pass, which
+    // is what both the per-sale "Settle" action and the customer's bulk
+    // payment drawer call.
+    //
+    // The money physically arrives at a drawer, so every settlement is stamped
+    // with the open register session it was taken in and counted in that
+    // shift's closure tally (see registerSession.resolver.ts). That's why an
+    // open session is required: without one there'd be no shift to answer for
+    // the cash.
+    settleSales: validate(checkSchema(settleSalesSchema))(
+      async (_: any, { sales, method, register, note }: any, ctx: any) => {
+        const session = await mongoose.startSession()
+        try {
+          let result: any
+          await session.withTransaction(async () => {
+            const openSession = await RegisterSession.findOne({
+              register,
+              status: "OPEN",
+            })
+              .session(session)
+              .lean()
+            if (!openSession)
+              throw new GraphQLError(
+                "This register has no open shift. Open the register before taking a settlement, so the payment is counted in a shift.",
+                { extensions: { code: "NO_OPEN_SESSION" } }
+              )
+
+            const paymentMethod = await PaymentMethod.findById(method)
+              .session(session)
+              .lean()
+            if (!paymentMethod)
+              throw new GraphQLError("Payment method not found")
+            // Settling with On Account would just move the debt around.
+            if (method.toString() === process.env.NEXT_PUBLIC_ON_ACCOUNT_ID)
+              throw new GraphQLError(
+                "An account balance can't be settled with On Account.",
+                { extensions: { code: "INVALID_METHOD" } }
+              )
+
+            const now = new Date()
+            const settledPerCustomer = new Map<string, number>()
+            const settledSales: any[] = []
+
+            for (const entry of sales) {
+              const sale = await Sale.findById(entry._id)
+                .select(
+                  "saleNumber customer payments total settledAmount currentSaleStatus currentSalePaymentStatus"
+                )
+                .session(session)
+                .lean()
+              if (!sale)
+                throw new GraphQLError(`Sale ${entry._id} was not found.`)
+              if (sale.currentSaleStatus === "VOIDED")
+                throw new GraphQLError(
+                  `Sale ${sale.saleNumber} is voided, so there is nothing to settle.`,
+                  { extensions: { code: "SALE_VOIDED" } }
+                )
+
+              const alreadySettled = sale.settledAmount || 0
+              const outstanding = outstandingAmount(
+                sale.payments,
+                alreadySettled
+              )
+              if (outstanding <= 0)
+                throw new GraphQLError(
+                  `Sale ${sale.saleNumber} has nothing left to settle.`,
+                  { extensions: { code: "NOTHING_OUTSTANDING" } }
+                )
+              const amount = parseFloat(entry.amount.toFixed(2))
+              if (amount - outstanding > 0.001)
+                throw new GraphQLError(
+                  `Sale ${sale.saleNumber} only has ${outstanding.toFixed(2)} outstanding.`,
+                  { extensions: { code: "SETTLEMENT_EXCEEDS_OUTSTANDING" } }
+                )
+
+              // One Payment document per sale, so settlements show up in the
+              // payment reports the same way an original tender does.
+              const [payment] = await Payment.create(
+                [
+                  {
+                    amount,
+                    change: 0,
+                    method,
+                    date: now,
+                    note: note || `Settlement for ${sale.saleNumber}`,
+                    by: ctx.session._id,
+                    sale: [sale._id],
+                  },
+                ],
+                { session }
+              )
+
+              const nextSettled = parseFloat(
+                (alreadySettled + amount).toFixed(2)
+              )
+              const nextStatus = checkSalesPaymentStatus(
+                sale.payments,
+                sale.total,
+                nextSettled
+              )
+
+              // settledAmount goes in the filter so two cashiers settling the
+              // same sale at once can't both succeed and overpay it.
+              const updated = await Sale.findOneAndUpdate(
+                { _id: sale._id, settledAmount: alreadySettled },
+                {
+                  $set: {
+                    settledAmount: nextSettled,
+                    currentSalePaymentStatus: nextStatus,
+                  },
+                  $push: {
+                    settlements: {
+                      amount,
+                      method,
+                      payment: payment._id,
+                      note: note || "",
+                      date: now,
+                      by: ctx.session._id,
+                      register,
+                      registerSession: openSession._id,
+                    },
+                    salePaymentStatusHistory: {
+                      status: nextStatus,
+                      paymentRef: payment._id,
+                      date: now,
+                      by: ctx.session._id,
+                    },
+                  },
+                },
+                { returnDocument: "after", session }
+              ).lean()
+              if (!updated)
+                throw new GraphQLError(
+                  `Sale ${sale.saleNumber} was settled by someone else just now. Reopen it to see what's left.`,
+                  { extensions: { code: "CONFLICT" } }
+                )
+
+              const customerId = (
+                (sale.customer as any)?._id || sale.customer
+              )?.toString()
+              if (customerId)
+                settledPerCustomer.set(
+                  customerId,
+                  (settledPerCustomer.get(customerId) || 0) + amount
+                )
+              settledSales.push({
+                _id: updated._id,
+                saleNumber: updated.saleNumber,
+                settledAmount: updated.settledAmount,
+                currentSalePaymentStatus: updated.currentSalePaymentStatus,
+              })
+            }
+
+            // Repaying frees the credit back up, exactly like
+            // settleAccountBalance - and never touches accountLimit.max, since
+            // paying a debt doesn't raise the customer's ceiling.
+            for (const [customerId, amount] of settledPerCustomer) {
+              const customer = await Customer.findById(customerId)
+                .select("accountLimit")
+                .session(session)
+                .lean()
+              if (!customer) throw new GraphQLError("Customer not found")
+              await Customer.updateOne(
+                { _id: customerId },
+                {
+                  $inc: { "accountLimit.current": amount },
+                  $push: {
+                    "accountLimit.history": {
+                      remaining: customer.accountLimit.current + amount,
+                      transacted: amount,
+                      date: now,
+                      description: `Settlement (${paymentMethod.name})`,
+                    },
+                  },
+                },
+                { session }
+              )
+            }
+
+            const total = [...settledPerCustomer.values()].reduce(
+              (sum, amount) => sum + amount,
+              0
+            )
+            result = {
+              sales: settledSales,
+              total: parseFloat(total.toFixed(2)),
+            }
+          })
+
+          return {
+            ok: true,
+            message:
+              result.sales.length === 1
+                ? `Settled ${result.sales[0].saleNumber}.`
+                : `Settled ${result.sales.length} sales.`,
+            data: result,
           }
         } catch (error) {
           throw error

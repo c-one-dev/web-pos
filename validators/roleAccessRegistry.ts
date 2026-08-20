@@ -37,6 +37,7 @@ const CASHIER_DEFAULT_PERMISSIONS = [
   "pos.sale",
   "pos.sale.process",
   "pos.sale.edit",
+  "pos.sale.settle",
   "pos.sale.refund",
   "pos.sale.void",
   "pos.sale.history",

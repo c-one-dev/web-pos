@@ -10,7 +10,8 @@ import { fromCursor, toCursor } from "../helpers/cursor"
 
 const REGISTER_SESSION_CURSOR_TYPE = "registerSession"
 
-const fullName = (u: any) => `${u?.name || ""} ${u?.surname || ""}`.trim() || "-"
+const fullName = (u: any) =>
+  `${u?.name || ""} ${u?.surname || ""}`.trim() || "-"
 
 const resolveSummary = async (registerDoc: any, session: any) => {
   const start = session.openedAt
@@ -90,11 +91,36 @@ const resolveSummary = async (registerDoc: any, session: any) => {
     },
   ]
 
-  const [[facets], newCustomers, methodDocs] = await Promise.all([
-    Sale.aggregate(pipeline),
-    Customer.countDocuments({ createdAt: { $gte: start, $lte: end } }),
-    PaymentMethod.find({ _id: { $in: tallyMethodIds } }).lean(),
-  ])
+  // Settlements are repayments of older sales, so they don't appear in the
+  // shift's own sales - but the cash was handed over at this drawer, so the
+  // closure tally has to expect it. Matched on the session, not a date range,
+  // so a settlement always belongs to exactly one shift.
+  const settlementPipeline: PipelineStage[] = [
+    { $match: { "settlements.register": new Types.ObjectId(registerDoc._id) } },
+    { $unwind: "$settlements" },
+    {
+      $match: {
+        "settlements.date": { $gte: start, $lte: end },
+        "settlements.method": {
+          $in: tallyMethodIds.map((id: string) => new Types.ObjectId(id)),
+        },
+      },
+    },
+    {
+      $group: {
+        _id: "$settlements.method",
+        expected: { $sum: "$settlements.amount" },
+      },
+    },
+  ]
+
+  const [[facets], settlementTotals, newCustomers, methodDocs] =
+    await Promise.all([
+      Sale.aggregate(pipeline),
+      Sale.aggregate(settlementPipeline),
+      Customer.countDocuments({ createdAt: { $gte: start, $lte: end } }),
+      PaymentMethod.find({ _id: { $in: tallyMethodIds } }).lean(),
+    ])
 
   const totals = facets.totals[0] || {
     totalSales: 0,
@@ -104,9 +130,16 @@ const resolveSummary = async (registerDoc: any, session: any) => {
   const itemDiscounts = facets.itemDiscounts[0]?.total || 0
   const totalOnAccountSales = facets.onAccount?.[0]?.total || 0
   const methodsById = new Map(methodDocs.map((m: any) => [m._id.toString(), m]))
-  const expectedById = new Map(
+  const expectedById = new Map<string, number>(
     facets.byMethod.map((m: any) => [m._id.toString(), m.expected])
   )
+  // Fold this shift's settlements into the same per-method expectations, so a
+  // cash repayment shows up in the drawer count instead of reading as an
+  // overage at closing time.
+  for (const settlement of settlementTotals) {
+    const key = settlement._id.toString()
+    expectedById.set(key, (expectedById.get(key) || 0) + settlement.expected)
+  }
 
   const totalCashIn = (session.cashMovements || [])
     .filter((m: any) => m.type === "IN")

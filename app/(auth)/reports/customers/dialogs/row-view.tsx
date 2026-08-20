@@ -1,4 +1,6 @@
 import { Button } from "@/components/ui/button"
+import SettleSalesDialog from "@/components/custom/settle-sales-dialog"
+import { usePermissions } from "@/hooks/use-permissions"
 import {
   Drawer,
   DrawerClose,
@@ -259,6 +261,10 @@ export default function RowViewDrawer({ _id, open, setOpen, onClose }: Props) {
     onClose?.()
   }
 
+  const [settleOpen, setSettleOpen] = useState(false)
+  const { can } = usePermissions()
+  const canSettle = can("pos.sale.settle")
+
   return (
     <Drawer direction="right" modal open={open} onOpenChange={handleClose}>
       <DrawerContent
@@ -370,10 +376,29 @@ export default function RowViewDrawer({ _id, open, setOpen, onClose }: Props) {
             />
           </div>
         </div>
-        <DrawerFooter className="flex flex-row">
+        <DrawerFooter className="flex flex-row flex-wrap">
           <StoreCreditDrawer _id={_id!} />
           <AccountLimitDrawer _id={_id!} />
+          {/*
+            Settles this customer's unpaid on-account sales in one pass -
+            pick any combination, choose how they're paying, done.
+          */}
+          {canSettle && (
+            <Button
+              variant="outline"
+              onClick={() => setSettleOpen(true)}
+              disabled={!_id}
+            >
+              Bulk Payment
+            </Button>
+          )}
         </DrawerFooter>
+        <SettleSalesDialog
+          customerId={_id!}
+          customerName={customer?.name}
+          open={settleOpen}
+          setOpen={setSettleOpen}
+        />
       </DrawerContent>
     </Drawer>
   )

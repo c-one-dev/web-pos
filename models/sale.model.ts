@@ -47,6 +47,27 @@ const SaleRefund = new Schema(
   { _id: false }
 )
 
+// A repayment against the On Account portion of a sale. Stamped with the
+// register session it was taken in, so cash settlements land in that shift's
+// closure tally instead of vanishing from the drawer count.
+const SaleSettlement = new Schema(
+  {
+    amount: { type: Number, required: true },
+    method: {
+      type: Schema.Types.ObjectId,
+      ref: "Payment_Method",
+      required: true,
+    },
+    payment: { type: Schema.Types.ObjectId, ref: "Payment" },
+    note: { type: String },
+    date: { type: Date, required: true },
+    by: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    register: { type: Schema.Types.ObjectId, ref: "Register" },
+    registerSession: { type: Schema.Types.ObjectId, ref: "Register_Session" },
+  },
+  { _id: false }
+)
+
 const SalePayment = new Schema<ISalePayment>(
   {
     method: {
@@ -122,6 +143,10 @@ const Sale = new Schema<ISale>(
     changeCreditedAmount: { type: Number, default: 0 },
     // Running total of store credit issued back against this sale, and the
     // individual refunds that make it up.
+    // How much of the On Account debt has been repaid, and the repayments
+    // that make it up.
+    settledAmount: { type: Number, required: true, default: 0 },
+    settlements: { type: [SaleSettlement], required: false, default: [] },
     refundedAmount: { type: Number, required: true, default: 0 },
     refunds: { type: [SaleRefund], required: false, default: [] },
     notes: { type: String },

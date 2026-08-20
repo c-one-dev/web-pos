@@ -57,6 +57,11 @@ export const permissionTree: PermissionNode[] = [
             fields: ["Mutation.updateSale", "Mutation.updateSaleNotes"],
           },
           {
+            key: "pos.sale.settle",
+            label: "Settle an unpaid (on account) sale",
+            fields: ["Mutation.settleSales", "Query.customerOutstandingSales"],
+          },
+          {
             key: "pos.sale.refund",
             label: "Refund sale items as store credit",
             fields: ["Mutation.refundSaleItems"],

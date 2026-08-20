@@ -14,6 +14,8 @@ export enum SaleStatus {
 export enum SalePaymentStatus {
   PAID = "PAID",
   UNPAID = "UNPAID",
+  // An On Account sale whose debt hasn't been settled yet.
+  PENDING = "PENDING",
   PARTIALLY_PAID = "PARTIALLY_PAID",
   REFUNDED = "REFUNDED",
 }
@@ -28,6 +30,17 @@ export interface ISaleItem {
   subTotal: number
   total: number
   refundedQuantity: number
+}
+
+export interface ISaleSettlement {
+  amount: number
+  method: IPaymentMethod | Types.ObjectId | string
+  payment?: Types.ObjectId | string
+  note?: string
+  date: string | Date
+  by: IUser | Types.ObjectId | string
+  register?: Types.ObjectId | string
+  registerSession?: Types.ObjectId | string
 }
 
 export interface ISaleRefundItem {
@@ -83,6 +96,8 @@ export interface ISale {
   // 0 on such a sale, since no cash left the drawer.
   changeToStoreCredit?: boolean
   changeCreditedAmount?: number
+  settledAmount: number
+  settlements: ISaleSettlement[]
   refundedAmount: number
   refunds: ISaleRefund[]
   notes: string

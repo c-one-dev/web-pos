@@ -3,7 +3,7 @@
 import React from "react"
 import { useQuery } from "@apollo/client/react"
 import gql from "graphql-tag"
-import { CreditCardIcon, WalletIcon } from "@phosphor-icons/react"
+import { CreditCardIcon, LinkSimpleHorizontalIcon, WalletIcon } from "@phosphor-icons/react"
 import { Progress } from "@/components/ui/progress"
 import AdjustCreditDialog from "@/app/(auth)/reports/customers/dialogs/adjust-credit"
 import AdjustLimitDialog from "@/app/(auth)/reports/customers/dialogs/adjust-limit"
