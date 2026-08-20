@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/drawer"
 import { Label } from "@/components/ui/label"
 import { useQuery } from "@apollo/client/react"
-import { XIcon } from "@phosphor-icons/react"
+import { GiftIcon, XIcon } from "@phosphor-icons/react"
 import { format } from "date-fns"
 import gql from "graphql-tag"
 import AdjustCreditDialog from "./adjust-credit"
@@ -229,8 +229,8 @@ export default function StoreCreditDrawer({ _id }: Props) {
   return (
     <Drawer direction="right" modal open={open} onOpenChange={setOpen}>
       <DrawerTrigger asChild>
-        <Button className="cursor-pointer rounded-[10px] bg-destructive hover:bg-destructive/80">
-          Store Credit
+        <Button variant="outline" size="sm" className="rounded-md">
+          <GiftIcon /> Store Credit
         </Button>
       </DrawerTrigger>
       <DrawerContent

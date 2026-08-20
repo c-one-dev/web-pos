@@ -12,10 +12,9 @@ import {
 } from "@/components/ui/drawer"
 import { Label } from "@/components/ui/label"
 import { useQuery } from "@apollo/client/react"
-import { XIcon } from "@phosphor-icons/react"
+import { HandCoinsIcon, XIcon } from "@phosphor-icons/react"
 import { format } from "date-fns"
 import gql from "graphql-tag"
-import { Separator } from "@/components/ui/separator"
 import StoreCreditDrawer from "./view-credit"
 import AccountLimitDrawer from "./view-limit"
 import { useMemo, useState } from "react"
@@ -265,6 +264,13 @@ export default function RowViewDrawer({ _id, open, setOpen, onClose }: Props) {
   }
 
   const [settleOpen, setSettleOpen] = useState(false)
+  const maxLimit = customer?.accountLimit?.max || 0
+  const usedLimit = Math.max(
+    maxLimit - (customer?.accountLimit?.current || 0),
+    0
+  )
+  const limitUsedPercent =
+    maxLimit > 0 ? Math.min((usedLimit / maxLimit) * 100, 100) : 0
   const { can } = usePermissions()
   const canSettle = can("pos.sale.settle")
 
@@ -275,67 +281,109 @@ export default function RowViewDrawer({ _id, open, setOpen, onClose }: Props) {
         onInteractOutside={(e) => e.preventDefault()}
         className="w-full data-[vaul-drawer-direction=right]:w-full data-[vaul-drawer-direction=right]:sm:max-w-[min(80rem,96vw)]"
       >
-        <DrawerHeader className="flex flex-row justify-between">
-          <div>
-            <DrawerTitle>{customer?.name}</DrawerTitle>
-            <DrawerDescription>{customer?.email}</DrawerDescription>
-          </div>
-          <DrawerClose asChild>
-            <Button variant="outline" size="icon-lg" className="h-full">
-              <XIcon />
-            </Button>
-          </DrawerClose>
-        </DrawerHeader>
-        <div className="flex h-full w-full gap-4 overflow-y-auto px-4">
-          <div className="grid h-fit w-xs shrink-0 grid-cols-2 place-content-start gap-1.5 border p-2.5">
-            <div className="col-span-2">
-              <Label>Email</Label>
-              <span className="block text-muted-foreground">
-                {customer?.email}
-              </span>
-            </div>
-            <div className="col-span-2">
-              <Label>Customer Since</Label>
-              <span className="block text-muted-foreground">
+        <DrawerHeader className="gap-3 border-b bg-muted/40">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <DrawerTitle className="truncate">{customer?.name}</DrawerTitle>
+              <DrawerDescription className="truncate">
+                {customer?.email || "No email on file"}
                 {customer?.createdAt
-                  ? format(Number(customer.createdAt), "PPpp")
-                  : "-"}
-              </span>
+                  ? ` · Customer since ${format(Number(customer.createdAt), "PP")}`
+                  : ""}
+              </DrawerDescription>
             </div>
-            <Separator className="col-span-2" />
-            <div className="col-span-2">
-              <Label>Max Account Limit</Label>
-              <span className="block text-lg font-medium">
-                {currency(customer?.accountLimit?.max)}
-              </span>
-            </div>
-            <div className="col-span-2">
-              <Label>Remaining Account Limit</Label>
-              <span className="block text-lg font-medium">
-                {currency(customer?.accountLimit?.current)}
-              </span>
-            </div>
-            <div className="col-span-2">
-              <Label>Store Credit</Label>
-              <span className="block text-lg font-medium">
-                {currency(customer?.storeCredit?.current)}
-              </span>
-            </div>
-            <div className="col-span-2">
-              {/*
-                Change the customer left on their account at checkout. A
-                separate wallet from store credit, spendable as its own
-                tender in Process Sale.
-              */}
-              <Label>Current Balance</Label>
-              <span className="block text-lg font-medium">
-                {currency(customer?.currentBalance?.current)}
-              </span>
-            </div>
+            <DrawerClose asChild>
+              <Button variant="ghost" size="icon-sm" className="shrink-0">
+                <XIcon />
+              </Button>
+            </DrawerClose>
           </div>
-          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-            <div className="flex items-center justify-between">
-              <Label className="text-lg font-semibold">Sales</Label>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <StoreCreditDrawer _id={_id!} />
+            <AccountLimitDrawer _id={_id!} />
+            {/*
+              Settles this customer's unpaid on-account sales in one pass -
+              pick any combination, choose how they are paying, done.
+            */}
+            {canSettle && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-md"
+                onClick={() => setSettleOpen(true)}
+                disabled={!_id}
+              >
+                <HandCoinsIcon /> Bulk Payment
+              </Button>
+            )}
+          </div>
+        </DrawerHeader>
+        <div className="flex h-full w-full flex-col gap-4 overflow-y-auto p-4 lg:flex-row">
+          <div className="flex w-full shrink-0 flex-col gap-3 lg:w-72">
+            <section className="border bg-muted/40 p-3">
+              <Label className="text-base font-semibold text-primary">
+                Account limit
+              </Label>
+              <div className="mt-2 space-y-2">
+                <div>
+                  <span className="block text-xs text-muted-foreground">
+                    Remaining
+                  </span>
+                  <span className="block text-xl font-semibold tabular-nums">
+                    {currency(customer?.accountLimit?.current)}
+                  </span>
+                </div>
+                {/*
+                  The bar reads at a glance what two currency figures do not:
+                  how much of the customer's credit is already spent.
+                */}
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all"
+                    style={{ width: `${limitUsedPercent}%` }}
+                  />
+                </div>
+                <span className="block text-xs text-muted-foreground">
+                  {currency(usedLimit)} of{" "}
+                  {currency(customer?.accountLimit?.max)} used
+                </span>
+              </div>
+            </section>
+
+            <section className="border bg-muted/40 p-3">
+              <Label className="text-base font-semibold text-primary">
+                Wallets
+              </Label>
+              <div className="mt-2 grid grid-cols-2 gap-3 lg:grid-cols-1">
+                <div>
+                  {/*
+                    Change the customer left on their account at checkout - a
+                    separate wallet from store credit, spendable as its own
+                    tender in Process Sale.
+                  */}
+                  <span className="block text-xs text-muted-foreground">
+                    Current balance
+                  </span>
+                  <span className="block text-xl font-semibold text-blue-700 tabular-nums">
+                    {currency(customer?.currentBalance?.current)}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-xs text-muted-foreground">
+                    Store credit
+                  </span>
+                  <span className="block text-xl font-semibold text-green-700 tabular-nums">
+                    {currency(customer?.storeCredit?.current)}
+                  </span>
+                </div>
+              </div>
+            </section>
+          </div>
+          <section className="flex min-w-0 flex-1 flex-col gap-2 border bg-muted/40 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Label className="text-base font-semibold text-primary">
+                Sales
+              </Label>
               <div className="flex items-center gap-1.5">
                 <span className="text-sm text-muted-foreground">
                   Showing {total === 0 ? 0 : (page.current - 1) * rows + 1}-
@@ -388,24 +436,12 @@ export default function RowViewDrawer({ _id, open, setOpen, onClose }: Props) {
               noFooter
               rowView={<SaleRowViewDialog external />}
             />
-          </div>
+          </section>
         </div>
-        <DrawerFooter className="flex flex-row flex-wrap">
-          <StoreCreditDrawer _id={_id!} />
-          <AccountLimitDrawer _id={_id!} />
-          {/*
-            Settles this customer's unpaid on-account sales in one pass -
-            pick any combination, choose how they're paying, done.
-          */}
-          {canSettle && (
-            <Button
-              variant="outline"
-              onClick={() => setSettleOpen(true)}
-              disabled={!_id}
-            >
-              Bulk Payment
-            </Button>
-          )}
+        <DrawerFooter className="border-t">
+          <DrawerClose asChild>
+            <Button variant="outline">Close</Button>
+          </DrawerClose>
         </DrawerFooter>
         <SettleSalesDialog
           customerId={_id!}

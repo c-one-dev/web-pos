@@ -273,7 +273,15 @@ function Pay({
   }
 
   const addPayment = (methodId: string | undefined) => {
-    if (!methodId) return
+    // The account-backed tenders are identified by env ids rather than the
+    // register's own method list, so a missing one used to make its button do
+    // nothing at all. Say so instead of failing silently.
+    if (!methodId) {
+      toast.error(
+        "This payment type isn't configured yet. Create the payment method and set its id in the environment, then redeploy."
+      )
+      return
+    }
     if (amountTendered <= 0) {
       toast.error("Amount must be greater than zero.")
       return
@@ -516,7 +524,17 @@ function Pay({
                   <Button
                     size="lg"
                     className="p-2 text-base sm:p-3 sm:text-xl"
-                    disabled={!state.customer}
+                    // Also disabled when the payment method hasn't been set up
+                    // yet, so the button can't look available and do nothing.
+                    disabled={
+                      !state.customer ||
+                      !process.env.NEXT_PUBLIC_CURRENT_BALANCE_ID
+                    }
+                    title={
+                      process.env.NEXT_PUBLIC_CURRENT_BALANCE_ID
+                        ? undefined
+                        : "Set NEXT_PUBLIC_CURRENT_BALANCE_ID to the Current Balance payment method's id."
+                    }
                     onClick={() =>
                       addPayment(process.env.NEXT_PUBLIC_CURRENT_BALANCE_ID)
                     }

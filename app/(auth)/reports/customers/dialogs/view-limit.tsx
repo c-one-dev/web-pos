@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/drawer"
 import { Label } from "@/components/ui/label"
 import { useQuery } from "@apollo/client/react"
-import { XIcon } from "@phosphor-icons/react"
+import { CreditCardIcon, XIcon } from "@phosphor-icons/react"
 import { format } from "date-fns"
 import gql from "graphql-tag"
 import AdjustLimitDialog from "./adjust-limit"
@@ -238,8 +238,8 @@ export default function AccountLimitDrawer({ _id }: Props) {
   return (
     <Drawer direction="right" modal open={open} onOpenChange={setOpen}>
       <DrawerTrigger asChild>
-        <Button className="cursor-pointer rounded-[10px] bg-blue-700 hover:bg-blue-700/80">
-          Account Limit
+        <Button variant="outline" size="sm" className="rounded-md">
+          <CreditCardIcon /> Account Limit
         </Button>
       </DrawerTrigger>
       <DrawerContent
