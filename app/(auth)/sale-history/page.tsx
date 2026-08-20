@@ -51,6 +51,7 @@ import {
 } from "@/types/sale.type"
 import { format, startOfToday, endOfDay } from "date-fns"
 import { ArrowElbowRightIcon } from "@phosphor-icons/react/dist/ssr"
+import { HandCoinsIcon } from "@phosphor-icons/react"
 
 const GET_SALE_HISTORY = gql`
   query SaleHistoryTable(
@@ -104,20 +105,20 @@ function PaymentStatusCell({ row }: { row: ISaleHistoryNode }) {
     can("pos.sale.settle") && owesMoney && row.currentSaleStatus !== "VOIDED"
 
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-center gap-2">
       <StatusBadge status={status} />
       {canSettle && (
-        <>
+        // React portals bubble their events through the React tree, not the
+        // DOM one, so without this wrapper every click inside the dialog -
+        // its overlay included - reaches the cell's row handler and reopens
+        // the Sale Order drawer behind it.
+        <span onClick={(e) => e.stopPropagation()}>
           <Button
             size="sm"
-            variant="outline"
-            className="h-6 rounded-md px-2 text-xs"
-            onClick={(e) => {
-              // The row itself opens the Sale Order drawer on click.
-              e.stopPropagation()
-              setSettleOpen(true)
-            }}
+            className="h-7 gap-1 rounded-md px-2.5 text-xs font-semibold"
+            onClick={() => setSettleOpen(true)}
           >
+            <HandCoinsIcon />
             Pay
           </Button>
           <SettleSalesDialog
@@ -125,7 +126,7 @@ function PaymentStatusCell({ row }: { row: ISaleHistoryNode }) {
             open={settleOpen}
             setOpen={setSettleOpen}
           />
-        </>
+        </span>
       )}
     </div>
   )

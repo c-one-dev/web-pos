@@ -160,6 +160,13 @@ export const registerSessionSchema = gql`
     itemDiscounts: Float
     discounts: Float
     surcharge: Float
+    # Figures the closing report prints beneath the payment tally.
+    openingFloat: Float
+    totalCashIn: Float
+    totalCashOut: Float
+    newCustomers: Int
+    numberOfTransactions: Int
+    avgSaleValue: Float
     paymentSummary: [TallyItem]
     paymentDetails: [ClosurePaymentDetailItem]
     onAccountSales: [ClosurePaymentDetailItem]

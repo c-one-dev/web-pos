@@ -376,6 +376,18 @@ export const registerSessionResolver = {
           itemDiscounts,
           discounts: orderDiscounts,
           surcharge: 0,
+          openingFloat: session.openingFloat || 0,
+          totalCashIn: (session.cashMovements || [])
+            .filter((movement: any) => movement.type === "IN")
+            .reduce((sum: number, movement: any) => sum + movement.amount, 0),
+          totalCashOut: (session.cashMovements || [])
+            .filter((movement: any) => movement.type === "OUT")
+            .reduce((sum: number, movement: any) => sum + movement.amount, 0),
+          newCustomers: await Customer.countDocuments({
+            createdAt: { $gte: start, $lte: end },
+          }),
+          numberOfTransactions: sales.length,
+          avgSaleValue: sales.length ? paymentReceived / sales.length : 0,
           paymentSummary: session.tally || [],
           paymentDetails,
           onAccountSales,
