@@ -282,29 +282,41 @@ function Pay({
       toast.error("Amount must be greater than zero.")
       return
     }
-    // These two tenders draw on a balance rather than taking money in, so
-    // they're capped by what the customer actually has. Same rule the server
-    // enforces in generateSale - checked here so the cart isn't left in a
-    // state that can never be paid.
-    if (
-      methodId === process.env.NEXT_PUBLIC_STORE_CREDIT_ID &&
-      amountTendered > availableStoreCredit
-    ) {
-      toast.error(
-        availableStoreCredit > 0
-          ? `Only ${formatCurrency(availableStoreCredit)} of store credit is available.`
-          : "This customer has no store credit to spend. Change kept at checkout or a refund adds to it."
+    const remainingDue = Math.max(state.total - state.receivedAmount, 0)
+    let appliedAmount = amountTendered
+
+    // Store credit is spendable value, not money coming in, so a tender for
+    // more than the customer holds isn't an error - it just applies what's
+    // there and leaves the rest of the sale to another method. Capped at the
+    // remaining due as well, so credit never produces change.
+    if (methodId === process.env.NEXT_PUBLIC_STORE_CREDIT_ID) {
+      appliedAmount = Math.min(
+        amountTendered,
+        availableStoreCredit,
+        remainingDue
       )
-      return
+      if (appliedAmount <= 0) {
+        toast.error(
+          "This customer has no store credit to spend. Change kept at checkout or a refund adds to it."
+        )
+        return
+      }
+      if (appliedAmount < amountTendered)
+        toast.info(
+          `Applied ${formatCurrency(appliedAmount)} of store credit — ${formatCurrency(
+            remainingDue - appliedAmount
+          )} still to pay.`
+        )
     }
-    const receivedAmount = state.receivedAmount + amountTendered
+
+    const receivedAmount = state.receivedAmount + appliedAmount
     const changeAmount = Math.max(receivedAmount - state.total, 0)
     const netAmount = receivedAmount - changeAmount
     form.setFieldValue("payments", [
       ...state.payments,
       {
         method: methodId,
-        amount: amountTendered,
+        amount: appliedAmount,
         change: changeAmount - state.changeAmount,
         date: new Date(),
         note,
@@ -313,7 +325,9 @@ function Pay({
     form.setFieldValue("receivedAmount", receivedAmount)
     form.setFieldValue("changeAmount", changeAmount)
     form.setFieldValue("netAmount", netAmount)
-    setAmountTendered(0)
+    // Carry what's still owed into the box, so the next method can be paid
+    // with one click instead of retyping the balance.
+    setAmountTendered(Math.max(state.total - receivedAmount, 0))
     setNote("")
   }
 
