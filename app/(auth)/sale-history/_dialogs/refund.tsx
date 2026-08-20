@@ -81,7 +81,7 @@ export default function RefundDialog({ _id, open, setOpen }: Props) {
   const [refundSaleItems, { loading: refunding }] = useMutation(
     REFUND_SALE_ITEMS,
     {
-      refetchQueries: ["Sale", "SaleHistoryTable", "SaleRowActions"],
+      refetchQueries: ["Sale", "SaleHistoryTable"],
       onQueryUpdated: refetchOnlyReadyQueries,
       awaitRefetchQueries: true,
     }

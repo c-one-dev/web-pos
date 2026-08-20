@@ -139,10 +139,13 @@ export default function SettleSalesDialog({
     skip: !open,
   })
   const [settleSales, { loading: settling }] = useMutation(SETTLE_SALES, {
+    // SaleRowActions is deliberately absent: it's the row menu's own lookup,
+    // skipped until the menu opens and then fetched cache-and-network, so it
+    // is always fresh without being refetched here - and refetching a query
+    // whose component is about to re-render only invites aborted requests.
     refetchQueries: [
       "Sale",
       "SaleHistoryTable",
-      "SaleRowActions",
       "CustomerSalesTable",
       "CustomerReport",
       "CustomerOutstandingSales",

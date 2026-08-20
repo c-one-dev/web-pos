@@ -37,5 +37,14 @@ export const refetchOnlyReadyQueries = (observableQuery: any) => {
   // empty optional ones - SaleHistoryTable starts life with `search: ""` and
   // `sort: null` - and skipping those would leave the table showing stale
   // rows after a mutation.
-  return observableQuery.refetch()
+  //
+  // Returning a promise from onQueryUpdated makes the mutation await it, so
+  // the rejection has to be swallowed here: a refetch that gets aborted -
+  // typically because its component unmounted when the table it lives in
+  // re-rendered with the mutation's own result - would otherwise reject an
+  // operation the server already accepted, and surface as "The operation was
+  // aborted." on a successful save.
+  return observableQuery.refetch().catch((error: unknown) => {
+    console.warn("Post-mutation refetch failed:", error)
+  })
 }
