@@ -306,6 +306,7 @@ function SearchBox({
   return (
     <InputGroup className="w-80">
       <InputGroupInput
+        data-search-input
         placeholder={placeholder}
         onChange={(e) => setTerm(e.currentTarget.value)}
         onKeyDown={(e) => {
@@ -488,6 +489,7 @@ function TargetCell({
   return (
     <InputGroup className="w-32">
       <InputGroupInput
+        data-search-input
         type="number"
         min={0}
         disabled={loading}

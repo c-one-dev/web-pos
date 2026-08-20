@@ -316,6 +316,7 @@ export default function Page() {
       <div className="flex justify-between">
         <InputGroup>
           <InputGroupInput
+            data-search-input
             onChange={(e) => setSearchTerm(e.currentTarget.value)}
             placeholder="Type to search..."
             onKeyDown={(e) => {

@@ -457,6 +457,7 @@ function ShiftReportTab() {
         <div className="flex items-center gap-4">
           <InputGroup className="w-80">
             <InputGroupInput
+              data-search-input
               onChange={(e) => setSearchTerm(e.currentTarget.value)}
               placeholder="Find by register"
               onKeyDown={(e) => {
@@ -705,6 +706,7 @@ function VoidedTransactionsTab() {
       <div className="flex items-center justify-between">
         <InputGroup className="w-80">
           <InputGroupInput
+            data-search-input
             onChange={(e) => setSearchTerm(e.currentTarget.value)}
             placeholder="Find by sale #, register, or user"
             onKeyDown={(e) => {

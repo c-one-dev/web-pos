@@ -1342,6 +1342,7 @@ function SalesTransactionsTab({ range }: { range: DateRange }) {
     <div className="flex flex-col gap-1.5 pt-4">
       <InputGroup>
         <InputGroupInput
+          data-search-input
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.currentTarget.value)}
           placeholder="Find by order number..."
