@@ -48,3 +48,8 @@ export const adjustStoreCreditSchema = z.object({
   amount: z.number().finite("Amount must be a valid number"),
   description: z.string().optional().nullable(),
 })
+
+export const deleteStoreCreditHistoryItemSchema = z.object({
+  customerId: z.string().nonempty("Customer id is required"),
+  itemId: z.string().nonempty("History item id is required"),
+})

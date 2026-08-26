@@ -169,6 +169,152 @@ const resolveSummary = async (registerDoc: any, session: any) => {
   }
 }
 
+// Row builders for the closure tabs. Shared by registerSessionClosureDetail
+// and the paged closure* queries so a tab can never disagree with the summary
+// printed above it.
+const buildPaymentRows = (sales: any[], onAccountId?: string) =>
+  sales.flatMap((s: any) =>
+    (s.payments || []).map((p: any) => ({
+      date: p.date,
+      _id: s._id,
+      saleNumber: s.saleNumber,
+      saleTotal: s.total,
+      paymentAmount: p.amount - p.change,
+      type: p.method?.name || "-",
+      isOnAccount: p.method?._id?.toString() === onAccountId,
+      userName: fullName(s.by),
+    }))
+  )
+
+const buildPaymentDetails = (sales: any[], onAccountId?: string) =>
+  sales
+    .filter((s: any) => (s.payments || []).length > 0)
+    .map((s: any) => {
+      const payments = s.payments || []
+      return {
+        date: payments[0]?.date,
+        _id: s._id,
+        saleNumber: s.saleNumber,
+        saleTotal: s.total,
+        paymentAmount: payments.reduce(
+          (sum: number, p: any) => sum + (p.amount - p.change),
+          0
+        ),
+        type: [
+          ...new Set(payments.map((p: any) => p.method?.name || "-")),
+        ].join(", "),
+        isOnAccount: payments.some(
+          (p: any) => p.method?._id?.toString() === onAccountId
+        ),
+        userName: fullName(s.by),
+      }
+    })
+
+const buildTransactions = (sales: any[]) =>
+  sales.map((s: any) => ({
+    date: s.createdAt,
+    _id: s._id,
+    saleNumber: s.saleNumber,
+    status: s.currentSaleStatus,
+    customerName: s.customer?.name || "Walk-in",
+    discount: s.discount,
+    saleTotal: s.total,
+    userName: fullName(s.by),
+  }))
+
+const buildTransactionsBySku = (sales: any[]) =>
+  sales.flatMap((s: any) =>
+    (s.items || []).map((item: any) => ({
+      sku: item.product?.sku || "-",
+      _id: s._id,
+      date: s.createdAt,
+      saleNumber: s.saleNumber,
+      quantity: item.quantity,
+      salesExTax: item.total,
+      totalTax: 0,
+      salesInc: item.total,
+      discountOffers: item.discount * item.quantity,
+      orderDiscounts: s.discount,
+      saleTotal: s.total,
+      payments: [
+        ...new Set((s.payments || []).map((p: any) => p.method?.name)),
+      ].join(", "),
+    }))
+  )
+
+const buildCogs = (sales: any[]) => {
+  const cogsMap = new Map<string, any>()
+  sales.forEach((s: any) => {
+    ;(s.items || []).forEach((item: any) => {
+      const key = item.product?._id?.toString() || item.snapshotName
+      const existing = cogsMap.get(key) || {
+        itemName: item.snapshotName,
+        sku: item.product?.sku || "-",
+        quantitySold: 0,
+        salesInc: 0,
+        salesExTax: 0,
+        purchaseCost: 0,
+        retailPrice: item.product?.currentPrice ?? item.snapshotPrice,
+      }
+      existing.quantitySold += item.quantity
+      existing.salesInc += item.total
+      existing.salesExTax += item.total
+      existing.purchaseCost += (item.product?.cost || 0) * item.quantity
+      cogsMap.set(key, existing)
+    })
+  })
+  return Array.from(cogsMap.values())
+}
+
+// Same scoping as resolveSummary and registerSessionClosureDetail: sales on
+// this register inside the shift window, voided excluded.
+const loadShiftSales = async (_id: string) => {
+  const session = await RegisterSession.findById(_id).lean()
+  if (!session) throw new GraphQLError("Register session not found")
+  const registerDoc = await Register.findById(session.register).lean()
+  if (!registerDoc) throw new GraphQLError("Register not found")
+
+  const sales = await Sale.find({
+    register: registerDoc._id,
+    currentSaleStatus: { $ne: "VOIDED" },
+    createdAt: {
+      $gte: session.openedAt,
+      $lte: session.closedAt || new Date(),
+    },
+  })
+    .populate(["customer", "by", "payments.method", "items.product"])
+    .sort({ createdAt: 1 })
+    .lean()
+
+  return sales
+}
+
+// These rows are derived from the shift's sales rather than stored, so the
+// whole list is built before it can be cut. Index-based cursor, same client
+// contract as the DB-backed tables.
+const paginateRows = (rows: any[], first: number, after?: string) => {
+  let startIndex = 0
+  if (after) {
+    const decoded = Number(Buffer.from(after, "base64").toString("utf8"))
+    startIndex = Number.isFinite(decoded) && decoded > 0 ? decoded : 0
+  }
+  const sliced = rows.slice(startIndex, startIndex + first)
+  const cursorAt = (index: number) =>
+    Buffer.from(String(index), "utf8").toString("base64")
+  return {
+    total: rows.length,
+    pages: Math.ceil(rows.length / first) || 1,
+    edges: sliced.map((row: any, index: number) => ({
+      node: row,
+      cursor: cursorAt(startIndex + index + 1),
+    })),
+    pageInfo: {
+      endCursor: sliced.length ? cursorAt(startIndex + sliced.length) : null,
+      hasNextPage: startIndex + first < rows.length,
+    },
+  }
+}
+
 export const registerSessionResolver = {
   Query: {
     activeRegisterSession: async (_: any, { register }: any) => {
@@ -184,6 +330,22 @@ export const registerSessionResolver = {
         if (!session) return null
         const summary = await resolveSummary(registerDoc, session)
         return { ...session, register: registerDoc, summary }
+      } catch (error) {
+        throw error
+      }
+    },
+    // Scoped to the caller on purpose: the logout warning is only for the
+    // person who left a shift open, not for anyone else signed in.
+    myOpenRegisterSessions: async (_: any, __: any, ctx: any) => {
+      try {
+        if (!ctx.session) return []
+        return await RegisterSession.find({
+          openedBy: ctx.session._id,
+          status: "OPEN",
+        })
+          .populate(["register", "openedBy"])
+          .sort({ openedAt: 1 })
+          .lean()
       } catch (error) {
         throw error
       }
@@ -267,97 +429,19 @@ export const registerSessionResolver = {
         // this rather than from the grouped rows below, because a split
         // payment only puts *part* of the sale on account - grouping first
         // would report the whole sale total as owed.
-        const paymentRows = sales.flatMap((s: any) =>
-          (s.payments || []).map((p: any) => ({
-            date: p.date,
-            _id: s._id,
-            saleNumber: s.saleNumber,
-            saleTotal: s.total,
-            paymentAmount: p.amount - p.change,
-            type: p.method?.name || "-",
-            isOnAccount: p.method?._id?.toString() === onAccountId,
-            userName: fullName(s.by),
-          }))
+        const onAccountSales = buildPaymentRows(sales, onAccountId).filter(
+          (p) => p.isOnAccount
         )
-        const onAccountSales = paymentRows.filter((p) => p.isOnAccount)
 
         // Payment Details is one row per SALE: a sale settled with more than
         // one tender shows a single line with the methods joined, matching
         // the convention Transaction by SKU already uses for its payments
         // column. paymentAmount is the sale's total net tender, not one
         // method's share - use the Payment Summary tab for per-method totals.
-        const paymentDetails = sales
-          .filter((s: any) => (s.payments || []).length > 0)
-          .map((s: any) => {
-            const payments = s.payments || []
-            return {
-              date: payments[0]?.date,
-              _id: s._id,
-              saleNumber: s.saleNumber,
-              saleTotal: s.total,
-              paymentAmount: payments.reduce(
-                (sum: number, p: any) => sum + (p.amount - p.change),
-                0
-              ),
-              type: [
-                ...new Set(payments.map((p: any) => p.method?.name || "-")),
-              ].join(", "),
-              isOnAccount: payments.some(
-                (p: any) => p.method?._id?.toString() === onAccountId
-              ),
-              userName: fullName(s.by),
-            }
-          })
-
-        const transactions = sales.map((s: any) => ({
-          date: s.createdAt,
-          _id: s._id,
-          saleNumber: s.saleNumber,
-          status: s.currentSaleStatus,
-          customerName: s.customer?.name || "Walk-in",
-          discount: s.discount,
-          saleTotal: s.total,
-          userName: fullName(s.by),
-        }))
-
-        const transactionsBySku = sales.flatMap((s: any) =>
-          (s.items || []).map((item: any) => ({
-            sku: item.product?.sku || "-",
-            _id: s._id,
-            saleNumber: s.saleNumber,
-            quantity: item.quantity,
-            salesExTax: item.total,
-            totalTax: 0,
-            salesInc: item.total,
-            discountOffers: item.discount * item.quantity,
-            orderDiscounts: s.discount,
-            saleTotal: s.total,
-            payments: [
-              ...new Set((s.payments || []).map((p: any) => p.method?.name)),
-            ].join(", "),
-          }))
-        )
-
-        const cogsMap = new Map<string, any>()
-        sales.forEach((s: any) => {
-          ;(s.items || []).forEach((item: any) => {
-            const key = item.product?._id?.toString() || item.snapshotName
-            const existing = cogsMap.get(key) || {
-              itemName: item.snapshotName,
-              sku: item.product?.sku || "-",
-              quantitySold: 0,
-              salesInc: 0,
-              salesExTax: 0,
-              purchaseCost: 0,
-              retailPrice: item.product?.currentPrice ?? item.snapshotPrice,
-            }
-            existing.quantitySold += item.quantity
-            existing.salesInc += item.total
-            existing.salesExTax += item.total
-            existing.purchaseCost += (item.product?.cost || 0) * item.quantity
-            cogsMap.set(key, existing)
-          })
-        })
+        const paymentDetails = buildPaymentDetails(sales, onAccountId)
+        const transactions = buildTransactions(sales)
+        const transactionsBySku = buildTransactionsBySku(sales)
+        const cogs = buildCogs(sales)
 
         return {
           _id: session._id,
@@ -394,8 +478,58 @@ export const registerSessionResolver = {
           addsPayouts: session.cashMovements || [],
           transactions,
           transactionsBySku,
-          cogs: Array.from(cogsMap.values()),
+          cogs,
         }
+      } catch (error) {
+        throw error
+      }
+    },
+    closureTransactions: async (_: any, { _id, first = 10, after }: any) => {
+      try {
+        const sales = await loadShiftSales(_id)
+        return paginateRows(buildTransactions(sales), first, after)
+      } catch (error) {
+        throw error
+      }
+    },
+    closureTransactionsBySku: async (
+      _: any,
+      { _id, first = 10, after }: any
+    ) => {
+      try {
+        const sales = await loadShiftSales(_id)
+        return paginateRows(buildTransactionsBySku(sales), first, after)
+      } catch (error) {
+        throw error
+      }
+    },
+    closurePaymentDetails: async (
+      _: any,
+      { _id, first = 10, after, onAccountOnly = false, type }: any
+    ) => {
+      try {
+        const sales = await loadShiftSales(_id)
+        const onAccountId = process.env.NEXT_PUBLIC_ON_ACCOUNT_ID
+        // On Account is per-payment, Payment Details is per-sale - see the
+        // builders for why those two grains differ.
+        let rows = onAccountOnly
+          ? buildPaymentRows(sales, onAccountId).filter((p) => p.isOnAccount)
+          : buildPaymentDetails(sales, onAccountId)
+        // A split payment joins its methods ("Gcash, Cash"), so match on
+        // membership - an equality test would drop every multi-tender sale.
+        if (type)
+          rows = rows.filter((r: any) =>
+            (r.type || "").split(", ").includes(type)
+          )
+        return paginateRows(rows, first, after)
+      } catch (error) {
+        throw error
+      }
+    },
+    closureCogs: async (_: any, { _id, first = 10, after }: any) => {
+      try {
+        const sales = await loadShiftSales(_id)
+        return paginateRows(buildCogs(sales), first, after)
       } catch (error) {
         throw error
       }

@@ -1,7 +1,6 @@
 "use client"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Kbd } from "@/components/ui/kbd"
 import { useMutation, useQuery } from "@apollo/client/react"
 import { gql } from "@apollo/client"
 import { ButtonGroup } from "@/components/ui/button-group"
@@ -75,6 +74,8 @@ import SelectRegisterSheet from "./_dialogs/select-register"
 import PerItem from "./_dialogs/per-item"
 import TotalDiscount from "./_dialogs/total-discount"
 import Pay from "./_dialogs/pay"
+import ShortcutsDialog from "./_dialogs/shortcuts"
+import ShortcutHint from "./_dialogs/shortcut-hint"
 import ReceiptDialog from "./_dialogs/receipt"
 import { toast } from "sonner"
 import { refetchOnlyReadyQueries } from "@/lib/refetch"
@@ -135,6 +136,7 @@ const GET_SALE_FOR_EDIT = gql`
         amount
         change
         note
+        reference
         date
         method {
           _id
@@ -175,6 +177,9 @@ const GET_REGISTER = gql`
       paymentMethods {
         _id
         name
+        # DIGITAL methods (Gcash, Card, BPI QR, bank transfers) need a
+        # reference captured at checkout - see pay.tsx.
+        type
       }
     }
   }
@@ -217,6 +222,7 @@ function saleToFormValues(sale: any, registerId: string) {
       amount: payment.amount,
       change: payment.change,
       note: payment.note || "",
+      reference: payment.reference || "",
       date: payment.date,
     })),
     discount: sale.discount,
@@ -299,6 +305,8 @@ function ProcessSalePage({
     onQueryUpdated: refetchOnlyReadyQueries,
   })
   const [openPay, setOpenPay] = useState(false)
+  // Lifted out of AddCustomer so F2 can open it.
+  const [openCustomerPicker, setOpenCustomerPicker] = useState(false)
   const [receiptSaleId, setReceiptSaleId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -395,14 +403,21 @@ function ProcessSalePage({
     },
   })
 
-  // Keyboard shortcuts for the two things a cashier does on every sale.
-  // Both keys carry a browser default that has to be suppressed - F3 opens
+  // Keyboard shortcuts for the three things a cashier does on a sale.
+  // Each key carries a browser default that has to be suppressed - F3 opens
   // the browser's find bar, and F5 would reload the page and drop the cart
   // mid-sale - so preventDefault runs before anything else.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "F3" && event.key !== "F5") return
+      if (event.key !== "F2" && event.key !== "F3" && event.key !== "F5") return
       event.preventDefault()
+
+      // F2 opens the customer picker. Harmless at any point in a sale - the
+      // customer can be attached before or after the cart is filled.
+      if (event.key === "F2") {
+        setOpenCustomerPicker(true)
+        return
+      }
 
       if (event.key === "F3") {
         setOpenSearchCommand(true)
@@ -645,19 +660,30 @@ function ProcessSalePage({
                         type="button"
                       >
                         Search SKU, Barcode / Product Name
-                        <Kbd>F3</Kbd>
+                        <ShortcutHint
+                          keys="F3"
+                          className="h-7 min-w-9 px-2 text-sm font-semibold"
+                        />
                       </Button>
                     </ButtonGroup>
                     <ButtonGroup className="shrink-0 self-start sm:self-auto">
-                      <Button
-                        variant="outline"
-                        disabled
-                        size="icon"
-                        className="font-base"
-                        type="button"
-                      >
-                        <GraduationCapIcon />
-                      </Button>
+                      {/*
+                        The graduation cap was a disabled placeholder. It is
+                        the obvious home for a shortcuts guide, and keeps the
+                        help next to the keys it explains.
+                      */}
+                      <ShortcutsDialog>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="font-base"
+                          type="button"
+                          title="Keyboard shortcuts"
+                          aria-label="Keyboard shortcuts"
+                        >
+                          <GraduationCapIcon />
+                        </Button>
+                      </ShortcutsDialog>
                       <Button
                         variant="outline"
                         disabled
@@ -742,7 +768,11 @@ function ProcessSalePage({
                   </div>
                 </div>
                 <div className="flex w-full shrink-0 flex-col justify-between gap-2.5 border-t p-2 lg:w-96 lg:overflow-y-auto lg:border-t-0 lg:border-l">
-                  <AddCustomer form={form} />
+                  <AddCustomer
+                    form={form}
+                    open={openCustomerPicker}
+                    onOpenChange={setOpenCustomerPicker}
+                  />
                   <div className="flex flex-1 flex-col items-start justify-start overflow-y-auto">
                     {state.items.length > 0 && (
                       <div className="flex max-h-96 w-full flex-col gap-2.5">
@@ -942,9 +972,11 @@ function ProcessSalePage({
                         >
                           <span className="flex items-center gap-2">
                             Pay
-                            <Kbd className="bg-primary-foreground/20 text-primary-foreground">
-                              F5
-                            </Kbd>
+                            <ShortcutHint
+                              keys="F5"
+                              className="h-8 min-w-10 bg-primary-foreground/20 px-2 text-base font-semibold text-primary-foreground"
+                              iconClassName="text-primary-foreground"
+                            />
                           </span>
                           <span>
                             {new Intl.NumberFormat("en-PH", {

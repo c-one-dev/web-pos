@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button"
+import { refetchOnlyReadyQueries } from "@/lib/refetch"
 import {
   Drawer,
   DrawerClose,
@@ -10,8 +11,8 @@ import {
   DrawerTrigger,
 } from "@/components/ui/drawer"
 import { Label } from "@/components/ui/label"
-import { useQuery } from "@apollo/client/react"
-import { GiftIcon, XIcon } from "@phosphor-icons/react"
+import { useMutation, useQuery } from "@apollo/client/react"
+import { GiftIcon, TrashSimpleIcon, XIcon } from "@phosphor-icons/react"
 import { format } from "date-fns"
 import gql from "graphql-tag"
 import AdjustCreditDialog from "./adjust-credit"
@@ -22,6 +23,18 @@ import { useIsMobile } from "@/hooks/use-mobile"
 import { ColumnDef } from "@tanstack/react-table"
 import { IStoreCreditHistoryItem } from "@/types/customer.type"
 import DataTable from "@/components/custom/data-table"
+import { toast } from "sonner"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { ButtonGroup, ButtonGroupText } from "@/components/ui/button-group"
 import {
   Select,
@@ -71,6 +84,113 @@ const GET_CUSTOMER_CREDIT_HISTORY = gql`
   }
 `
 
+const DELETE_CREDIT_HISTORY_ITEM = gql`
+  mutation DeleteStoreCreditHistoryItem($customerId: ID!, $itemId: ID!) {
+    deleteStoreCreditHistoryItem(customerId: $customerId, itemId: $itemId) {
+      ok
+      message
+    }
+  }
+`
+
+/**
+ * Deletes one store credit entry outright. There is no undo and no reversing
+ * line - the row is removed and the balance re-derived - so the confirmation
+ * spells out the amount and the resulting balance rather than asking a vague
+ * "are you sure".
+ */
+function DeleteCreditEntry({
+  customerId,
+  item,
+  currentBalance,
+}: {
+  customerId?: string
+  item: IStoreCreditHistoryItem
+  currentBalance: number
+}) {
+  const [open, setOpen] = useState(false)
+  const [deleteEntry, { loading }] = useMutation(DELETE_CREDIT_HISTORY_ITEM, {
+    refetchQueries: ["ViewStoreCreditDetails", "CustomerReport", "Customer"],
+    // "Customer" is also mounted by parked row-view dialogs with no _id;
+    // refetching those by name sends no variables and errors on an
+    // operation that already succeeded.
+    onQueryUpdated: refetchOnlyReadyQueries,
+    awaitRefetchQueries: true,
+  })
+
+  const peso = (value: number) =>
+    new Intl.NumberFormat("en-PH", {
+      style: "currency",
+      currency: "PHP",
+    }).format(value)
+
+  const balanceAfter = currentBalance - (item.transacted || 0)
+
+  return (
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+          aria-label="Delete this store credit entry"
+        >
+          <TrashSimpleIcon />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete this store credit entry?</AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-2">
+              <p>
+                This removes the {peso(item.transacted || 0)} entry permanently.
+                The balance becomes{" "}
+                <span className="font-semibold text-foreground">
+                  {peso(balanceAfter)}
+                </span>
+                .
+              </p>
+              <p>
+                The entry is not reversed, it is erased - the history will no
+                longer show it ever happened. This cannot be undone.
+              </p>
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-destructive hover:bg-destructive/90"
+            disabled={loading}
+            onClick={async (event) => {
+              // Radix closes on click; keep it open so a failure is visible
+              // instead of the dialog vanishing as if it worked.
+              event.preventDefault()
+              try {
+                const result: any = await deleteEntry({
+                  variables: { customerId, itemId: item._id?.toString() },
+                })
+                if (result?.data?.deleteStoreCreditHistoryItem?.ok) {
+                  toast.success(
+                    result.data.deleteStoreCreditHistoryItem.message
+                  )
+                  setOpen(false)
+                }
+              } catch (error: any) {
+                toast.error(error.graphQLErrors?.[0]?.message ?? error.message)
+              }
+            }}
+          >
+            Yes, delete it
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}
+
 export default function StoreCreditDrawer({ _id }: Props) {
   // Drawer state
   const [open, setOpen] = useState(false)
@@ -95,6 +215,9 @@ export default function StoreCreditDrawer({ _id }: Props) {
     skip: !_id || !open,
   })
   const customer = (data as any)?.customerReport
+  // Shown in the delete confirmation so the cashier sees the balance the
+  // deletion will produce, not just the amount being removed.
+  const currentBalance = customer?.storeCredit?.current || 0
   // Responsiveness
   const isMobile = useIsMobile()
 
@@ -169,8 +292,21 @@ export default function StoreCreditDrawer({ _id }: Props) {
           )
         },
       },
+      {
+        id: "actions",
+        header: () => <span className="sr-only">Actions</span>,
+        cell: ({ row }) => (
+          <div className="flex justify-end">
+            <DeleteCreditEntry
+              customerId={_id}
+              item={row.original}
+              currentBalance={currentBalance}
+            />
+          </div>
+        ),
+      },
     ],
-    []
+    [_id, currentBalance]
   )
 
   const resetPage = () => setPage({ current: 1, loaded: 1, max: 1 })

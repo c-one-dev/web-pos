@@ -9,6 +9,9 @@ import {
 import Sale from "../models/sale.model"
 import SalesTarget from "../models/salesTarget.model"
 import User from "../models/user.model"
+import { fromCursor, toCursor } from "../helpers/cursor"
+
+const CURSOR_TYPE = "salesTarget"
 
 const rangeForPeriod = (period: string, date: Date) => {
   switch (period) {
@@ -26,10 +29,18 @@ export const salesTargetResolver = {
     salesTargetTable: async (
       _: any,
       {
+        first = 10,
+        after,
         period = "MONTHLY",
         date,
         search,
-      }: { period?: string; date?: string; search?: string }
+      }: {
+        first?: number
+        after?: string
+        period?: string
+        date?: string
+        search?: string
+      }
     ) => {
       try {
         const { start, end } = rangeForPeriod(
@@ -64,7 +75,7 @@ export const salesTargetResolver = {
           targets.map((t: any) => [t.user.toString(), t.target])
         )
 
-        return users
+        const rows = users
           .map((u: any) => {
             const sales = salesByUser.get(u._id.toString())
             const target = targetByUser.get(u._id.toString()) || 0
@@ -83,6 +94,47 @@ export const salesTargetResolver = {
               !search || r.userName.toLowerCase().includes(search.toLowerCase())
           )
           .sort((a: any, b: any) => a.userName.localeCompare(b.userName))
+
+        // These rows are derived (active users joined to sale aggregates and
+        // targets), not a stored collection, so the whole set has to be built
+        // before it can be cut. Paging happens over that computed list, which
+        // keeps the client contract identical to the DB-backed tables.
+        const total = rows.length
+        let startIndex = 0
+        if (after) {
+          const { id, type } = fromCursor(after)
+          if (type !== CURSOR_TYPE) throw new Error("Invalid cursor")
+          const found = rows.findIndex((r: any) => r._id.toString() === id)
+          // A cursor whose row vanished (user deactivated between pages)
+          // restarts rather than throwing - the alternative is a dead table.
+          startIndex = found === -1 ? 0 : found + 1
+        }
+
+        const sliced = rows.slice(startIndex, startIndex + first)
+        const edges = sliced.map((row: any) => ({
+          node: row,
+          cursor: toCursor({
+            type: CURSOR_TYPE,
+            id: row._id.toString(),
+            value: row.userName,
+          }),
+        }))
+
+        return {
+          total,
+          pages: Math.ceil(total / first),
+          edges,
+          pageInfo: {
+            endCursor: sliced.length
+              ? toCursor({
+                  type: CURSOR_TYPE,
+                  id: sliced[sliced.length - 1]._id.toString(),
+                  value: sliced[sliced.length - 1].userName,
+                })
+              : null,
+            hasNextPage: startIndex + first < total,
+          },
+        }
       } catch (error) {
         throw error
       }

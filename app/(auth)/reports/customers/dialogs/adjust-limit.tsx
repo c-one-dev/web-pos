@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button"
+import { refetchOnlyReadyQueries } from "@/lib/refetch"
 import {
   Dialog,
   DialogClose,
@@ -71,6 +72,10 @@ export default function AdjustLimitDialog({ _id }: Props) {
   })
   const [adjustCredit] = useMutation(ADJUST_ACCOUNT_LIMIT, {
     refetchQueries: ["ViewAccountLimitDetails", "CustomerReport", "Customer"],
+    // "Customer" is also mounted by parked row-view dialogs with no _id;
+    // refetching those by name sends no variables and errors on an
+    // operation that already succeeded.
+    onQueryUpdated: refetchOnlyReadyQueries,
     awaitRefetchQueries: true,
     updateQueries: {
       CustomerReportTable: (prev, { mutationResult }: any) => {

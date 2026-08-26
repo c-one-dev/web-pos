@@ -8,6 +8,7 @@ export const paymentSchema = gql`
     change: Float
     date: String
     note: String
+    reference: String
     by: User
     sale: [Sale]
     createdAt: String

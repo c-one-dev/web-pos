@@ -68,6 +68,9 @@ export const saleSchema = gql`
     amount: Float
     change: Float
     note: String
+    # Provider reference / card approval code. Separate from note - see the
+    # model for why.
+    reference: String
     date: String
     payment: Payment
   }
@@ -164,6 +167,7 @@ export const saleSchema = gql`
     amount: Float
     change: Float
     note: String
+    reference: String
     date: String
   }
 

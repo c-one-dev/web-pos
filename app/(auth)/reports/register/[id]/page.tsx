@@ -1,5 +1,12 @@
 "use client"
-import { useMemo, useState, type ReactNode } from "react"
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react"
 import gql from "graphql-tag"
 import { useQuery } from "@apollo/client/react"
 import { useParams, useRouter } from "next/navigation"
@@ -39,12 +46,52 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ColumnDef } from "@tanstack/react-table"
 import DataTable from "@/components/custom/data-table"
 import SaleRowViewDialog from "@/app/(auth)/sale-history/_dialogs/row-view"
+import { useCursorPage } from "@/hooks/use-cursor-page"
+import { cn } from "@/lib/utils"
 
 const currency = (value?: number | null) =>
   new Intl.NumberFormat("en-PH", {
     style: "currency",
     currency: "PHP",
   }).format(value || 0)
+
+// This report gets read at the counter, often quickly and not always by
+// someone with sharp near vision, so the whole tab strip and its tables are
+// deliberately larger and higher-contrast than the shared defaults. All of it
+// is applied here rather than in components/ui/{tabs,table}.tsx, which every
+// other page uses.
+const CLOSURE_TABS_LIST =
+  "relative w-full flex-wrap justify-start gap-1 border-b border-border bg-transparent p-0 group-data-horizontal/tabs:h-auto"
+
+// 16px labels instead of 12px. The active tab is a solid green pill rather
+// than an underline - the pill is a single element behind the strip
+// (ClosureTabs below) that slides between tabs, so it cannot be a per-trigger
+// background.
+const CLOSURE_TAB_TRIGGER = [
+  // z-10 keeps the label above the sliding pill, which is painted behind it.
+  "relative z-10 flex-none px-4 py-2.5 text-base text-muted-foreground",
+  "hover:text-foreground data-active:font-semibold",
+  // White-ish label on the green pill. The second rule re-states it for the
+  // hovered-active case: plain `hover:text-foreground` above would otherwise
+  // darken the label to near-black against the green fill. Stacking the
+  // variants raises specificity, so this wins without !important.
+  "data-active:text-primary-foreground",
+  "data-active:hover:text-primary-foreground",
+  // 2px side rules give each inactive label a visible edge, so the strip reads
+  // as a row of buttons rather than as a sentence. Dropped on hover and on the
+  // active tab, where the fill already defines the shape - keeping both would
+  // read as two competing outlines.
+  "border-x-2 border-x-primary data-active:border-x-transparent",
+  "hover:border-x-transparent",
+  // The trigger never paints its own background - the pill owns that.
+  "cursor-pointer hover:bg-primary/5 data-active:bg-transparent",
+].join(" ")
+
+// Row text at 14px - still well above the shared 12px default, but a notch
+// under the 16px tab labels so the wide tabs (Transaction by SKU has nine
+// columns) do not force horizontal scrolling. Rows stay taller than default
+// so the denser type is not cramped.
+const CLOSURE_TABLE_TEXT = "text-sm [&_td]:py-2.5 [&_th]:h-11 [&_th]:text-sm"
 
 const GET_CLOSURE_DETAIL = gql`
   query RegisterSessionClosureDetail($_id: ID!) {
@@ -74,25 +121,6 @@ const GET_CLOSURE_DETAIL = gql`
         counted
         difference
       }
-      paymentDetails {
-        _id
-        date
-        saleNumber
-        saleTotal
-        paymentAmount
-        type
-        isOnAccount
-        userName
-      }
-      onAccountSales {
-        _id
-        date
-        saleNumber
-        saleTotal
-        paymentAmount
-        type
-        userName
-      }
       addsPayouts {
         type
         amount
@@ -103,37 +131,6 @@ const GET_CLOSURE_DETAIL = gql`
           name
           surname
         }
-      }
-      transactions {
-        _id
-        date
-        saleNumber
-        status
-        customerName
-        discount
-        saleTotal
-        userName
-      }
-      transactionsBySku {
-        _id
-        sku
-        saleNumber
-        quantity
-        salesExTax
-        salesInc
-        discountOffers
-        orderDiscounts
-        saleTotal
-        payments
-      }
-      cogs {
-        itemName
-        sku
-        quantitySold
-        salesInc
-        salesExTax
-        purchaseCost
-        retailPrice
       }
     }
   }
@@ -175,6 +172,7 @@ type TransactionRow = {
 type SkuRow = {
   _id: string
   sku: string
+  date: string
   saleNumber: string
   quantity: number
   salesExTax: number
@@ -228,34 +226,334 @@ function SummaryCard({
   )
 }
 
-function TotalsTable<T>({
-  data,
-  loading,
+// Tab labels in render order. Kept as data so the strip and the sliding pill
+// stay in step without repeating the list.
+const CLOSURE_TAB_DEFS = [
+  { value: "payment-summary", label: "Payment Summary" },
+  { value: "payment-details", label: "Payment Details" },
+  { value: "on-account", label: "On Account Sale" },
+  { value: "adds-payouts", label: "Adds / Payouts" },
+  { value: "transactions", label: "Transactions" },
+  { value: "by-sku", label: "Transaction by SKU" },
+  { value: "cogs", label: "Cost of Goods Sold" },
+]
+
+/**
+ * Tab strip whose active state is a green pill that slides to the tab you
+ * pick. Radix has no built-in moving indicator, so the pill is one absolutely
+ * positioned element measured from the active trigger's offset box - which
+ * also handles the strip wrapping to a second line, since offsetTop moves with
+ * it. Falls back to sitting still (not disappearing) if measurement fails.
+ */
+function ClosureTabs({ children }: { children: ReactNode }) {
+  const [value, setValue] = useState(CLOSURE_TAB_DEFS[0].value)
+  const listRef = useRef<HTMLDivElement>(null)
+  // Keyed by tab value rather than read off a data attribute, so this does not
+  // depend on which state attribute the Radix version happens to set.
+  const triggerRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+  const [pill, setPill] = useState({
+    left: 0,
+    top: 0,
+    width: 0,
+    height: 0,
+    measured: false,
+  })
+
+  useLayoutEffect(() => {
+    const measure = () => {
+      const el = triggerRefs.current[value]
+      if (!el) return
+      setPill({
+        left: el.offsetLeft,
+        top: el.offsetTop,
+        width: el.offsetWidth,
+        height: el.offsetHeight,
+        measured: true,
+      })
+    }
+    measure()
+    // Re-measure when the strip reflows - a resize can rewrap the tabs and
+    // leave the pill stranded over the wrong one.
+    const list = listRef.current
+    if (!list || typeof ResizeObserver === "undefined") return
+    const observer = new ResizeObserver(measure)
+    observer.observe(list)
+    return () => observer.disconnect()
+  }, [value])
+
+  return (
+    <Tabs value={value} onValueChange={setValue}>
+      <TabsList ref={listRef} className={CLOSURE_TABS_LIST}>
+        <span
+          aria-hidden
+          className={cn(
+            "pointer-events-none absolute top-0 left-0 z-0 rounded-md bg-primary",
+            // The slide itself. Held still for anyone who asked the OS for
+            // reduced motion.
+            "transition-all duration-300 ease-out motion-reduce:transition-none"
+          )}
+          style={{
+            transform: `translate3d(${pill.left}px, ${pill.top}px, 0)`,
+            width: pill.width,
+            height: pill.height,
+            opacity: pill.measured ? 1 : 0,
+          }}
+        />
+        {CLOSURE_TAB_DEFS.map((tab) => (
+          <TabsTrigger
+            key={tab.value}
+            value={tab.value}
+            ref={(el) => {
+              triggerRefs.current[tab.value] = el
+            }}
+            className={CLOSURE_TAB_TRIGGER}
+          >
+            {tab.label}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+      {children}
+    </Tabs>
+  )
+}
+
+// Paged tab queries. The summary cards stay on GET_CLOSURE_DETAIL, which
+// still computes them over the whole shift, so paging a tab can never move a
+// total.
+const GET_CLOSURE_TRANSACTIONS = gql`
+  query ClosureTransactions($_id: ID!, $first: Int, $after: String) {
+    closureTransactions(_id: $_id, first: $first, after: $after) {
+      total
+      pages
+      edges {
+        cursor
+        node {
+          _id
+          date
+          saleNumber
+          status
+          customerName
+          discount
+          saleTotal
+          userName
+        }
+      }
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
+    }
+  }
+`
+
+const GET_CLOSURE_BY_SKU = gql`
+  query ClosureTransactionsBySku($_id: ID!, $first: Int, $after: String) {
+    closureTransactionsBySku(_id: $_id, first: $first, after: $after) {
+      total
+      pages
+      edges {
+        cursor
+        node {
+          _id
+          sku
+          date
+          saleNumber
+          quantity
+          salesExTax
+          salesInc
+          discountOffers
+          orderDiscounts
+          saleTotal
+          payments
+        }
+      }
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
+    }
+  }
+`
+
+const GET_CLOSURE_PAYMENT_DETAILS = gql`
+  query ClosurePaymentDetails(
+    $_id: ID!
+    $first: Int
+    $after: String
+    $onAccountOnly: Boolean
+    $type: String
+  ) {
+    closurePaymentDetails(
+      _id: $_id
+      first: $first
+      after: $after
+      onAccountOnly: $onAccountOnly
+      type: $type
+    ) {
+      total
+      pages
+      edges {
+        cursor
+        node {
+          _id
+          date
+          saleNumber
+          saleTotal
+          paymentAmount
+          type
+          isOnAccount
+          userName
+        }
+      }
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
+    }
+  }
+`
+
+const GET_CLOSURE_COGS = gql`
+  query ClosureCogs($_id: ID!, $first: Int, $after: String) {
+    closureCogs(_id: $_id, first: $first, after: $after) {
+      total
+      pages
+      edges {
+        cursor
+        node {
+          itemName
+          sku
+          quantitySold
+          salesInc
+          salesExTax
+          purchaseCost
+          retailPrice
+        }
+      }
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
+    }
+  }
+`
+
+// One tab's worth of rows, paged server-side. Owns its own page size and
+// cursor so switching tabs does not disturb the others.
+function PagedTab<T>({
+  query,
+  field,
+  variables,
   columns,
   emptyLabel,
   rowView,
 }: {
-  data?: T[]
-  loading: boolean
+  query: any
+  field: string
+  variables: Record<string, any>
   columns: ColumnDef<T>[]
   emptyLabel: string
   rowView?: ReactNode
 }) {
   const [rows, setRows] = useState<number>(8)
-  const [page, setPage] = useState<{ current: number; max: number }>({
-    current: 1,
-    max: 1,
+  const baseVars = useMemo(() => variables, [variables])
+  const { data, loading, fetchMore } = useQuery(query, {
+    variables: { first: rows, ...baseVars },
+    fetchPolicy: "cache-and-network",
   })
+  const { page, total, nodes, reset, onNext, onPrev } = useCursorPage(
+    field,
+    data,
+    fetchMore,
+    rows,
+    baseVars
+  )
+
+  // A changed filter or page size starts a fresh cursor run.
+  useEffect(() => {
+    reset()
+  }, [baseVars, rows, reset])
+
+  return (
+    <TotalsTable
+      data={nodes.slice((page.current - 1) * rows, page.current * rows)}
+      total={total}
+      loading={loading}
+      columns={columns}
+      emptyLabel={emptyLabel}
+      rowView={rowView}
+      rows={rows}
+      setRows={setRows}
+      page={page}
+      onPrev={onPrev}
+      onNext={onNext}
+    />
+  )
+}
+
+// Two modes. Server-paged callers (PagedTab) hand in an already-sliced page
+// plus its own controls; the small tabs still fed straight off
+// GET_CLOSURE_DETAIL keep slicing locally.
+function TotalsTable<T>({
+  data,
+  total: serverTotal,
+  loading,
+  columns,
+  emptyLabel,
+  rowView,
+  rows: serverRows,
+  setRows: serverSetRows,
+  page: serverPage,
+  onPrev: serverOnPrev,
+  onNext: serverOnNext,
+}: {
+  data?: T[]
+  total?: number
+  loading: boolean
+  columns: ColumnDef<T>[]
+  emptyLabel: string
+  rowView?: ReactNode
+  rows?: number
+  setRows?: (rows: number) => void
+  page?: { current: number; max: number }
+  onPrev?: () => void
+  onNext?: () => void
+}) {
+  const serverPaged = serverPage !== undefined
+  const [localRows, setLocalRows] = useState<number>(8)
+  const [localPage, setLocalPage] = useState<{
+    current: number
+    max: number
+  }>({ current: 1, max: 1 })
+
+  const rows = serverRows ?? localRows
+  const setRows = serverSetRows ?? setLocalRows
 
   const points = useMemo(() => data || [], [data])
-  const total = points.length
+  const total = serverPaged ? serverTotal || 0 : points.length
   const max = Math.max(1, Math.ceil(total / rows))
-  if (max !== page.max)
-    setPage((prev) => ({ ...prev, max, current: Math.min(prev.current, max) }))
+  if (!serverPaged && max !== localPage.max)
+    setLocalPage((prev) => ({
+      ...prev,
+      max,
+      current: Math.min(prev.current, max),
+    }))
+  const page = serverPage ?? localPage
+
+  // Reserve a consistent body height so switching tabs doesn't make the page
+  // jump - a tab with 3 rows takes the same space as one with 8, and an empty
+  // tab takes it too. Derived from the metrics CLOSURE_TABLE_TEXT sets (h-11
+  // header, py-2.5 rows at 14px); retune here if those change. Capped at 8
+  // rows so picking 100/page doesn't reserve a screen of whitespace for a
+  // short tab.
+  const reservedBodyHeight = 44 + Math.min(rows, 8) * 41
 
   if (!loading && !points.length)
     return (
-      <div className="flex h-40 w-full items-center justify-center text-sm text-muted-foreground">
+      <div
+        className="flex w-full items-center justify-center text-sm text-muted-foreground"
+        style={{ minHeight: reservedBodyHeight }}
+      >
         {emptyLabel}
       </div>
     )
@@ -263,7 +561,7 @@ function TotalsTable<T>({
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between">
-        <span className="text-sm text-muted-foreground">
+        <span className="text-base text-muted-foreground">
           Showing {total === 0 ? 0 : (page.current - 1) * rows + 1}-
           {page.current === page.max ? total : page.current * rows} out of{" "}
           {total} result{total === 1 ? "" : "s"}.
@@ -273,7 +571,7 @@ function TotalsTable<T>({
             value={rows.toString()}
             onValueChange={(value) => {
               setRows(Number(value))
-              setPage({ current: 1, max: 1 })
+              if (!serverPaged) setLocalPage({ current: 1, max: 1 })
             }}
           >
             <SelectTrigger className="w-18">
@@ -290,7 +588,12 @@ function TotalsTable<T>({
           <ButtonGroup>
             <Button
               onClick={() =>
-                setPage((prev) => ({ ...prev, current: prev.current - 1 }))
+                serverOnPrev
+                  ? serverOnPrev()
+                  : setLocalPage((prev) => ({
+                      ...prev,
+                      current: prev.current - 1,
+                    }))
               }
               disabled={page.current === 1}
               variant="outline"
@@ -300,7 +603,12 @@ function TotalsTable<T>({
             <ButtonGroupText>{`Page ${page.current} of ${page.max}`}</ButtonGroupText>
             <Button
               onClick={() =>
-                setPage((prev) => ({ ...prev, current: prev.current + 1 }))
+                serverOnNext
+                  ? serverOnNext()
+                  : setLocalPage((prev) => ({
+                      ...prev,
+                      current: prev.current + 1,
+                    }))
               }
               disabled={page.current === page.max}
               variant="outline"
@@ -310,13 +618,20 @@ function TotalsTable<T>({
           </ButtonGroup>
         </div>
       </div>
-      <DataTable
-        loading={loading}
-        columns={columns}
-        data={points.slice((page.current - 1) * rows, page.current * rows)}
-        noFooter
-        rowView={rowView}
-      />
+      <div style={{ minHeight: reservedBodyHeight }}>
+        <DataTable
+          loading={loading}
+          columns={columns}
+          data={
+            serverPaged
+              ? points
+              : points.slice((page.current - 1) * rows, page.current * rows)
+          }
+          noFooter
+          rowView={rowView}
+          className={CLOSURE_TABLE_TEXT}
+        />
+      </div>
     </div>
   )
 }
@@ -343,23 +658,25 @@ export default function Page() {
     return Array.from(names).filter(Boolean)
   }, [detail])
 
+  // Memoised so PagedTab's reset effect only fires on a real change.
+  const sessionVars = useMemo(() => ({ _id: sessionId }), [sessionId])
+  const paymentDetailVars = useMemo(
+    () => ({
+      _id: sessionId,
+      type: paymentType === "ALL" ? null : paymentType,
+    }),
+    [sessionId, paymentType]
+  )
+  const onAccountVars = useMemo(
+    () => ({ _id: sessionId, onAccountOnly: true }),
+    [sessionId]
+  )
+
   const filteredPaymentSummary: PaymentSummaryRow[] = useMemo(() => {
     const rows = detail?.paymentSummary || []
     return paymentType === "ALL"
       ? rows
       : rows.filter((r: PaymentSummaryRow) => r.method?.name === paymentType)
-  }, [detail, paymentType])
-
-  const filteredPaymentDetails: PaymentDetailRow[] = useMemo(() => {
-    const rows = detail?.paymentDetails || []
-    // A split payment's type is a joined list ("Gcash, Card"), so match on
-    // membership rather than equality - an exact compare would drop every
-    // multi-tender sale from the filtered view.
-    return paymentType === "ALL"
-      ? rows
-      : rows.filter((r: PaymentDetailRow) =>
-          (r.type || "").split(", ").includes(paymentType)
-        )
   }, [detail, paymentType])
 
   if (loading && !detail) {
@@ -532,6 +849,12 @@ export default function Page() {
       cell: ({ row }) => (
         <span className="font-medium text-primary">
           {row.original.saleNumber}
+          {row.original.date && (
+            <span className="font-normal text-muted-foreground">
+              {" · "}
+              {format(Number(row.original.date), "MMM d")}
+            </span>
+          )}
         </span>
       ),
     },
@@ -635,7 +958,11 @@ export default function Page() {
   ]
 
   return (
-    <div className="flex h-full w-full flex-col gap-2.5 p-2.5 print:p-0">
+    // pb-10 so the last table row is not flush against the bottom of the
+    // scroll area - the tabs make this page tall enough that the final row
+    // otherwise sits right on the edge. Reset for print, where the page
+    // break handles spacing.
+    <div className="flex h-full w-full flex-col gap-2.5 p-2.5 pb-10 print:p-0 print:pb-0">
       <div className="flex items-center justify-between">
         <Label className="text-xl font-medium">Register closure summary</Label>
         <div className="flex gap-1.5 print:hidden">
@@ -789,16 +1116,7 @@ export default function Page() {
               </Select>
             </div>
           )}
-          <Tabs defaultValue="payment-summary">
-            <TabsList variant="line" className="flex-wrap">
-              <TabsTrigger value="payment-summary">Payment Summary</TabsTrigger>
-              <TabsTrigger value="payment-details">Payment Details</TabsTrigger>
-              <TabsTrigger value="on-account">On Account Sale</TabsTrigger>
-              <TabsTrigger value="adds-payouts">Adds / Payouts</TabsTrigger>
-              <TabsTrigger value="transactions">Transactions</TabsTrigger>
-              <TabsTrigger value="by-sku">Transaction by SKU</TabsTrigger>
-              <TabsTrigger value="cogs">Cost of Goods Sold</TabsTrigger>
-            </TabsList>
+          <ClosureTabs>
             <TabsContent value="payment-summary" className="pt-4">
               <TotalsTable
                 data={filteredPaymentSummary}
@@ -808,18 +1126,20 @@ export default function Page() {
               />
             </TabsContent>
             <TabsContent value="payment-details" className="pt-4">
-              <TotalsTable
-                data={filteredPaymentDetails}
-                loading={loading}
+              <PagedTab<PaymentDetailRow>
+                query={GET_CLOSURE_PAYMENT_DETAILS}
+                field="closurePaymentDetails"
+                variables={paymentDetailVars}
                 columns={paymentDetailColumns}
                 emptyLabel="No payments recorded in this shift."
                 rowView={<SaleRowViewDialog external />}
               />
             </TabsContent>
             <TabsContent value="on-account" className="pt-4">
-              <TotalsTable
-                data={detail.onAccountSales}
-                loading={loading}
+              <PagedTab<PaymentDetailRow>
+                query={GET_CLOSURE_PAYMENT_DETAILS}
+                field="closurePaymentDetails"
+                variables={onAccountVars}
                 columns={paymentDetailColumns}
                 emptyLabel="No on-account sales in this shift."
                 rowView={<SaleRowViewDialog external />}
@@ -834,32 +1154,35 @@ export default function Page() {
               />
             </TabsContent>
             <TabsContent value="transactions" className="pt-4">
-              <TotalsTable
-                data={detail.transactions}
-                loading={loading}
+              <PagedTab<TransactionRow>
+                query={GET_CLOSURE_TRANSACTIONS}
+                field="closureTransactions"
+                variables={sessionVars}
                 columns={transactionColumns}
                 emptyLabel="No transactions in this shift."
                 rowView={<SaleRowViewDialog external />}
               />
             </TabsContent>
             <TabsContent value="by-sku" className="pt-4">
-              <TotalsTable
-                data={detail.transactionsBySku}
-                loading={loading}
+              <PagedTab<SkuRow>
+                query={GET_CLOSURE_BY_SKU}
+                field="closureTransactionsBySku"
+                variables={sessionVars}
                 columns={skuColumns}
                 emptyLabel="No items sold in this shift."
                 rowView={<SaleRowViewDialog external />}
               />
             </TabsContent>
             <TabsContent value="cogs" className="pt-4">
-              <TotalsTable
-                data={detail.cogs}
-                loading={loading}
+              <PagedTab<CogsRow>
+                query={GET_CLOSURE_COGS}
+                field="closureCogs"
+                variables={sessionVars}
                 columns={cogsColumns}
                 emptyLabel="No items sold in this shift."
               />
             </TabsContent>
-          </Tabs>
+          </ClosureTabs>
         </CardContent>
       </Card>
     </div>

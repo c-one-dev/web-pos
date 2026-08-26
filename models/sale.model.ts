@@ -78,6 +78,11 @@ const SalePayment = new Schema<ISalePayment>(
     amount: { type: Number, required: true },
     change: { type: Number, required: true, default: 0 },
     note: { type: String },
+    // Kept separate from `note`: a note is free text the cashier may add for
+    // any reason, while this is the provider's reference / approval code and
+    // is required for digital tenders. Merging them meant a stray note looked
+    // like a captured reference.
+    reference: { type: String },
     date: { type: Date, required: true },
     payment: { type: Schema.Types.ObjectId, ref: "Payment" },
   },

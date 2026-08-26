@@ -1,5 +1,5 @@
 "use client"
-import { signOut, useSession } from "next-auth/react"
+import { useSession } from "next-auth/react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,6 +20,7 @@ import { SidebarTrigger } from "../ui/sidebar"
 import SwitchUserSheet from "./switch-user-sheet"
 import MyProfileSheet from "./my-profile-sheet"
 import ChangePasswordDialog from "./change-password-dialog"
+import LogoutGuardDialog from "./logout-guard-dialog"
 
 function ProfileMenu() {
   const { data: session }: any = useSession()
@@ -75,7 +76,11 @@ function ProfileMenu() {
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem onClick={() => signOut()}>Log out</DropdownMenuItem>
+          <LogoutGuardDialog>
+            <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+              Log out
+            </DropdownMenuItem>
+          </LogoutGuardDialog>
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>

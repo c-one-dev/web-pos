@@ -193,5 +193,8 @@ export const customerSchema = gql`
     adjustStoreCredit(_id: ID!, amount: Float!, description: String): Response
     updateCustomer(_id: ID!, input: CustomerInput): Response
     changeCustomerStatus(_id: ID!): Response
+    # Permanently removes one store credit history entry and re-derives the
+    # balance. Destructive by design - see the resolver.
+    deleteStoreCreditHistoryItem(customerId: ID!, itemId: ID!): Response
   }
 `

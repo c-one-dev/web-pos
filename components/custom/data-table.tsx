@@ -34,6 +34,10 @@ type Props<TData, TValue> = {
   // instead of opening a drawer (e.g. Shift Report -> closure summary page).
   onRowClick?: (row: TData) => void
   noFooter?: boolean
+  // Merged onto the <Table> element. Font size lives there and cells inherit
+  // it, so a caller can enlarge a whole table without restyling the shared
+  // primitive for every other page.
+  className?: string
 }
 
 export default function DataTable<TData, TValue>({
@@ -44,6 +48,7 @@ export default function DataTable<TData, TValue>({
   rowView,
   onRowClick,
   noFooter = false,
+  className,
 }: Props<TData, TValue>) {
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
@@ -69,7 +74,7 @@ export default function DataTable<TData, TValue>({
           setOpen: setOpenView,
           onClose: onCloseView,
         })}
-      <Table className="border">
+      <Table className={cn("border", className)}>
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow key={headerGroup.id}>
@@ -145,12 +150,17 @@ export default function DataTable<TData, TValue>({
                     className={cn(
                       cell.column.id !== "select" &&
                         cell.column.id !== "registers" &&
+                        cell.column.id !== "actions" &&
                         "cursor-pointer"
                     )}
                     onClick={() => {
+                      // "actions" holds row-level buttons (delete, etc).
+                      // Without this, clicking one also fires the row view
+                      // and the two dialogs stack on top of each other.
                       if (
                         cell.column.id === "select" ||
-                        cell.column.id === "registers"
+                        cell.column.id === "registers" ||
+                        cell.column.id === "actions"
                       )
                         return
                       if (onRowClick) {

@@ -122,6 +122,7 @@ export const registerSessionSchema = gql`
   type ClosureSkuItem {
     sku: String
     _id: ID
+    date: String
     saleNumber: String
     quantity: Float
     salesExTax: Float
@@ -176,10 +177,78 @@ export const registerSessionSchema = gql`
     cogs: [ClosureCogsItem]
   }
 
+  # Paginated views of the closure tabs. The summary cards stay on
+  # registerSessionClosureDetail, which still computes them over the whole
+  # shift - only the row lists are paged, so the totals can not drift.
+  type ClosureTransactionEdge {
+    node: ClosureTransactionItem
+    cursor: String
+  }
+  type ClosureTransactionConnection {
+    total: Int
+    pages: Int
+    edges: [ClosureTransactionEdge]
+    pageInfo: PageInfo
+  }
+
+  type ClosureSkuEdge {
+    node: ClosureSkuItem
+    cursor: String
+  }
+  type ClosureSkuConnection {
+    total: Int
+    pages: Int
+    edges: [ClosureSkuEdge]
+    pageInfo: PageInfo
+  }
+
+  type ClosurePaymentDetailEdge {
+    node: ClosurePaymentDetailItem
+    cursor: String
+  }
+  type ClosurePaymentDetailConnection {
+    total: Int
+    pages: Int
+    edges: [ClosurePaymentDetailEdge]
+    pageInfo: PageInfo
+  }
+
+  type ClosureCogsEdge {
+    node: ClosureCogsItem
+    cursor: String
+  }
+  type ClosureCogsConnection {
+    total: Int
+    pages: Int
+    edges: [ClosureCogsEdge]
+    pageInfo: PageInfo
+  }
+
   type Query {
     activeRegisterSession(register: ID!): RegisterSession
+    # Shifts the signed-in user opened and has not closed. Used to warn them
+    # on logout - a user who opened nothing gets no warning.
+    myOpenRegisterSessions: [RegisterSession]
     registerSession(_id: ID!): RegisterSession
     registerSessionClosureDetail(_id: ID!): RegisterSessionClosureDetail
+    closureTransactions(
+      _id: ID!
+      first: Int
+      after: String
+    ): ClosureTransactionConnection
+    closureTransactionsBySku(
+      _id: ID!
+      first: Int
+      after: String
+    ): ClosureSkuConnection
+    closurePaymentDetails(
+      _id: ID!
+      first: Int
+      after: String
+      onAccountOnly: Boolean
+      type: String
+    ): ClosurePaymentDetailConnection
+    closureCogs(_id: ID!, first: Int, after: String): ClosureCogsConnection
     registerSessionTable(
       first: Int
       after: String

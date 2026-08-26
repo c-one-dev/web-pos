@@ -22,6 +22,10 @@ const salePaymentSchema = z
     amount: z.number().nonnegative(),
     change: z.number().nonnegative(),
     note: z.string().optional().nullable(),
+    // Provider reference / card approval code. Optional here because the
+    // requirement is per payment method, and the method list is data - the
+    // client enforces it at checkout for DIGITAL tenders.
+    reference: z.string().optional().nullable(),
     date: z.string().optional().nullable(),
   })
   .refine((payment) => payment.change <= payment.amount, {

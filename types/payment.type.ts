@@ -12,7 +12,10 @@ export interface IPayment {
   date: string | Date
   by: IUser | Types.ObjectId | string
   sale: ISale[] | Types.ObjectId[] | string[]
+  // Provider reference / card approval code, distinct from note.
+  reference?: string
 }
+
 
 export interface IPaymentNode {
   _id: Types.ObjectId

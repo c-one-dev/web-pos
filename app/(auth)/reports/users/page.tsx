@@ -1,5 +1,5 @@
 "use client"
-import { useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import gql from "graphql-tag"
 import { useApolloClient, useMutation, useQuery } from "@apollo/client/react"
 import { format } from "date-fns"
@@ -48,6 +48,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ColumnDef } from "@tanstack/react-table"
 import DataTable from "@/components/custom/data-table"
+import { useCursorPage } from "@/hooks/use-cursor-page"
 import { toast } from "sonner"
 import { downloadExcelWorkbook, styleExcelHeaderRow } from "@/lib/report-export"
 
@@ -206,27 +207,29 @@ function DateRangeFilter({
 }
 
 function TotalsTable<T extends { _id: string }>({
-  data,
+  nodes,
+  total,
   loading,
   columns,
   emptyLabel,
+  rows,
+  setRows,
+  page,
+  onPrev,
+  onNext,
 }: {
-  data?: T[]
+  nodes: T[]
+  total: number
   loading: boolean
   columns: ColumnDef<T>[]
   emptyLabel: string
+  rows: number
+  setRows: (rows: number) => void
+  page: { current: number; max: number }
+  onPrev: () => void
+  onNext: () => void
 }) {
-  const [rows, setRows] = useState<number>(8)
-  const [page, setPage] = useState<{ current: number; max: number }>({
-    current: 1,
-    max: 1,
-  })
-
-  const points = useMemo(() => data || [], [data])
-  const total = points.length
-  const max = Math.max(1, Math.ceil(total / rows))
-  if (max !== page.max)
-    setPage((prev) => ({ ...prev, max, current: Math.min(prev.current, max) }))
+  const points = nodes
 
   if (!loading && !points.length)
     return (
@@ -246,10 +249,7 @@ function TotalsTable<T extends { _id: string }>({
         <div className="flex gap-1.5">
           <Select
             value={rows.toString()}
-            onValueChange={(value) => {
-              setRows(Number(value))
-              setPage({ current: 1, max: 1 })
-            }}
+            onValueChange={(value) => setRows(Number(value))}
           >
             <SelectTrigger className="w-18">
               <SelectValue placeholder="Rows" />
@@ -264,9 +264,7 @@ function TotalsTable<T extends { _id: string }>({
           </Select>
           <ButtonGroup>
             <Button
-              onClick={() =>
-                setPage((prev) => ({ ...prev, current: prev.current - 1 }))
-              }
+              onClick={onPrev}
               disabled={page.current === 1}
               variant="outline"
             >
@@ -274,9 +272,7 @@ function TotalsTable<T extends { _id: string }>({
             </Button>
             <ButtonGroupText>{`Page ${page.current} of ${page.max}`}</ButtonGroupText>
             <Button
-              onClick={() =>
-                setPage((prev) => ({ ...prev, current: prev.current + 1 }))
-              }
+              onClick={onNext}
               disabled={page.current === page.max}
               variant="outline"
             >
@@ -327,15 +323,38 @@ function SearchBox({
 }
 
 const GET_ACTIVITY_LOG = gql`
-  query ActivityLogTable($start: String!, $end: String!, $search: String) {
-    activityLogTable(start: $start, end: $end, search: $search) {
-      _id
-      userName
-      activity
-      ipAddress
-      deviceName
-      browser
-      date
+  query ActivityLogTable(
+    $first: Int
+    $after: String
+    $start: String!
+    $end: String!
+    $search: String
+  ) {
+    activityLogTable(
+      first: $first
+      after: $after
+      start: $start
+      end: $end
+      search: $search
+    ) {
+      total
+      pages
+      edges {
+        cursor
+        node {
+          _id
+          userName
+          activity
+          ipAddress
+          deviceName
+          browser
+          date
+        }
+      }
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
     }
   }
 `
@@ -352,16 +371,34 @@ type ActivityLogNode = {
 
 function MajorActivityLogTab({ range }: { range: DateRange }) {
   const [search, setSearch] = useState("")
+  const [rows, setRows] = useState<number>(8)
 
-  const { data, loading } = useQuery(GET_ACTIVITY_LOG, {
-    variables: {
+  const baseVars = useMemo(
+    () => ({
       start: startOfDay(range.from || startOfToday()).toISOString(),
       end: endOfDay(range.to || range.from || startOfToday()).toISOString(),
       search,
-    },
+    }),
+    [range, search]
+  )
+
+  const { data, loading, fetchMore } = useQuery(GET_ACTIVITY_LOG, {
+    variables: { first: rows, ...baseVars },
     fetchPolicy: "network-only",
   })
-  const nodes: ActivityLogNode[] = (data as any)?.activityLogTable || []
+  const { page, total, nodes, reset, onNext, onPrev } = useCursorPage(
+    "activityLogTable",
+    data,
+    fetchMore,
+    rows,
+    baseVars
+  )
+
+  // A new range, search or page size starts a fresh cursor run - the pages
+  // already loaded belong to the old query.
+  useEffect(() => {
+    reset()
+  }, [baseVars, rows, reset])
 
   const columns: ColumnDef<ActivityLogNode>[] = useMemo(
     () => [
@@ -404,10 +441,16 @@ function MajorActivityLogTab({ range }: { range: DateRange }) {
     <div className="flex flex-col gap-1.5 pt-4">
       <SearchBox placeholder="Find by user or activity" onSearch={setSearch} />
       <TotalsTable
-        data={nodes}
+        nodes={nodes.slice((page.current - 1) * rows, page.current * rows)}
+        total={total}
         loading={loading}
         columns={columns}
         emptyLabel="No activity recorded in this period."
+        rows={rows}
+        setRows={setRows}
+        page={page}
+        onPrev={onPrev}
+        onNext={onNext}
       />
     </div>
   )
@@ -415,17 +458,36 @@ function MajorActivityLogTab({ range }: { range: DateRange }) {
 
 const GET_SALES_TARGETS = gql`
   query SalesTargetTable(
+    $first: Int
+    $after: String
     $period: SalesTargetPeriod
     $date: String
     $search: String
   ) {
-    salesTargetTable(period: $period, date: $date, search: $search) {
-      _id
-      userName
-      totalSalesCount
-      totalSales
-      target
-      achievedPercent
+    salesTargetTable(
+      first: $first
+      after: $after
+      period: $period
+      date: $date
+      search: $search
+    ) {
+      total
+      pages
+      edges {
+        cursor
+        node {
+          _id
+          userName
+          totalSalesCount
+          totalSales
+          target
+          achievedPercent
+        }
+      }
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
     }
   }
 `
@@ -513,12 +575,28 @@ function SalesTargetsTab({
   date: Date
 }) {
   const [search, setSearch] = useState("")
+  const [rows, setRows] = useState<number>(8)
 
-  const { data, loading, refetch } = useQuery(GET_SALES_TARGETS, {
-    variables: { period, date: date.toISOString(), search },
+  const baseVars = useMemo(
+    () => ({ period, date: date.toISOString(), search }),
+    [period, date, search]
+  )
+
+  const { data, loading, refetch, fetchMore } = useQuery(GET_SALES_TARGETS, {
+    variables: { first: rows, ...baseVars },
     fetchPolicy: "network-only",
   })
-  const nodes: SalesTargetNode[] = (data as any)?.salesTargetTable || []
+  const { page, total, nodes, reset, onNext, onPrev } = useCursorPage(
+    "salesTargetTable",
+    data,
+    fetchMore,
+    rows,
+    baseVars
+  )
+
+  useEffect(() => {
+    reset()
+  }, [baseVars, rows, reset])
 
   const columns: ColumnDef<SalesTargetNode>[] = useMemo(
     () => [
@@ -566,13 +644,48 @@ function SalesTargetsTab({
     <div className="flex flex-col gap-1.5 pt-4">
       <SearchBox placeholder="Find user" onSearch={setSearch} />
       <TotalsTable
-        data={nodes}
+        nodes={nodes.slice((page.current - 1) * rows, page.current * rows)}
+        total={total}
         loading={loading}
         columns={columns}
         emptyLabel="No active users found."
+        rows={rows}
+        setRows={setRows}
+        page={page}
+        onPrev={onPrev}
+        onNext={onNext}
       />
     </div>
   )
+}
+
+// Exports must cover the whole result set, not just the pages the table has
+// loaded. The server clamps first at MAX_PAGE_SIZE (500), so one big request
+// would silently truncate - page through instead, with a hard cap so a huge
+// date range can not build an unbounded workbook.
+async function fetchAllPages<T>(
+  client: ReturnType<typeof useApolloClient>,
+  query: any,
+  baseVars: Record<string, any>,
+  field: string,
+  cap: number
+): Promise<T[]> {
+  const collected: T[] = []
+  let after: string | null = null
+  for (;;) {
+    const { data }: any = await client.query({
+      query,
+      variables: { ...baseVars, first: 500, after },
+      fetchPolicy: "network-only",
+    })
+    const connection = data?.[field]
+    if (!connection) break
+    collected.push(...(connection.edges || []).map((edge: any) => edge.node))
+    if (!connection.pageInfo?.hasNextPage || collected.length >= cap) break
+    after = connection.pageInfo.endCursor
+    if (!after) break
+  }
+  return collected.slice(0, cap)
 }
 
 async function exportActivityLogExcel(
@@ -581,12 +694,13 @@ async function exportActivityLogExcel(
 ) {
   const start = startOfDay(range.from || startOfToday()).toISOString()
   const end = endOfDay(range.to || range.from || startOfToday()).toISOString()
-  const { data } = await client.query({
-    query: GET_ACTIVITY_LOG,
-    variables: { start, end },
-    fetchPolicy: "network-only",
-  })
-  const nodes: ActivityLogNode[] = (data as any)?.activityLogTable || []
+  const nodes: ActivityLogNode[] = await fetchAllPages<ActivityLogNode>(
+    client,
+    GET_ACTIVITY_LOG,
+    { start, end },
+    "activityLogTable",
+    2000
+  )
 
   const workbook = new ExcelJS.Workbook()
   const sheet = workbook.addWorksheet("Major Activity Log")
@@ -628,12 +742,13 @@ async function exportSalesTargetsExcel(
   date: Date
 ) {
   const range = periodDateRange(period, date)
-  const { data } = await client.query({
-    query: GET_SALES_TARGETS,
-    variables: { period, date: date.toISOString() },
-    fetchPolicy: "network-only",
-  })
-  const nodes: SalesTargetNode[] = (data as any)?.salesTargetTable || []
+  const nodes: SalesTargetNode[] = await fetchAllPages<SalesTargetNode>(
+    client,
+    GET_SALES_TARGETS,
+    { period, date: date.toISOString() },
+    "salesTargetTable",
+    2000
+  )
 
   const workbook = new ExcelJS.Workbook()
   const sheet = workbook.addWorksheet("Sales Targets")

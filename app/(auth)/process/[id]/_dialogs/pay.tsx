@@ -18,7 +18,11 @@ import {
 import React, { useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { InputGroup, InputGroupInput } from "@/components/ui/input-group"
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group"
 import { Separator } from "@/components/ui/separator"
 import { ButtonGroup } from "@/components/ui/button-group"
 import { IRegister } from "@/types/register.type"
@@ -26,8 +30,12 @@ import { IPaymentMethod } from "@/types/paymentMethod.type"
 import {
   ArrowElbowDownRightIcon,
   CheckIcon,
+  CreditCardIcon,
+  DeviceMobileIcon,
+  HashIcon,
   PencilSimpleIcon,
   PlusCircleIcon,
+  ReceiptIcon,
   XIcon,
 } from "@phosphor-icons/react"
 import { toast } from "sonner"
@@ -273,6 +281,11 @@ function Pay({
   const [amountTendered, setAmountTendered] = useState<number>(total)
   const [note, setNote] = useState<string>("")
   const [askKeepChange, setAskKeepChange] = useState<boolean>(false)
+  const [askReferences, setAskReferences] = useState<boolean>(false)
+  // Keyed by payment index, seeded when the reference modal opens.
+  const [referenceDrafts, setReferenceDrafts] = useState<
+    Record<number, string>
+  >({})
   // Store Credit and On Account spend a balance the customer already has, so
   // the buttons need to know what that balance is. Without this the cashier
   // only finds out the wallet is empty after generateSale rejects the sale.
@@ -292,22 +305,76 @@ function Pay({
 
   const paymentMethods = useMemo(
     () => [
-      ...(register?.paymentMethods.map((r: IRegister) => ({
+      ...(register?.paymentMethods.map((r: any) => ({
         _id: r._id,
         name: r.name,
+        type: r.type,
       })) || []),
-      { _id: process.env.NEXT_PUBLIC_STORE_CREDIT_ID, name: "Store Credit" },
-      { _id: process.env.NEXT_PUBLIC_ON_ACCOUNT_ID, name: "On Account" },
+      {
+        _id: process.env.NEXT_PUBLIC_STORE_CREDIT_ID,
+        name: "Store Credit",
+        type: "OTHER",
+      },
+      {
+        _id: process.env.NEXT_PUBLIC_ON_ACCOUNT_ID,
+        name: "On Account",
+        type: "OTHER",
+      },
     ],
     [register]
   )
 
-  // The Pay button is a plain button rather than a submit, so the change
-  // question can be asked before the sale is actually rung up.
+  // Which tenders need a reference captured. Keyed off the method's own type
+  // rather than its name: DIGITAL is exactly Gcash, Card, BPI QR and the bank
+  // transfers, so renaming a method (or adding another e-wallet) does not
+  // quietly stop asking. Cash is PHYSICAL; On Account and Store Credit are
+  // OTHER - none of those have a reference to give.
+  const requiresReference = (methodId: string) =>
+    paymentMethods.find((m: any) => m._id === methodId)?.type === "DIGITAL"
+
+  // Card issuers call it an approval code, e-wallets call it a reference.
+  const referenceLabel = (methodId: string) => {
+    const name = paymentMethods.find((m: any) => m._id === methodId)?.name || ""
+    return /card/i.test(name) ? "Approval Code #" : "Reference #"
+  }
+
+  // Staged payments still missing one. Indexed so the answers can be written
+  // straight back onto the right payment.
+  const missingReferences = (state.payments || [])
+    .map((payment: any, index: number) => ({ payment, index }))
+    .filter(
+      ({ payment }: any) =>
+        requiresReference(payment.method) &&
+        !String(payment.reference || "").trim()
+    )
+
+  // The Pay button is a plain button rather than a submit, so both the
+  // reference and the change question can be asked before the sale is rung up.
   const submitSale = (keepChange: boolean) => {
     form.setFieldValue("changeToStoreCredit", keepChange)
     setAskKeepChange(false)
     form.handleSubmit()
+  }
+
+  // Runs once references are satisfied (or were never needed).
+  const continueToPayment = () => {
+    // Only worth asking about change when there is some and an account to keep
+    // it on - a walk-in has nowhere to put it.
+    if (state.changeAmount > 0 && state.customer) setAskKeepChange(true)
+    else submitSale(false)
+  }
+
+  const onPayClick = () => {
+    if (missingReferences.length) {
+      setReferenceDrafts(
+        Object.fromEntries(
+          missingReferences.map(({ index }: any) => [index, ""])
+        )
+      )
+      setAskReferences(true)
+      return
+    }
+    continueToPayment()
   }
 
   const addPayment = (methodId: string | undefined) => {
@@ -362,6 +429,8 @@ function Pay({
         change: changeAmount - state.changeAmount,
         date: new Date(),
         note,
+        // Filled in by the reference dialog for DIGITAL tenders.
+        reference: "",
       },
     ])
     form.setFieldValue("receivedAmount", receivedAmount)
@@ -623,13 +692,7 @@ function Pay({
             type="button"
             disabled={submitting}
             loading={submitting}
-            onClick={() => {
-              // Only worth asking when there is change to keep and an account
-              // to keep it on - a walk-in has nowhere to put it.
-              if (state.changeAmount > 0 && state.customer)
-                setAskKeepChange(true)
-              else submitSale(false)
-            }}
+            onClick={onPayClick}
           >
             Pay
           </Button>
@@ -639,6 +702,138 @@ function Pay({
             </Button>
           </SheetClose>
         </SheetFooter>
+        <AlertDialog open={askReferences} onOpenChange={setAskReferences}>
+          <AlertDialogContent className="gap-5 p-4 sm:max-w-lg sm:p-6">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2.5 text-xl sm:text-2xl">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <ReceiptIcon size={22} />
+                </span>
+                {missingReferences.length > 1
+                  ? "Enter the reference numbers"
+                  : referenceLabel(
+                      missingReferences[0]?.payment?.method
+                    ).replace(" #", "")}
+              </AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-2 text-base">
+                  <p>
+                    Digital payments need their reference recorded, so this sale
+                    can be matched against the provider&apos;s settlement later.
+                  </p>
+                  <p className="text-muted-foreground italic">
+                    Kinahanglan ang reference sa digital nga bayad aron
+                    matugma-tugma ang baligya sa settlement sa provider.
+                  </p>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+
+            <div className="flex flex-col gap-3">
+              {missingReferences.map(({ payment, index }: any) => {
+                const method = paymentMethods.find(
+                  (m: any) => m._id === payment.method
+                )
+                const label = referenceLabel(payment.method)
+                const isCard = /card/i.test(method?.name || "")
+                return (
+                  <div
+                    key={index}
+                    className="flex flex-col gap-2.5 rounded-md border p-3 sm:p-4"
+                  >
+                    {/*
+                      Method and amount above the field: with a split payment
+                      there is more than one of these, and the cashier has to
+                      know which tender each reference belongs to.
+                    */}
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="flex min-w-0 items-center gap-2 font-medium">
+                        <span className="shrink-0 text-muted-foreground">
+                          {isCard ? (
+                            <CreditCardIcon size={20} />
+                          ) : (
+                            <DeviceMobileIcon size={20} />
+                          )}
+                        </span>
+                        <span className="truncate">{method?.name}</span>
+                      </span>
+                      <span className="shrink-0 font-semibold">
+                        {formatCurrency(payment.amount)}
+                      </span>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label
+                        htmlFor={`reference-${index}`}
+                        className="text-sm text-muted-foreground"
+                      >
+                        {label}
+                      </Label>
+                      <InputGroup className="bg-background">
+                        <InputGroupAddon>
+                          <HashIcon />
+                        </InputGroupAddon>
+                        <InputGroupInput
+                          id={`reference-${index}`}
+                          autoFocus={index === missingReferences[0]?.index}
+                          className="h-11 text-base"
+                          value={referenceDrafts[index] ?? ""}
+                          placeholder={
+                            isCard ? "e.g. 004512" : "e.g. 0021 4455 7788"
+                          }
+                          onChange={(e) =>
+                            setReferenceDrafts((prev) => ({
+                              ...prev,
+                              [index]: e.target.value,
+                            }))
+                          }
+                        />
+                      </InputGroup>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <AlertDialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                className="w-full text-base sm:w-auto"
+                onClick={() => setAskReferences(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="lg"
+                className="w-full text-base sm:w-auto"
+                // Every field has to be filled: a blank reference is the thing
+                // this dialog exists to prevent.
+                disabled={missingReferences.some(
+                  ({ index }: any) =>
+                    !String(referenceDrafts[index] || "").trim()
+                )}
+                onClick={() => {
+                  const updated = state.payments.map(
+                    (payment: any, index: number) =>
+                      referenceDrafts[index] !== undefined
+                        ? {
+                            ...payment,
+                            reference: referenceDrafts[index].trim(),
+                          }
+                        : payment
+                  )
+                  form.setFieldValue("payments", updated)
+                  setAskReferences(false)
+                  continueToPayment()
+                }}
+              >
+                Save and continue
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         <AlertDialog open={askKeepChange} onOpenChange={setAskKeepChange}>
           <AlertDialogContent>
             <AlertDialogHeader>

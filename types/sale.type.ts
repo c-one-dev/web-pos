@@ -65,6 +65,8 @@ export interface ISalePayment {
   note?: string
   date: string | Date
   payment?: Types.ObjectId | string
+  // Provider reference / card approval code, distinct from note.
+  reference?: string
 }
 
 export interface ISalePaymentStatusHistoryItem {

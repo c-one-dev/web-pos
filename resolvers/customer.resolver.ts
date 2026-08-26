@@ -10,6 +10,7 @@ import {
   customerUpdateSchema,
   adjustAccountLimitSchema,
   adjustStoreCreditSchema,
+  deleteStoreCreditHistoryItemSchema,
 } from "../validators/customer.validator"
 import { settleAccountBalanceSchema } from "../validators/customer.server.validator"
 import { isISOString } from "../helpers/isoString"
@@ -673,6 +674,75 @@ export const customerResolver = {
         }
       }
     ),
+    // Hard delete: the entry is removed outright rather than reversed with an
+    // offsetting line. That is a deliberate product choice - it means the
+    // history no longer explains how the balance reached its current value,
+    // so it is destructive and unrecoverable.
+    //
+    // Two things still have to hold afterwards, or the wallet stops adding up:
+    //   1. storeCredit.current drops by the deleted entry's transacted amount.
+    //   2. Every surviving entry's stored  is re-derived, since
+    //      those were snapshots of the running balance at the time. Rebuilt
+    //      newest-first from the corrected balance, so the newest row always
+    //      matches current even when the history predates balance tracking.
+    deleteStoreCreditHistoryItem: validate(
+      checkSchema(deleteStoreCreditHistoryItemSchema)
+    )(async (_: any, { customerId, itemId }: any) => {
+      try {
+        const customer = await Customer.findById(customerId)
+          .select("storeCredit")
+          .lean()
+        if (!customer) throw new GraphQLError("Customer not found")
+
+        const history = (customer.storeCredit?.history ||
+          []) as IStoreCreditHistoryItem[]
+        const target = history.find(
+          (item: IStoreCreditHistoryItem) => item._id.toString() === itemId
+        )
+        if (!target) throw new GraphQLError("Store credit entry not found")
+
+        const newCurrent =
+          (customer.storeCredit?.current || 0) - (target.transacted || 0)
+        if (newCurrent < 0)
+          throw new GraphQLError(
+            "Deleting this entry would leave the customer with negative store credit.",
+            { extensions: { code: "INSUFFICIENT_BALANCE" } }
+          )
+
+        const remaining = history
+          .filter((item: any) => item._id.toString() !== itemId)
+          .sort(
+            (a: any, b: any) =>
+              new Date(a.date).getTime() - new Date(b.date).getTime()
+          )
+
+        let runningBalance = newCurrent
+        for (let i = remaining.length - 1; i >= 0; i--) {
+          remaining[i].remaining = runningBalance
+          runningBalance -= remaining[i].transacted || 0
+        }
+
+        const result = await Customer.findByIdAndUpdate(
+          customerId,
+          {
+            $set: {
+              "storeCredit.current": newCurrent,
+              "storeCredit.history": remaining,
+            },
+          },
+          { returnDocument: "after" }
+        ).lean()
+        if (!result) throw new GraphQLError("Customer not found")
+
+        return {
+          ok: true,
+          message: "Store credit entry deleted.",
+          data: generateCustomerNode(result),
+        }
+      } catch (error) {
+        throw error
+      }
+    }),
     changeCustomerStatus: async (_: any, { _id }: any) => {
       try {
         const result = await Customer.findByIdAndUpdate(

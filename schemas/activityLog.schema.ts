@@ -11,11 +11,25 @@ export const activityLogSchema = gql`
     date: String
   }
 
+  type ActivityLogEdge {
+    node: ActivityLogNode
+    cursor: String
+  }
+
+  type ActivityLogConnection {
+    total: Int
+    pages: Int
+    edges: [ActivityLogEdge]
+    pageInfo: PageInfo
+  }
+
   type Query {
     activityLogTable(
+      first: Int
+      after: String
       start: String!
       end: String!
       search: String
-    ): [ActivityLogNode]
+    ): ActivityLogConnection
   }
 `

@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button"
+import ShortcutHint from "./shortcut-hint"
 import { ButtonGroup } from "@/components/ui/button-group"
 import {
   Command,
@@ -31,7 +32,17 @@ const GET_CUSTOMER_OPTIONS = gql`
   }
 `
 
-function AddCustomer({ form }: { form: any }) {
+function AddCustomer({
+  form,
+  open,
+  onOpenChange,
+}: {
+  form: any
+  // Optional controlled mode so the register page can open this picker from
+  // the F2 shortcut. Uncontrolled by default.
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+}) {
   const { data: customerOptionsData, loading } = useQuery(
     GET_CUSTOMER_OPTIONS,
     {
@@ -40,7 +51,12 @@ function AddCustomer({ form }: { form: any }) {
     }
   )
   const customerOptions = (customerOptionsData as any)?.customerOptions
-  const [openCustomerCommand, setOpenCustomerCommand] = useState<boolean>(false)
+  const [uncontrolledOpen, setUncontrolledOpen] = useState<boolean>(false)
+  const openCustomerCommand = open ?? uncontrolledOpen
+  const setOpenCustomerCommand = (next: boolean) => {
+    if (open !== undefined) onOpenChange?.(next)
+    else setUncontrolledOpen(next)
+  }
   const [openCreateCustomer, setOpenCreateCustomer] = useState<boolean>(false)
 
   return (
@@ -76,6 +92,10 @@ function AddCustomer({ form }: { form: any }) {
                       ) : (
                         <>
                           <PlusCircleIcon /> Add Customer
+                          <ShortcutHint
+                            keys="F2"
+                            className="ml-1 h-6 min-w-8 px-1.5 text-xs font-semibold"
+                          />
                         </>
                       )}
                     </Button>

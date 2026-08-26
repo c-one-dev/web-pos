@@ -21,6 +21,7 @@ import {
   customerUpdateSchema,
   adjustAccountLimitSchema,
   adjustStoreCreditSchema,
+  deleteStoreCreditHistoryItemSchema,
 } from "./customer.validator"
 import { settleAccountBalanceSchema } from "./customer.server.validator"
 import { outletSchema } from "./outlet.validator"
@@ -91,6 +92,7 @@ export const mutationValidationRegistry: Record<
   adjustStoreCredit: adjustStoreCreditSchema,
   updateCustomer: customerUpdateSchema,
   changeCustomerStatus: NO_VALIDATION,
+  deleteStoreCreditHistoryItem: deleteStoreCreditHistoryItemSchema,
 
   createOutlet: outletSchema,
   updateOutlet: outletSchema,

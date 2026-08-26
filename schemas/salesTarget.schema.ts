@@ -16,12 +16,26 @@ export const salesTargetSchema = gql`
     achievedPercent: Float
   }
 
+  type SalesTargetEdge {
+    node: SalesTargetNode
+    cursor: String
+  }
+
+  type SalesTargetConnection {
+    total: Int
+    pages: Int
+    edges: [SalesTargetEdge]
+    pageInfo: PageInfo
+  }
+
   type Query {
     salesTargetTable(
+      first: Int
+      after: String
       period: SalesTargetPeriod
       date: String
       search: String
-    ): [SalesTargetNode]
+    ): SalesTargetConnection
   }
 
   type Mutation {
