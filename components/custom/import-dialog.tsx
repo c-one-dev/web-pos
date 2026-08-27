@@ -182,7 +182,7 @@ export default function ImportDialog({
                   {column.required ? (
                     <span className="text-destructive"> *</span>
                   ) : (
-                    <span className="text-muted-foreground"> (optional)</span>
+                    <span className="text-destructive"> (Optional)</span>
                   )}
                   {column.hint && <span> — {column.hint}</span>}
                 </li>
