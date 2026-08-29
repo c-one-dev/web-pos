@@ -10,6 +10,7 @@ import {
   updateSaleNotesSchema,
   refundSaleItemsSchema,
   settleSalesSchema,
+  legacySaleSchema,
 } from "../validators/sale.validator"
 import { isISOString } from "../helpers/isoString"
 import Register from "@/models/register.model"
@@ -135,7 +136,9 @@ export const saleResolver = {
       { first = 10, after, search, filter, sort }: IDataTableArgs
     ) => {
       try {
-        const matchStage: Record<string, any> = {}
+        // Imported sales belong to the customer's own account view, not to
+        // this system's sale history - they were never rung up here.
+        const matchStage: Record<string, any> = { isImported: { $ne: true } }
 
         if (search)
           matchStage.$or = [
@@ -696,6 +699,97 @@ export const saleResolver = {
     },
   },
   Mutation: {
+    // Writes one unpaid sale carried over from the previous POS. Deliberately
+    // does NOT go through generateSale: there is no register session to ring
+    // it into, no line items to sell, and the customer's account limit
+    // already carries this debt from the on-account balance import - putting
+    // it through the normal path would deduct it a second time.
+    importLegacySale: validate(checkSchema(legacySaleSchema))(
+      async (_: any, { input }: any, ctx: any) => {
+        try {
+          const customer = await Customer.findById(input.customer)
+            .select("name")
+            .lean()
+          if (!customer) throw new GraphQLError("Customer not found")
+
+          const date = new Date(input.date)
+          if (Number.isNaN(date.getTime()))
+            throw new GraphQLError(`"${input.date}" is not a valid date`)
+
+          const exists = await Sale.exists({ saleNumber: input.saleNumber })
+          if (exists)
+            throw new GraphQLError(
+              `Sale ${input.saleNumber} has already been imported`
+            )
+
+          const register =
+            input.register || (await Register.findOne().select("_id").lean())?._id
+          if (!register)
+            throw new GraphQLError("No register exists to file the sale under")
+
+          // `paid` in the customer's sales table is derived from non-account
+          // payments plus settledAmount, so the already-paid part of a
+          // partly-settled invoice is carried as a settled amount.
+          const total = input.total
+          const outstanding = Math.min(input.outstanding, total)
+          const settled = parseFloat((total - outstanding).toFixed(2))
+          const paymentStatus =
+            outstanding === 0
+              ? "PAID"
+              : settled > 0
+                ? "PARTIALLY_PAID"
+                : "PENDING"
+
+          const [result] = await Sale.create(
+            [
+              {
+                saleNumber: input.saleNumber,
+                customer: input.customer,
+                items: [],
+                payments: [],
+                subTotal: total,
+                discount: 0,
+                total,
+                receivedAmount: 0,
+                changeAmount: 0,
+                netAmount: total,
+                settledAmount: settled,
+                currentSaleStatus: "COMPLETED",
+                saleStatusHistory: [
+                  {
+                    status: "COMPLETED",
+                    date,
+                    by: ctx.session._id,
+                  },
+                ],
+                currentSalePaymentStatus: paymentStatus,
+                salePaymentStatusHistory: [
+                  { status: paymentStatus, date, by: ctx.session._id },
+                ],
+                register,
+                by: ctx.session._id,
+                isOnAccount: true,
+                isImported: true,
+                notes: "Carried over from the previous POS",
+                createdAt: date,
+                updatedAt: date,
+              },
+            ],
+            // Without this Mongoose stamps createdAt with now and the sale
+            // loses the date it was actually rung up on.
+            { timestamps: false }
+          )
+
+          return {
+            ok: true,
+            message: "Sale imported successfully.",
+            data: generateSaleNode(result),
+          }
+        } catch (error) {
+          throw error
+        }
+      }
+    ),
     generateSale: validate(checkSchema(saleSchema))(
       async (_: any, { input }: any, ctx: any) => {
         const session = await mongoose.startSession()

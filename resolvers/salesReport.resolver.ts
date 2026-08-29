@@ -29,6 +29,9 @@ export const salesReportResolver = {
         const sortOrder = sort?.order === "ASC" ? 1 : -1
 
         const baseStages: PipelineStage[] = [
+          // Sales carried over from the previous POS have no line items and
+          // took no money here, so they are not this system's revenue.
+          { $match: { isImported: { $ne: true } } },
           {
             $lookup: {
               from: "customers",
@@ -241,6 +244,7 @@ export const salesReportResolver = {
           {
             $match: {
               currentSaleStatus: { $ne: "VOIDED" },
+              isImported: { $ne: true },
               createdAt: { $gte: rangeStart, $lte: rangeEnd },
             },
           },
@@ -292,7 +296,12 @@ export const salesReportResolver = {
         const rangeEnd = new Date(end)
 
         const pipeline: PipelineStage[] = [
-          { $match: { createdAt: { $gte: rangeStart, $lte: rangeEnd } } },
+          {
+            $match: {
+              isImported: { $ne: true },
+              createdAt: { $gte: rangeStart, $lte: rangeEnd },
+            },
+          },
           {
             $lookup: {
               from: "registers",

@@ -28,12 +28,23 @@ import {
 export type ImportColumn = {
   /** Header text expected in the file, lower-cased. */
   key: string
+  /**
+   * Other header names that mean the same column, so an export can be handed
+   * over untouched - "order #" for a sale number, "credit limit" for an
+   * account limit.
+   */
+  aliases?: string[]
   required?: boolean
   hint?: string
   example?: string
 }
 
-export type RowResult = { ok: true } | { ok: false; error: string }
+export type RowResult =
+  // `skipped` is for a row that is not this importer's business at all - the
+  // totals line an exported report ends with, say. It counts as neither an
+  // import nor a failure.
+  | { ok: true; skipped?: boolean }
+  | { ok: false; error: string }
 
 type Props = {
   title: string
@@ -80,7 +91,7 @@ export default function ImportDialog({
   const onFile = async (file?: File) => {
     if (!file) return
     try {
-      const parsed = await parseImportFile(file)
+      const parsed = await parseImportFile(file, columns)
       if (!parsed.length) {
         toast.error("That file has no data rows.")
         return
@@ -107,6 +118,7 @@ export default function ImportDialog({
     setRunning(true)
     setProgress(0)
     const problems: Outcome[] = []
+    let skipped = 0
     let done = 0
 
     // Sequential on purpose. These call the same validated mutations the UI
@@ -116,13 +128,25 @@ export default function ImportDialog({
       try {
         const result = await importRow(rows[index], index)
         if (!result.ok) problems.push({ index, error: result.error })
+        else if (result.skipped) skipped++
       } catch (error: any) {
+        // The validation middleware sends the per-field messages in
+        // extensions.fields and puts only "Form validation error." on top.
+        // Showing the top line alone tells the importer nothing about which
+        // column is wrong.
+        const graphQLError = error?.graphQLErrors?.[0]
+        const fields = graphQLError?.extensions?.fields as
+          | { path: string; message: string }[]
+          | undefined
         problems.push({
           index,
-          error:
-            error?.graphQLErrors?.[0]?.message ??
-            error?.message ??
-            "Unknown error",
+          error: fields?.length
+            ? fields
+                .map((field) =>
+                  field.path ? `${field.path}: ${field.message}` : field.message
+                )
+                .join("; ")
+            : (graphQLError?.message ?? error?.message ?? "Unknown error"),
         })
       }
       done++
@@ -130,7 +154,7 @@ export default function ImportDialog({
     }
 
     setFailures(problems)
-    setSucceeded(rows.length - problems.length)
+    setSucceeded(rows.length - problems.length - skipped)
     setRunning(false)
     if (rows.length - problems.length > 0) onFinished?.()
   }

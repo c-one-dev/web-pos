@@ -110,6 +110,7 @@ export interface ISale {
   register?: Types.ObjectId | string
   by: IUser | Types.ObjectId | string
   isOnAccount: boolean
+  isImported?: boolean
 }
 
 export interface ISaleHistoryNode {

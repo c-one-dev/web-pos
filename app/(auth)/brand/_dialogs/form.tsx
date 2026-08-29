@@ -58,26 +58,11 @@ export default function FormDialog({ _id }: Props) {
   const [open, setOpen] = useState<boolean>(false)
   const [isPending, startTransition] = useTransition()
   const [createBrand] = useMutation(CREATE_BRAND, {
-    updateQueries: {
-      BrandTable: (prev, { mutationResult }: any) => {
-        if (!mutationResult.data.createBrand.ok) return prev
-        const newBrand = mutationResult.data.createBrand.data
-        return {
-          ...prev,
-          brandTable: {
-            ...prev.brandTable,
-            edges: [
-              ...prev.brandTable.edges,
-              {
-                node: newBrand.node,
-                cursor: newBrand.cursor,
-                __typename: "BrandEdge",
-              },
-            ],
-          },
-        }
-      },
-    },
+    // A new row changes `total` / `pages`, which only the server can
+    // recompute - patching edges into the cache would leave the table
+    // paginating against a stale count.
+    refetchQueries: ["BrandTable"],
+    awaitRefetchQueries: true,
   })
   const [updateBrand] = useMutation(UPDATE_BRAND, {
     updateQueries: {

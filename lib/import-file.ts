@@ -12,10 +12,67 @@ export type ImportRow = Record<string, string>
  * per-entity validators, which know what each column is meant to be.
  */
 
-const HEADER_ROW = 1
+// An export from another system rarely puts its headers on the first row -
+// HIKE's On Account report spends three rows on a title and a date range - and
+// rarely uses our column names either. So the caller passes the columns it
+// wants, each with the header names that mean the same thing, and the reader
+// finds the row that best matches and renames as it goes.
+export type ColumnSpec = { key: string; aliases?: string[] }
+
+// How far down to look for the header row before giving up on the first.
+const HEADER_SEARCH_DEPTH = 10
 
 const normaliseHeader = (value: string) =>
   value.trim().toLowerCase().replace(/\s+/g, " ")
+
+// An export can prefix a column with the outlet it belongs to
+// ("Cagayan de Oro Store_Retail price"). The part after the last underscore is
+// the column itself, so it gets a second chance at matching.
+const afterOutletPrefix = (value: string) => {
+  const index = value.lastIndexOf("_")
+  return index === -1 ? "" : value.slice(index + 1).trim()
+}
+
+// Maps every accepted spelling to the key the importers read.
+const buildAliasMap = (columns: ColumnSpec[] = []) => {
+  const map = new Map<string, string>()
+  for (const column of columns) {
+    map.set(normaliseHeader(column.key), column.key)
+    for (const alias of column.aliases ?? [])
+      map.set(normaliseHeader(alias), column.key)
+  }
+  return map
+}
+
+// Exact spelling first, then the same header stripped of its outlet prefix.
+const resolveHeader = (aliases: Map<string, string>, raw: string) => {
+  const name = normaliseHeader(raw)
+  return aliases.get(name) ?? aliases.get(afterOutletPrefix(name)) ?? name
+}
+
+// The header row is whichever of the first few rows names the most known
+// columns. A file already in our own shape matches on row 1 and stops there.
+const findHeaderRow = (
+  rowAt: (index: number) => string[],
+  rowCount: number,
+  aliases: Map<string, string>
+) => {
+  if (!aliases.size) return 1
+  let best = { row: 1, score: 0 }
+  const depth = Math.min(rowCount, HEADER_SEARCH_DEPTH)
+  for (let row = 1; row <= depth; row++) {
+    const score = new Set(
+      rowAt(row)
+        .map((cell) => {
+          const name = normaliseHeader(cell)
+          return aliases.get(name) ?? aliases.get(afterOutletPrefix(name))
+        })
+        .filter(Boolean) as string[]
+    ).size
+    if (score > best.score) best = { row, score }
+  }
+  return best.score ? best.row : 1
+}
 
 // ExcelJS hands back rich text, formula results, dates and hyperlinks as
 // objects. Flatten them to the text a human would see in the cell.
@@ -34,20 +91,34 @@ const cellToString = (value: unknown): string => {
   return String(value)
 }
 
-async function parseXlsx(file: File): Promise<ImportRow[]> {
+async function parseXlsx(
+  file: File,
+  columns: ColumnSpec[] = []
+): Promise<ImportRow[]> {
   const workbook = new ExcelJS.Workbook()
   await workbook.xlsx.load(await file.arrayBuffer())
   const sheet = workbook.worksheets[0]
   if (!sheet) return []
 
+  const aliases = buildAliasMap(columns)
+  const cellsOf = (rowNumber: number) => {
+    const values: string[] = []
+    sheet.getRow(rowNumber).eachCell((cell) => values.push(cellToString(cell.value)))
+    return values
+  }
+  const headerRow = findHeaderRow(cellsOf, sheet.rowCount, aliases)
+
   const headers: string[] = []
-  sheet.getRow(HEADER_ROW).eachCell((cell, column) => {
-    headers[column] = normaliseHeader(cellToString(cell.value))
+  sheet.getRow(headerRow).eachCell((cell, column) => {
+    // First spelling wins, so "Retail price" is not overwritten by a second
+    // outlet's column of the same name further along the row.
+    const resolved = resolveHeader(aliases, cellToString(cell.value))
+    headers[column] = headers.includes(resolved) ? "" : resolved
   })
 
   const rows: ImportRow[] = []
   sheet.eachRow((row, rowNumber) => {
-    if (rowNumber === HEADER_ROW) return
+    if (rowNumber <= headerRow) return
     const parsed: ImportRow = {}
     let hasValue = false
     row.eachCell({ includeEmpty: true }, (cell, column) => {
@@ -109,7 +180,10 @@ function splitCsv(text: string): string[][] {
   return rows
 }
 
-async function parseCsv(file: File): Promise<ImportRow[]> {
+async function parseCsv(
+  file: File,
+  columns: ColumnSpec[] = []
+): Promise<ImportRow[]> {
   let text = await file.text()
   // Strip a UTF-8 BOM, which Excel writes and which would otherwise become
   // part of the first header's name.
@@ -118,9 +192,21 @@ async function parseCsv(file: File): Promise<ImportRow[]> {
   const grid = splitCsv(text)
   if (!grid.length) return []
 
-  const headers = grid[0].map(normaliseHeader)
+  const aliases = buildAliasMap(columns)
+  const headerRow = findHeaderRow(
+    (row) => grid[row - 1] ?? [],
+    grid.length,
+    aliases
+  )
+  const seen = new Set<string>()
+  const headers = grid[headerRow - 1].map((cell) => {
+    const resolved = resolveHeader(aliases, cell)
+    if (seen.has(resolved)) return ""
+    seen.add(resolved)
+    return resolved
+  })
   return grid
-    .slice(1)
+    .slice(headerRow)
     .map((cells) => {
       const parsed: ImportRow = {}
       headers.forEach((header, index) => {
@@ -131,10 +217,14 @@ async function parseCsv(file: File): Promise<ImportRow[]> {
     .filter((parsed) => Object.values(parsed).some(Boolean))
 }
 
-export async function parseImportFile(file: File): Promise<ImportRow[]> {
+export async function parseImportFile(
+  file: File,
+  columns: ColumnSpec[] = []
+): Promise<ImportRow[]> {
   const name = file.name.toLowerCase()
-  if (name.endsWith(".csv")) return parseCsv(file)
-  if (name.endsWith(".xlsx") || name.endsWith(".xlsm")) return parseXlsx(file)
+  if (name.endsWith(".csv")) return parseCsv(file, columns)
+  if (name.endsWith(".xlsx") || name.endsWith(".xlsm"))
+    return parseXlsx(file, columns)
   throw new Error(
     "Unsupported file type. Use a .xlsx or .csv file — the template download gives you the right shape."
   )

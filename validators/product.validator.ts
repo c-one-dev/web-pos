@@ -14,4 +14,5 @@ export const productSchema = z.object({
   type: z.string().nonempty("Type is required"),
   brand: z.string().optional().nullable(),
   registers: z.array(z.string()).optional(),
+  isActive: z.boolean().optional(),
 })

@@ -242,26 +242,11 @@ export default function FormDialog({ _id, onClose }: Props) {
   const [open, setOpen] = useState<boolean>(false)
   const [isPending, startTransition] = useTransition()
   const [createProduct] = useMutation(CREATE_PRODUCT, {
-    updateQueries: {
-      ProductTable: (prev, { mutationResult }: any) => {
-        if (!mutationResult.data.createProduct.ok) return prev
-        const newProduct = mutationResult.data.createProduct.data
-        return {
-          ...prev,
-          productTable: {
-            ...prev.productTable,
-            edges: [
-              ...prev.productTable.edges,
-              {
-                node: newProduct.node,
-                cursor: newProduct.cursor,
-                __typename: "ProductEdge",
-              },
-            ],
-          },
-        }
-      },
-    },
+    // A new row changes `total` / `pages`, which only the server can
+    // recompute - patching edges into the cache would leave the table
+    // paginating against a stale count.
+    refetchQueries: ["ProductTable"],
+    awaitRefetchQueries: true,
   })
   const [updateProduct] = useMutation(UPDATE_PRODUCT, {
     updateQueries: {

@@ -176,6 +176,11 @@ const Sale = new Schema<ISale>(
     register: { type: Schema.Types.ObjectId, ref: "Register", required: true },
     by: { type: Schema.Types.ObjectId, ref: "User", required: true },
     isOnAccount: { type: Boolean, required: true, default: false },
+    // Carried over from the previous POS by importLegacySale: a receipt-less
+    // record that exists so a customer's account still shows what they owed
+    // before the migration. It has no line items and never happened on a
+    // register here, so sale history and the sales report leave it out.
+    isImported: { type: Boolean, required: true, default: false },
   },
   { timestamps: true }
 )

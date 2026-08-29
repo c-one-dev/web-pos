@@ -55,6 +55,7 @@ export const productSchema = gql`
     brand: ID
     type: ID
     registers: [ID]
+    isActive: Boolean
   }
 
   type Query {

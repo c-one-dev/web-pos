@@ -284,7 +284,7 @@ export default function FormDialog({
                 [
                   ["firstName", "First Name", true],
                   ["middleName", "Middle Name", false],
-                  ["lastName", "Last Name", true],
+                  ["lastName", "Last Name", false],
                 ] as const
               ).map(([name, label, required]) => (
                 <form.Field key={name} name={name}>

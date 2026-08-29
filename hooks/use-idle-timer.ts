@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 
-const IDLE_TIMEOUT_MS = 10 * 60 * 1000
+const IDLE_TIMEOUT_MS = 50 * 60 * 1000
 const LOCK_STORAGE_KEY = "pos-idle-locked"
 const ACTIVITY_EVENTS = [
   "mousemove",

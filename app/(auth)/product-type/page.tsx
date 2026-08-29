@@ -4,7 +4,6 @@ import { ImportProductTypes } from "@/components/custom/entity-imports"
 import FormDialog from "./dialogs/form"
 import { useCallback, useMemo, useState } from "react"
 import gql from "graphql-tag"
-import { useQuery } from "@apollo/client/react"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { Button } from "@/components/ui/button"
 import { ButtonGroup, ButtonGroupText } from "@/components/ui/button-group"
@@ -18,6 +17,7 @@ import { GearIcon, MagnifyingGlassIcon } from "@phosphor-icons/react"
 import { IProductTypeNode } from "@/types/productType.type"
 import { ColumnDef } from "@tanstack/react-table"
 import DataTable from "@/components/custom/data-table"
+import { useTablePage } from "@/hooks/use-table-page"
 import ColumnFilter from "@/components/custom/column-filter"
 import { FilterType } from "@/types/shared.type"
 import {
@@ -107,15 +107,6 @@ function Actions({ row }: { row?: IProductTypeNode }) {
 export default function Page() {
   // Pagination state
   const [rows, setRows] = useState<number>(10)
-  const [page, setPage] = useState<{
-    current: number
-    loaded: number
-    max: number
-  }>({
-    current: 1,
-    loaded: 1,
-    max: 1,
-  })
   // Search state
   const [search, setSearch] = useState<string>("")
   const [searchTerm, setSearchTerm] = useState<string>("")
@@ -128,41 +119,15 @@ export default function Page() {
   const [filter, setFilter] = useState<
     { key: string; value: string; type: FilterType }[]
   >([])
-  const { data, fetchMore, loading } = useQuery(GET_PRODUCT_TYPES, {
-    variables: {
+  const { page, total, from, to, nodes, loading, reset, onNext, onPrev } =
+    useTablePage<IProductTypeNode>(GET_PRODUCT_TYPES, "productTypeTable", {
       first: rows,
       search,
       filter,
       sort,
-    },
-    fetchPolicy: "cache-and-network",
-  })
+    })
   // Responsiveness
   const isMobile = useIsMobile()
-
-  // console.log("Product types data:", data)
-
-  const { total, nodes, endCursor } = useMemo(() => {
-    const result = data as any
-    const nodes =
-      result?.productTypeTable?.edges?.map((edge: any) => edge.node) || []
-    const hasNextPage = result?.productTypeTable?.pageInfo?.hasNextPage || false
-    const endCursor = result?.productTypeTable?.pageInfo?.endCursor || null
-
-    // eslint-disable-next-line react-hooks/set-state-in-render
-    setPage((prev) => ({
-      ...prev,
-      max: result?.productTypeTable?.pages || 1,
-    }))
-
-    return {
-      total: result?.productTypeTable?.total || 0,
-      pages: result?.productTypeTable?.pages || 0,
-      nodes,
-      hasNextPage,
-      endCursor,
-    }
-  }, [data])
 
   const columns: ColumnDef<IProductTypeNode>[] = useMemo(
     () => [
@@ -225,66 +190,21 @@ export default function Page() {
     [sort, filter]
   )
 
-  const resetPage = () => setPage({ current: 1, loaded: 1, max: 1 })
+  const onSearch = useCallback(
+    (value: string) => {
+      setSearch(value)
+      reset()
+    },
+    [reset]
+  )
 
-  const onSearch = useCallback((value: string) => {
-    setSearch(value)
-    resetPage()
-  }, [])
-
-  const onFilter = useCallback((value: any) => {
-    setFilter(value)
-    resetPage()
-  }, [])
-
-  const onNextPage = async () => {
-    if (page.current == page.loaded) {
-      await fetchMore({
-        variables: {
-          first: rows,
-          after: endCursor,
-          search,
-          filter,
-          sort,
-        },
-        updateQuery: (prev: any, { fetchMoreResult: more }: any) => {
-          if (!more) return prev
-          const cursorSet = new Set([
-            ...prev.productTypeTable.edges.map((edge: any) => edge.cursor),
-            ...more.productTypeTable.edges.map((edge: any) => edge.cursor),
-          ])
-          const filteredEdges = [
-            ...prev.productTypeTable.edges,
-            ...more.productTypeTable.edges,
-          ].filter((edge: any) => cursorSet.has(edge.cursor))
-          const pageInfo = more.productTypeTable.pageInfo
-          return {
-            productTypeTable: {
-              ...more.productTypeTable,
-              edges: filteredEdges,
-              pageInfo,
-            },
-          }
-        },
-      })
-      setPage((prev) => ({
-        ...prev,
-        loaded: prev.loaded + 1,
-      }))
-    }
-    setPage((prev) => ({
-      ...prev,
-      current: prev.current + 1,
-    }))
-  }
-
-  const onPrevPage = () => {
-    if (page.current === 1) return
-    setPage((prev) => ({
-      ...prev,
-      current: prev.current - 1,
-    }))
-  }
+  const onFilter = useCallback(
+    (value: any) => {
+      setFilter(value)
+      reset()
+    },
+    [reset]
+  )
 
   return (
     <div className="flex h-full w-full flex-col gap-1.5 p-2.5">
@@ -318,16 +238,14 @@ export default function Page() {
       </div>
       <div className="flex items-center justify-between">
         <span className="text-sm">
-          Showing {(page.current - 1) * rows + 1}-
-          {page.current === page.max ? total : page.current * rows} out of{" "}
-          {total} result{total === 1 ? "" : "s"}.
+          Showing {from}-{to} out of {total} result{total === 1 ? "" : "s"}.
         </span>
         <div className="flex gap-1.5">
           <Select
             value={rows.toString()}
             onValueChange={(value) => {
               setRows(Number(value))
-              resetPage()
+              reset()
             }}
           >
             <SelectTrigger className="w-18">
@@ -345,7 +263,7 @@ export default function Page() {
           </Select>
           <ButtonGroup>
             <Button
-              onClick={onPrevPage}
+              onClick={onPrev}
               disabled={page.current === 1}
               variant="outline"
             >
@@ -353,7 +271,7 @@ export default function Page() {
             </Button>
             <ButtonGroupText>{`Page ${page.current} of ${page.max}`}</ButtonGroupText>
             <Button
-              onClick={onNextPage}
+              onClick={onNext}
               disabled={page.current === page.max}
               variant="outline"
             >
@@ -365,7 +283,7 @@ export default function Page() {
       <DataTable
         loading={loading}
         columns={columns}
-        data={nodes.slice((page.current - 1) * rows, page.current * rows)}
+        data={nodes}
         actionsColumn={<Actions />}
         rowView={<RowViewDialog />}
       />

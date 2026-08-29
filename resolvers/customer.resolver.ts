@@ -511,8 +511,11 @@ export const customerResolver = {
             },
             storeCredit: {
               current: openingCredit,
+              // Any non-zero opening figure gets a history entry, a deficit
+              // included - an unexplained negative balance is worse than no
+              // balance at all.
               history:
-                openingCredit > 0
+                openingCredit !== 0
                   ? [
                       {
                         remaining: openingCredit,
@@ -550,7 +553,7 @@ export const customerResolver = {
       }
     ),
     adjustAccountLimit: validate(checkSchema(adjustAccountLimitSchema))(
-      async (_: any, { _id, amount }: any) => {
+      async (_: any, { _id, amount, description }: any) => {
         try {
           const customer = await Customer.findById(_id)
             .select("accountLimit")
@@ -568,6 +571,9 @@ export const customerResolver = {
                   remaining: customer.accountLimit.current + amount,
                   transacted: amount,
                   date: new Date(),
+                  // Shows in the Note column of the limit history table, so a
+                  // carried-over debt can name the invoice it came from.
+                  description: description || undefined,
                 },
               },
             },

@@ -188,7 +188,7 @@ export const customerSchema = gql`
 
   type Mutation {
     createCustomer(input: CustomerInput): Response
-    adjustAccountLimit(_id: ID!, amount: Float!): Response
+    adjustAccountLimit(_id: ID!, amount: Float!, description: String): Response
     settleAccountBalance(_id: ID!, amount: Float!): Response
     adjustStoreCredit(_id: ID!, amount: Float!, description: String): Response
     updateCustomer(_id: ID!, input: CustomerInput): Response

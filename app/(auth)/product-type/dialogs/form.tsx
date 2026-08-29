@@ -87,28 +87,11 @@ export default function FormDialog({ _id, onClose }: Props) {
   const [open, setOpen] = useState<boolean>(false)
   const [isPending, startTransition] = useTransition()
   const [createProductType] = useMutation(CREATE_PRODUCT_TYPE, {
-    // refetchQueries: ["ProcessedRegister"],
-    // awaitRefetchQueries: true,
-    updateQueries: {
-      ProductTypeTable: (prev, { mutationResult }: any) => {
-        if (!mutationResult.data.createProductType.ok) return prev
-        const newProductType = mutationResult.data.createProductType.data
-        return {
-          ...prev,
-          productTypeTable: {
-            ...prev.productTypeTable,
-            edges: [
-              ...prev.productTypeTable.edges,
-              {
-                node: newProductType.node,
-                cursor: newProductType.cursor,
-                __typename: "ProductTypeEdge",
-              },
-            ],
-          },
-        }
-      },
-    },
+    // A new row changes `total` / `pages`, which only the server can
+    // recompute - patching edges into the cache would leave the table
+    // paginating against a stale count.
+    refetchQueries: ["ProductTypeTable"],
+    awaitRefetchQueries: true,
   })
   const [updateProductType] = useMutation(UPDATE_PRODUCT_TYPE, {
     // refetchQueries: ["ProcessedRegister"],

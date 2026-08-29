@@ -46,8 +46,12 @@ const GET_CUSTOMER_REPORT = gql`
 `
 
 const ADJUST_ACCOUNT_LIMIT = gql`
-  mutation AdjustAccountLimit($_id: ID!, $amount: Float!) {
-    adjustAccountLimit(_id: $_id, amount: $amount) {
+  mutation AdjustAccountLimit(
+    $_id: ID!
+    $amount: Float!
+    $description: String
+  ) {
+    adjustAccountLimit(_id: $_id, amount: $amount, description: $description) {
       ok
       message
       data
