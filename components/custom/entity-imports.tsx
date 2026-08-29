@@ -492,9 +492,11 @@ export function ImportCustomers({ onFinished }: { onFinished?: () => void }) {
   )
 }
 
-/* --------------------------------------------- on-account opening balances */
+/* ------------------------------------------- customer account carry-over */
 
-const OPENING_BALANCE_COLUMNS: ImportColumn[] = [
+// Only the customer is ever required. Whether a row is a sale or a balance is
+// decided by what else it carries, so both files pass the column check.
+const CUSTOMER_ACCOUNT_COLUMNS: ImportColumn[] = [
   {
     key: "customer",
     required: true,
@@ -505,17 +507,34 @@ const OPENING_BALANCE_COLUMNS: ImportColumn[] = [
     key: "amount owed",
     aliases: ["outstanding"],
     required: true,
-    hint: "outstanding balance to carry over",
+    hint: "what is still owed",
     example: "1500",
+  },
+  {
+    key: "sale number",
+    aliases: ["order #", "sale #", "order number"],
+    hint: "old receipt number - given, the row is listed as a sale",
+    example: "MC44173",
+  },
+  {
+    key: "date",
+    hint: "when it was rung up, needed with a sale number",
+    example: "2026-08-25",
+  },
+  {
+    key: "total",
+    aliases: ["order total", "sale amount"],
+    hint: "defaults to the amount owed",
+    example: "196",
   },
   {
     key: "note",
     hint: "shows in the limit history, e.g. the old invoice number",
-    example: "AC103 - 09 Jan, 2026",
+    example: "carried over from HIKE",
   },
 ]
 
-export function ImportOpeningBalances({
+export function ImportCustomerAccounts({
   onFinished,
 }: {
   onFinished?: () => void
@@ -523,6 +542,10 @@ export function ImportOpeningBalances({
   const client = useApolloClient()
   const { data } = useQuery(GET_CUSTOMER_LOOKUP, {
     fetchPolicy: "cache-and-network",
+  })
+  const [importLegacySale] = useMutation(IMPORT_LEGACY_SALE, {
+    refetchQueries: ["CustomerSalesTable"],
+    onQueryUpdated: refetchOnlyReadyQueries,
   })
   const [adjustAccountLimit] = useMutation(ADJUST_ACCOUNT_LIMIT, {
     refetchQueries: ["CustomerReport", "ViewAccountLimitDetails"],
@@ -534,17 +557,56 @@ export function ImportOpeningBalances({
     [data]
   )
 
+  // One dialog, two shapes of file. A row naming an old receipt is a sale to
+  // list on the account; a row that only names an amount is a balance to
+  // carry over. Deciding per row rather than per file means a single export
+  // can be dropped in without the operator having to know which button it
+  // belongs to.
   const importRow = async (row: ImportRow): Promise<RowResult> => {
     const name = row["customer"]?.trim()
-    const owed = parseNumber(row["amount owed"])
+    const saleNumber = row["sale number"]?.trim()
+    const owed = parseNumber(pick(row, "amount owed", "outstanding"))
+
+    // A report's own totals row carries figures but names nobody.
+    if (!name && !saleNumber) return { ok: true, skipped: true }
     if (!name) return { ok: false, error: "customer is required" }
+
+    const customerId = findByName(customers, name)
+    if (!customerId) return { ok: false, error: `customer "${name}" not found` }
+
+    if (saleNumber) {
+      const total = parseNumber(row["total"]) ?? owed
+      const date = parseDate(row["date"])
+      if (!date)
+        return { ok: false, error: `date "${row["date"]}" is not a date` }
+      if (total === undefined)
+        return { ok: false, error: "total is missing or not a number" }
+      if (owed === undefined)
+        return { ok: false, error: "outstanding is missing or not a number" }
+
+      const result: any = await importLegacySale({
+        variables: {
+          input: {
+            customer: customerId,
+            saleNumber,
+            date,
+            total,
+            outstanding: owed,
+          },
+        },
+      })
+      return result?.data?.importLegacySale?.ok
+        ? { ok: true }
+        : {
+            ok: false,
+            error: result?.data?.importLegacySale?.message ?? "Failed",
+          }
+    }
+
     if (owed === undefined)
       return { ok: false, error: "amount owed is missing or not a number" }
     if (owed <= 0)
       return { ok: false, error: "amount owed must be greater than zero" }
-
-    const customerId = findByName(customers, name)
-    if (!customerId) return { ok: false, error: `customer "${name}" not found` }
 
     // A carried-over debt is recorded as a NEGATIVE limit adjustment: it
     // consumes available credit exactly as an unpaid on-account sale would,
@@ -566,117 +628,14 @@ export function ImportOpeningBalances({
 
   return (
     <ImportDialog
-      title="Import On-Account Balances"
-      description="Carries existing customer debts over from another system. Each row reduces that customer's available account limit by the amount owed and is recorded in their limit history, with the note against it. It does not create sales."
-      columns={OPENING_BALANCE_COLUMNS}
+      title="Import Customer Accounts"
+      description="Carries customer account data over from another system. A row naming an old receipt is added to that customer's sales list, with no line items and kept out of sale history and the sales report. A row with only an amount reduces their available account limit instead. Neither creates sales here or takes money."
+      columns={CUSTOMER_ACCOUNT_COLUMNS}
       importRow={importRow}
       onFinished={() => {
         client.refetchQueries({ include: ["CustomerReportTable"] })
         onFinished?.()
       }}
-    >
-      <Button variant="outline" className="gap-1.5">
-        <UploadSimpleIcon /> Import balances
-      </Button>
-    </ImportDialog>
-  )
-}
-
-/* ------------------------------------------------- carried-over sales */
-
-const LEGACY_SALE_COLUMNS: ImportColumn[] = [
-  {
-    key: "customer",
-    required: true,
-    hint: "must already exist, matched by display name",
-    example: "Juan Dela Cruz",
-  },
-  {
-    key: "sale number",
-    aliases: ["order #", "sale #", "order number"],
-    required: true,
-    hint: "the old receipt number",
-    example: "MC44173",
-  },
-  {
-    key: "date",
-    required: true,
-    hint: "when it was rung up",
-    example: "2026-08-25",
-  },
-  {
-    key: "total",
-    aliases: ["order total", "sale amount"],
-    required: true,
-    example: "196",
-  },
-  {
-    key: "outstanding",
-    required: true,
-    hint: "still owed on it",
-    example: "196",
-  },
-]
-
-export function ImportLegacySales({ onFinished }: { onFinished?: () => void }) {
-  const { data } = useQuery(GET_CUSTOMER_LOOKUP, {
-    fetchPolicy: "cache-and-network",
-  })
-  const [importLegacySale] = useMutation(IMPORT_LEGACY_SALE, {
-    refetchQueries: ["CustomerSalesTable"],
-    onQueryUpdated: refetchOnlyReadyQueries,
-  })
-
-  const customers = useMemo(
-    () => buildIndex((data as any)?.customerOptions),
-    [data]
-  )
-
-  const importRow = async (row: ImportRow): Promise<RowResult> => {
-    const name = row["customer"]?.trim()
-    const saleNumber = row["sale number"]?.trim()
-    const total = parseNumber(row["total"])
-    const outstanding = parseNumber(row["outstanding"])
-    const date = parseDate(row["date"])
-    // A report's own totals row has figures but no customer and no receipt
-    // number. Skipping it quietly beats reporting it as a failure.
-    if (!name && !saleNumber) return { ok: true, skipped: true }
-    if (!name) return { ok: false, error: "customer is required" }
-    if (!saleNumber) return { ok: false, error: "sale number is required" }
-    if (!date)
-      return { ok: false, error: `date "${row["date"]}" is not a date` }
-    if (total === undefined)
-      return { ok: false, error: "total is missing or not a number" }
-    if (outstanding === undefined)
-      return { ok: false, error: "outstanding is missing or not a number" }
-
-    const customerId = findByName(customers, name)
-    if (!customerId) return { ok: false, error: `customer "${name}" not found` }
-
-    const result: any = await importLegacySale({
-      variables: {
-        input: { customer: customerId, saleNumber, date, total, outstanding },
-      },
-    })
-    return result?.data?.importLegacySale?.ok
-      ? { ok: true }
-      : {
-          ok: false,
-          error: result?.data?.importLegacySale?.message ?? "Failed",
-        }
-  }
-
-  return (
-    <ImportDialog
-      title="Import Carried-Over Sales"
-      description="Adds the unpaid sales a customer had in the previous POS so their account still lists them. The rows carry no line items and are kept out of sale history and the sales report - they are a record of what was owed, not sales made here. Balances are not touched, so run this alongside the on-account balance import, not instead of it."
-      columns={LEGACY_SALE_COLUMNS}
-      importRow={importRow}
-      onFinished={onFinished}
-    >
-      <Button variant="outline" className="gap-1.5">
-        <UploadSimpleIcon /> Import sales
-      </Button>
-    </ImportDialog>
+    />
   )
 }

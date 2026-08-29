@@ -1,9 +1,6 @@
 "use client"
 import { Label } from "@/components/ui/label"
-import {
-  ImportLegacySales,
-  ImportOpeningBalances,
-} from "@/components/custom/entity-imports"
+import { ImportCustomerAccounts } from "@/components/custom/entity-imports"
 import { useCallback, useMemo, useState } from "react"
 import gql from "graphql-tag"
 import { useQuery } from "@apollo/client/react"
@@ -307,10 +304,7 @@ export default function Page() {
     <div className="flex h-full w-full flex-col gap-1.5 p-2.5">
       <div className="flex items-center justify-between gap-1.5">
         <Label className="text-xl font-medium">Customer Reports</Label>
-        <div className="flex items-center gap-1.5">
-          <ImportLegacySales />
-          <ImportOpeningBalances />
-        </div>
+        <ImportCustomerAccounts />
       </div>
       <div className="flex justify-between">
         <InputGroup>
