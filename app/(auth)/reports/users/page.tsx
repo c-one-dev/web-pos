@@ -105,6 +105,14 @@ const DATE_PRESETS: { label: string; getRange: () => DateRange }[] = [
     getRange: () => ({ from: startOfToday(), to: startOfToday() }),
   },
   {
+    // A single past day - the shift a manager reviews first thing.
+    label: "Yesterday",
+    getRange: () => ({
+      from: startOfDay(subDays(new Date(), 1)),
+      to: startOfDay(subDays(new Date(), 1)),
+    }),
+  },
+  {
     label: "This Week",
     getRange: () => ({
       from: startOfWeek(new Date()),

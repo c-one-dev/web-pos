@@ -48,6 +48,15 @@ const DATE_RANGE_PRESETS: { label: string; getRange: () => DateRange }[] = [
     getRange: () => ({ from: startOfToday(), to: startOfToday() }),
   },
   {
+    // A single past day, which is what a cashier reconciling last night's
+    // shift actually wants - "Last 7 Days" sweeps in today's takings too.
+    label: "Yesterday",
+    getRange: () => ({
+      from: startOfDay(subDays(new Date(), 1)),
+      to: startOfDay(subDays(new Date(), 1)),
+    }),
+  },
+  {
     label: "This Week",
     getRange: () => ({
       from: startOfWeek(new Date()),
