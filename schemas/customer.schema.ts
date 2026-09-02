@@ -54,6 +54,13 @@ export const customerSchema = gql`
     accountLimit: AccountLimit
     storeCredit: StoreCredit
     createdAt: String
+    # What this customer has bought and what they still owe. Voided sales are
+    # left out of all three; carried-over sales from the old POS are counted,
+    # since to the customer they are purchases like any other.
+    totalPurchase: Float
+    averagePurchase: Float
+    purchaseCount: Int
+    currentOutstanding: Float
   }
 
   # Customer Table

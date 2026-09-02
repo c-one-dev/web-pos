@@ -11,6 +11,7 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer"
 import { Label } from "@/components/ui/label"
+import { cn } from "@/lib/utils"
 import { useQuery } from "@apollo/client/react"
 import { HandCoinsIcon, XIcon } from "@phosphor-icons/react"
 import { format } from "date-fns"
@@ -64,6 +65,10 @@ const GET_CUSTOMER = gql`
       storeCredit {
         current
       }
+      totalPurchase
+      averagePurchase
+      purchaseCount
+      currentOutstanding
       createdAt
     }
   }
@@ -363,6 +368,54 @@ export default function RowViewDrawer({ _id, open, setOpen, onClose }: Props) {
                   {currency(usedLimit)} of{" "}
                   {currency(customer?.accountLimit?.max)} used
                 </span>
+              </div>
+            </section>
+
+            {/* What the customer has spent and what they still owe - the
+                figures a cashier is asked for at the counter. */}
+            <section className="border bg-muted/40 p-3">
+              <Label className="text-base font-semibold text-primary">
+                Purchases
+              </Label>
+              <div className="mt-2 grid grid-cols-2 gap-3">
+                <div>
+                  <span className="block text-xs text-muted-foreground">
+                    Total purchase
+                  </span>
+                  <span className="block text-base font-semibold tabular-nums">
+                    {currency(customer?.totalPurchase)}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-xs text-muted-foreground">
+                    Avg. purchase
+                  </span>
+                  <span className="block text-base font-semibold tabular-nums">
+                    {currency(customer?.averagePurchase)}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-xs text-muted-foreground">
+                    Sales
+                  </span>
+                  <span className="block text-base font-semibold tabular-nums">
+                    {customer?.purchaseCount ?? 0}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-xs text-muted-foreground">
+                    Current outstanding
+                  </span>
+                  <span
+                    className={cn(
+                      "block text-base font-semibold tabular-nums",
+                      (customer?.currentOutstanding || 0) > 0 &&
+                        "text-destructive"
+                    )}
+                  >
+                    {currency(customer?.currentOutstanding)}
+                  </span>
+                </div>
               </div>
             </section>
 

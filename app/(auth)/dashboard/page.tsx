@@ -288,7 +288,7 @@ function CategoryDonut({
   const points = (data || []).filter((point) => point.total > 0)
   if (!points.length) return <EmptyChartState />
   const total = points.reduce((sum, point) => sum + point.total, 0)
-
+  
   return (
     <div className="flex flex-col items-center justify-center gap-8 py-4 sm:flex-row">
       <PieChart width={260} height={260}>

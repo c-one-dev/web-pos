@@ -15,6 +15,8 @@ import {
 import { settleAccountBalanceSchema } from "../validators/customer.server.validator"
 import { isISOString } from "../helpers/isoString"
 import { IStoreCreditHistoryItem } from "@/types/customer.type"
+import Sale from "../models/sale.model"
+import { outstandingAmount } from "@/helpers/salesFn"
 
 const CURSOR_TYPE = "customer"
 
@@ -63,7 +65,37 @@ export const customerResolver = {
           .select("_id name email accountLimit storeCredit createdAt")
           .lean()
         if (!customer) throw new GraphQLError("Customer not found")
-        return customer
+
+        // Spend and debt are derived rather than stored, so they can never
+        // drift from the sales themselves. Payments are needed because what
+        // is still owed depends on which tenders were On Account - the same
+        // rule the status badge uses (helpers/salesFn.ts).
+        const sales = await Sale.find({
+          customer: customer._id,
+          currentSaleStatus: { $ne: "VOIDED" },
+        })
+          .select("total payments settledAmount")
+          .lean()
+
+        const totalPurchase = sales.reduce(
+          (sum: number, sale: any) => sum + (sale.total || 0),
+          0
+        )
+        const currentOutstanding = sales.reduce(
+          (sum: number, sale: any) =>
+            sum + outstandingAmount(sale.payments, sale.settledAmount || 0),
+          0
+        )
+
+        return {
+          ...customer,
+          purchaseCount: sales.length,
+          totalPurchase: parseFloat(totalPurchase.toFixed(2)),
+          averagePurchase: sales.length
+            ? parseFloat((totalPurchase / sales.length).toFixed(2))
+            : 0,
+          currentOutstanding: parseFloat(currentOutstanding.toFixed(2)),
+        }
       } catch (error) {
         throw error
       }
