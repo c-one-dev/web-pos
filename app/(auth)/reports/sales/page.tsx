@@ -818,25 +818,40 @@ function TotalsTable<T extends { _id: string }>({
   loading,
   columns,
   emptyLabel,
+  searchText,
+  searchPlaceholder = "Search...",
 }: {
   data?: T[]
   loading: boolean
   columns: ColumnDef<T>[]
   emptyLabel: string
+  // Supplying this turns on a search box. It returns the text of a row that
+  // should be matched against - the whole list is already in memory, so the
+  // filtering is instant and needs no round trip.
+  searchText?: (row: T) => string
+  searchPlaceholder?: string
 }) {
   const [rows, setRows] = useState<number>(10)
+  const [search, setSearch] = useState("")
   const [page, setPage] = useState<{ current: number; max: number }>({
     current: 1,
     max: 1,
   })
 
-  const points = useMemo(() => data || [], [data])
+  const points = useMemo(() => {
+    const all = data || []
+    const term = search.trim().toLowerCase()
+    if (!term || !searchText) return all
+    return all.filter((row) => searchText(row).toLowerCase().includes(term))
+  }, [data, search, searchText])
   const total = points.length
   const max = Math.max(1, Math.ceil(total / rows))
   if (max !== page.max)
     setPage((prev) => ({ ...prev, max, current: Math.min(prev.current, max) }))
 
-  if (!loading && !points.length)
+  // Only bail out early when there is genuinely nothing - with a search term
+  // typed, the box has to stay on screen so it can be cleared again.
+  if (!loading && !points.length && !search)
     return (
       <div className="flex h-40 w-full items-center justify-center text-sm text-muted-foreground">
         {emptyLabel}
@@ -845,6 +860,28 @@ function TotalsTable<T extends { _id: string }>({
 
   return (
     <div className="flex flex-col gap-1.5">
+      {searchText && (
+        <InputGroup>
+          <InputGroupInput
+            data-search-input
+            value={search}
+            placeholder={searchPlaceholder}
+            onChange={(e) => {
+              setSearch(e.currentTarget.value)
+              setPage((prev) => ({ ...prev, current: 1 }))
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setSearch("")
+                setPage((prev) => ({ ...prev, current: 1 }))
+              }
+            }}
+          />
+          <InputGroupAddon align="inline-end">
+            <MagnifyingGlassIcon />
+          </InputGroupAddon>
+        </InputGroup>
+      )}
       <div className="flex items-center justify-between">
         <span className="text-sm text-muted-foreground">
           Showing {total === 0 ? 0 : (page.current - 1) * rows + 1}-
@@ -1057,6 +1094,8 @@ function SalesByItemsTab({ range }: { range: DateRange }) {
         loading={loading}
         columns={columns}
         emptyLabel="No items sold in this period."
+        searchText={(row) => `${row.name} ${row.sku || ""}`}
+        searchPlaceholder="Search item name or SKU..."
       />
     </div>
   )
