@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/sidebar"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname } from "next/navigation"
 import {
   Accordion,
@@ -141,7 +142,19 @@ export default function AppSidebar() {
   }
   return (
     <Sidebar>
-      <SidebarHeader className="mx-auto">C-ONE POS System</SidebarHeader>
+      <SidebarHeader className="mx-auto flex-row items-center gap-2">
+        <Image
+          src="/images/icon.png"
+          alt=""
+          width={125}
+          height={100}
+          // Sized by height so the mark sits on the text's baseline box; the
+          // source is 125x100, so width follows from the aspect ratio.
+          className="h-6 w-auto"
+          priority
+        />
+        C-ONE POS System
+      </SidebarHeader>
       <SidebarContent>
         {canSeeDashboard && (
           <div className="not-last:border-b">

@@ -30,7 +30,7 @@ import {
 import { toast } from "sonner"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import { Spinner } from "@/components/ui/spinner"
+import { ReportPageSkeleton } from "@/components/custom/skeletons"
 import { Card, CardContent } from "@/components/ui/card"
 import { StatusBadge } from "@/components/custom/status-badge"
 import {
@@ -679,13 +679,7 @@ export default function Page() {
       : rows.filter((r: PaymentSummaryRow) => r.method?.name === paymentType)
   }, [detail, paymentType])
 
-  if (loading && !detail) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <Spinner className="size-10 text-primary" />
-      </div>
-    )
-  }
+  if (loading && !detail) return <ReportPageSkeleton />
 
   if (!detail) {
     return (

@@ -79,7 +79,7 @@ import ShortcutHint from "./_dialogs/shortcut-hint"
 import ReceiptDialog from "./_dialogs/receipt"
 import { toast } from "sonner"
 import { refetchOnlyReadyQueries } from "@/lib/refetch"
-import { Spinner } from "@/components/ui/spinner"
+import ProcessSaleSkeleton from "@/components/custom/process-sale-skeleton"
 import OpenRegisterDialog from "@/components/custom/open-register-dialog"
 
 const GENERATE_SALE = gql`
@@ -526,13 +526,10 @@ function ProcessSalePage({
     }
   }, [items, form, discount])
 
-  if (loading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <Spinner className="size-10 text-primary" />
-      </div>
-    )
-  }
+  // A skeleton of the register rather than a bare spinner: the grid is the
+  // page, and showing its shape keeps the cards from appearing to jump into
+  // place once the products arrive.
+  if (loading) return <ProcessSaleSkeleton />
 
   if (register && !register.isOpen) {
     return (
@@ -582,7 +579,7 @@ function ProcessSalePage({
             return (
               <>
                 <div className="flex min-w-0 flex-1 flex-col gap-1.5 bg-muted p-2.5 lg:overflow-y-auto">
-                  <div>
+                  <div className="shrink-0">
                     <SelectRegisterSheet>
                       <Breadcrumb className="w-fit cursor-pointer hover:opacity-80">
                         <BreadcrumbList>
@@ -642,7 +639,7 @@ function ProcessSalePage({
                       </Button>
                     </div>
                   )}
-                  <div className="flex flex-col gap-1.5 sm:flex-row">
+                  <div className="flex shrink-0 flex-col gap-1.5 sm:flex-row">
                     {/*
                       The field is a button, not an input: typing happens in
                       the centred palette F3 opens, so there's only one search
@@ -702,7 +699,7 @@ function ProcessSalePage({
                       </Button>
                     </ButtonGroup>
                   </div>
-                  <div className="-mb-0.5 overflow-x-auto pb-0.5">
+                  <div className="-mb-0.5 shrink-0 overflow-x-auto pb-0.5">
                     <ButtonGroup className="w-max">
                       {register?.productTypes.map(
                         (type: any, index: number) => (
@@ -712,7 +709,7 @@ function ProcessSalePage({
                             className={cn(
                               "font-base cursor-pointer",
                               selectedType === type._id &&
-                                "bg-blue-400 text-primary-foreground hover:bg-blue-400/80 hover:text-white"
+                                "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
                             )}
                             onClick={() => setSelectedType(type._id)}
                             type="button"
@@ -723,7 +720,7 @@ function ProcessSalePage({
                       )}
                     </ButtonGroup>
                   </div>
-                  <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
+                  <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                     {register?.products
                       .filter((p: any) => selectedType === p.type._id)
                       .map((product: any) => (
@@ -767,15 +764,18 @@ function ProcessSalePage({
                       ))}
                   </div>
                 </div>
-                <div className="flex w-full shrink-0 flex-col justify-between gap-2.5 border-t p-2 lg:w-96 lg:overflow-y-auto lg:border-t-0 lg:border-l">
+                {/* The panel itself never scrolls - the cart list inside it does - so
+                    the totals and the Pay button stay on screen no matter how
+                    long the order gets. */}
+                <div className="flex w-full min-h-0 shrink-0 flex-col justify-between gap-2.5 border-t p-2 lg:w-96 lg:overflow-hidden lg:border-t-0 lg:border-l">
                   <AddCustomer
                     form={form}
                     open={openCustomerPicker}
                     onOpenChange={setOpenCustomerPicker}
                   />
-                  <div className="flex flex-1 flex-col items-start justify-start overflow-y-auto">
+                  <div className="flex min-h-0 flex-1 flex-col items-start justify-start overflow-y-auto">
                     {state.items.length > 0 && (
-                      <div className="flex max-h-96 w-full flex-col gap-2.5">
+                      <div className="flex w-full flex-col gap-2.5">
                         {state.items.map((item: any, index: number) => {
                           return (
                             <PerItem
@@ -1083,13 +1083,9 @@ function ProcessSaleRoute() {
   })
   const sale = (data as any)?.sale || null
 
-  if (sourceSaleId && loading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <Spinner className="size-10 text-primary" />
-      </div>
-    )
-  }
+  // Loading a sale to correct lands on the same register screen, so it gets
+  // the same skeleton.
+  if (sourceSaleId && loading) return <ProcessSaleSkeleton />
 
   // Mirrors updateSale's own guard - a sale in a closed shift, or a voided
   // one, can't be corrected, so don't present an editable cart for it.
@@ -1128,13 +1124,7 @@ function ProcessSaleRoute() {
 // useSearchParams (for ?edit=) requires a Suspense boundary above it.
 export default function Page() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex h-full items-center justify-center">
-          <Spinner className="size-10 text-primary" />
-        </div>
-      }
-    >
+    <Suspense fallback={<ProcessSaleSkeleton />}>
       <ProcessSaleRoute />
     </Suspense>
   )

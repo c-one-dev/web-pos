@@ -39,8 +39,12 @@ export const registerResolver = {
           .populate("outlet paymentMethods")
           .lean()
         if (!register) throw new GraphQLError("Register not found")
+        // Deactivated products are off the shelf: they must not be searchable
+        // or ringable at the register, and a type left with none of its
+        // products active should not show as a tab either.
         const products = await Product.find({
           registers: register._id,
+          isActive: true,
         })
           .populate([
             {

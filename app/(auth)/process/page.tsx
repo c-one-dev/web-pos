@@ -4,8 +4,8 @@ import {
   InputGroupInput,
   InputGroupAddon,
 } from "@/components/ui/input-group"
-import { Spinner } from "@/components/ui/spinner"
 import { StatusBadge } from "@/components/custom/status-badge"
+import { CardGridSkeleton } from "@/components/custom/skeletons"
 import { useRegisterStore } from "@/hooks/use-register"
 import { gql } from "@apollo/client"
 import { useQuery } from "@apollo/client/react"
@@ -56,9 +56,7 @@ export default function Page() {
         </InputGroupAddon>
       </InputGroup>
       {loading ? (
-        <div className="flex flex-1 items-center justify-center">
-          <Spinner />
-        </div>
+        <CardGridSkeleton count={6} className="sm:grid-cols-2 xl:grid-cols-3" />
       ) : filteredRegisters.length === 0 ? (
         <span className="mt-8 text-center text-sm text-muted-foreground">
           No registers found.

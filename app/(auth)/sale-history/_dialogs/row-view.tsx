@@ -30,7 +30,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Spinner } from "@/components/ui/spinner"
+import { DetailSkeleton } from "@/components/custom/skeletons"
 import { toast } from "sonner"
 import { refetchOnlyReadyQueries } from "@/lib/refetch"
 import {
@@ -493,7 +493,7 @@ export default function RowViewDialog({
 
         {loading && !sale ? (
           <div className="flex h-full items-center justify-center">
-            <Spinner className="size-10" />
+            <DetailSkeleton />
           </div>
         ) : (
           <div className="flex flex-col gap-3 overflow-y-auto p-4">

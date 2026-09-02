@@ -19,9 +19,17 @@ export default function AuthLayout({
         <SearchHotkey />
         <SidebarProvider className="w-full">
           <AppSidebar />
-          <main className="flex flex-1 flex-col">
+          {/* min-w-0 stops wide page content - the register's product type
+              strip, a wide table - from stretching this column past the
+              viewport and scrolling the whole app sideways. A flex item
+              defaults to min-width:auto, which is what let that happen. */}
+          {/* h-svh + overflow-hidden caps the app at the viewport so pages
+              scroll INSIDE their own regions. Without it the register's
+              product grid grew the window itself and pushed the cart's Pay
+              button below the fold. */}
+          <main className="flex h-svh min-w-0 flex-1 flex-col overflow-hidden">
             <Header />
-            <div className="flex-1">
+            <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
               <RequirePermission>{children}</RequirePermission>
             </div>
           </main>

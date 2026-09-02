@@ -44,11 +44,15 @@ export function useSwitchUser() {
         // succeeded at this point — a resetStore() failure (e.g. an
         // aborted in-flight refetch) must not turn this into a reported
         // failure, since the account switch is genuinely done.
-        try {
-          await client.resetStore()
-        } catch (resetError) {
+        //
+        // Deliberately NOT awaited: resetStore refetches every active query,
+        // which on the register is the whole product list. Waiting for that
+        // kept the lock screen on screen for a beat after the right PIN, as
+        // if the PIN were still being checked. The reset still starts now;
+        // the caller just stops being blocked by it.
+        client.resetStore().catch((resetError) => {
           console.warn("Post-switch cache reset failed:", resetError)
-        }
+        })
         return { ok: true, message: result.data.switchUser.message }
       }
       return { ok: false, message: "Unable to switch user." }

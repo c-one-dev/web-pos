@@ -4,7 +4,7 @@ import { useQuery } from "@apollo/client/react"
 import gql from "graphql-tag"
 import { useState } from "react"
 import { format } from "date-fns"
-import { Spinner } from "@/components/ui/spinner"
+import { ReportPageSkeleton } from "@/components/custom/skeletons"
 import { Label } from "@/components/ui/label"
 import {
   Table,
@@ -110,11 +110,7 @@ export default function Page() {
   let body: React.ReactNode
 
   if (registerLoading || sessionLoading) {
-    body = (
-      <div className="flex h-full items-center justify-center">
-        <Spinner className="size-10 text-primary" />
-      </div>
-    )
+    body = <ReportPageSkeleton tiles={2} />
   } else if (!register) {
     body = (
       <div className="flex h-full items-center justify-center text-muted-foreground">

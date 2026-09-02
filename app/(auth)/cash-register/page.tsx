@@ -3,6 +3,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/custom/status-badge"
+import { CardGridSkeleton } from "@/components/custom/skeletons"
 import { Spinner } from "@/components/ui/spinner"
 import { useQuery } from "@apollo/client/react"
 import gql from "graphql-tag"
@@ -51,9 +52,7 @@ export default function Page() {
     <div className="flex h-full w-full flex-col gap-2.5 p-2.5">
       <Label className="text-xl font-medium">Cash Register</Label>
       {loading && !registers.length ? (
-        <div className="flex h-full items-center justify-center">
-          <Spinner className="size-10 text-primary" />
-        </div>
+        <CardGridSkeleton count={6} />
       ) : registers.length === 0 ? (
         <span className="text-sm text-muted-foreground">
           No registers found.
