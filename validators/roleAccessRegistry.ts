@@ -83,12 +83,72 @@ const MANAGER_EXCLUDED_PERMISSIONS = new Set([
   "users.user.status",
 ])
 
+// NO_ROLE sees everything and changes nothing. Every page-level permission is
+// granted so no tab is hidden, and every action one - create, edit, status,
+// process, settle, refund, void, open/close register, permissions - is left
+// out. The guard in app/graphql/route.ts enforces this on the server, so it
+// holds for a hand-crafted request too, not just for a hidden button.
+const NO_ROLE_DEFAULT_PERMISSIONS = [
+  "dashboard",
+  "dashboard.view",
+
+  // Point of Sale: the history and the register's state are readable, but no
+  // sale can be rung up, corrected, settled, refunded or voided, and the
+  // register cannot be opened, closed or have cash moved.
+  "pos",
+  "pos.sale",
+  "pos.sale.history",
+  "pos.register",
+  "pos.register.view",
+
+  // Catalogue: look, don't touch.
+  "products",
+  "products.product",
+  "products.product.view",
+  "products.type",
+  "products.type.view",
+  "products.brand",
+  "products.brand.view",
+
+  // Customers: profiles are readable; the money operations (account limit,
+  // settlement, store credit) are not granted.
+  "customers",
+  "customers.customer",
+  "customers.customer.view",
+
+  // Reports are read-only by nature. The two exceptions are left out:
+  // reports.payments.note edits a payment's note, and reports.users.target
+  // sets sales targets.
+  "reports",
+  "reports.sales",
+  "reports.customers",
+  "reports.payments",
+  "reports.register",
+  "reports.users",
+
+  // The roster is visible; creating users, editing them, disabling them and
+  // managing permissions are not.
+  "users",
+  "users.user",
+  "users.user.view",
+
+  // Store Setup: outlets, registers and payment methods are readable only.
+  "store",
+  "store.outlet",
+  "store.outlet.view",
+  "store.register",
+  "store.register.view",
+  "store.payment_method",
+  "store.payment_method.view",
+]
+
 export const roleDefaultPermissions: Record<string, string[]> = {
   ADMIN: permissionKeys,
   MANAGER: permissionKeys.filter(
     (key) => !MANAGER_EXCLUDED_PERMISSIONS.has(key)
   ),
   CASHIER: normalizePermissions(CASHIER_DEFAULT_PERMISSIONS),
+  NO_ROLE: normalizePermissions(NO_ROLE_DEFAULT_PERMISSIONS),
 }
 
 // Fail fast on a typo'd key in the defaults above rather than silently
@@ -97,6 +157,39 @@ for (const key of CASHIER_DEFAULT_PERMISSIONS) {
   if (!permissionKeySet.has(key))
     throw new Error(
       `"${key}" in CASHIER_DEFAULT_PERMISSIONS is not a key in permissionTree.`
+    )
+}
+
+for (const key of NO_ROLE_DEFAULT_PERMISSIONS) {
+  if (!permissionKeySet.has(key))
+    throw new Error(
+      `"${key}" in NO_ROLE_DEFAULT_PERMISSIONS is not a key in permissionTree.`
+    )
+}
+
+// NO_ROLE must never carry an action permission. Checked at import time so a
+// permission added to the tree later cannot quietly slip into the read-only
+// role through a copy-paste.
+const ACTION_SUFFIXES = [
+  "create",
+  "edit",
+  "status",
+  "process",
+  "settle",
+  "refund",
+  "void",
+  "open",
+  "close",
+  "cash_movement",
+  "permissions",
+  "note",
+  "target",
+]
+for (const key of NO_ROLE_DEFAULT_PERMISSIONS) {
+  const leaf = key.split(".").pop() ?? ""
+  if (ACTION_SUFFIXES.includes(leaf))
+    throw new Error(
+      `"${key}" is an action permission and must not be in NO_ROLE_DEFAULT_PERMISSIONS.`
     )
 }
 

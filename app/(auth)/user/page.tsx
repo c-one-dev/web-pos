@@ -29,6 +29,7 @@ import PermissionsDialog from "./dialogs/permissions"
 import { useSession } from "next-auth/react"
 import SortHeader from "@/components/custom/sort-header"
 import StatusDialog from "./dialogs/status"
+import ResetPasswordDialog from "./dialogs/reset-password"
 import Image from "next/image"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import RowViewDialog from "./dialogs/row-view"
@@ -89,6 +90,12 @@ function Actions({ row }: { row?: IUserNode }) {
   const canManagePermissions =
     (role === "ADMIN" || role === "MANAGER") &&
     (session as any)?.user?._id?.toString() !== data?._id?.toString()
+  // Resetting a password is ADMIN/MANAGER-only too, enforced for real in
+  // resolvers/user.resolver.ts. Hidden on your own row: you change your own
+  // password through the profile form, not by locking yourself out.
+  const canResetPassword =
+    (role === "ADMIN" || role === "MANAGER") &&
+    (session as any)?.user?._id?.toString() !== data?._id?.toString()
 
   return (
     <DropdownMenu modal open={open} onOpenChange={setOpen}>
@@ -106,6 +113,12 @@ function Actions({ row }: { row?: IUserNode }) {
           _id={data?._id?.toString()}
           onClose={() => setOpen(false)}
         />
+        {canResetPassword && (
+          <ResetPasswordDialog
+            _id={data?._id?.toString() || ""}
+            onClose={() => setOpen(false)}
+          />
+        )}
         {canManagePermissions && (
           <PermissionsDialog
             _id={data?._id?.toString() || ""}

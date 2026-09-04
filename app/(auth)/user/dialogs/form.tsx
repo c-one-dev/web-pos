@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button"
 import { useForm } from "@tanstack/react-form"
 import { userSchema } from "@/validators/user.validator"
 import { toast } from "sonner"
+import { copyToClipboard } from "@/lib/clipboard"
 import { Field, FieldError, FieldLabel, FieldSet } from "@/components/ui/field"
 import { InputGroup, InputGroupInput } from "@/components/ui/input-group"
 import { PasswordInput } from "@/components/ui/password-input"
@@ -467,9 +468,10 @@ export default function FormDialog({ _id, onClose }: Props) {
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => {
-                navigator.clipboard.writeText(tempPassword || "")
-                toast.success("Copied to clipboard.")
+              onClick={async () => {
+                const copied = await copyToClipboard(tempPassword || "")
+                if (copied) toast.success("Copied to clipboard.")
+                else toast.error("Could not copy - select the password and copy it by hand.")
               }}
             >
               Copy

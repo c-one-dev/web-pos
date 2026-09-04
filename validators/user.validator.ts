@@ -35,3 +35,9 @@ export const changePasswordSchema = z.object({
   oldPassword: z.string().nonempty("Current password is required"),
   newPassword: z.string().min(8, "New password must be at least 8 characters"),
 })
+
+// Resetting someone else's password. Only the target matters - the new
+// password is generated server-side, never supplied by the caller.
+export const resetUserPasswordSchema = z.object({
+  _id: z.string().nonempty("User is required"),
+})

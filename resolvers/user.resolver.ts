@@ -10,6 +10,7 @@ import { checkSchema, validate } from "../helpers/validate"
 import {
   userSchema,
   changePasswordSchema,
+  resetUserPasswordSchema,
   updateUserPermissionsSchema,
 } from "../validators/user.validator"
 import { normalizePermissions } from "../validators/permissionRegistry"
@@ -403,6 +404,44 @@ export const userResolver = {
             ok: true,
             message: "Password updated successfully.",
             data: null,
+          }
+        } catch (error) {
+          throw error
+        }
+      }
+    ),
+    // Hands a locked-out user a fresh temporary password. Mirrors createUser:
+    // the password is generated here, returned once so it can be read out, and
+    // `mustChangePassword` forces them to replace it at the next sign-in.
+    resetUserPassword: validate(checkSchema(resetUserPasswordSchema))(
+      async (_: any, { _id }: any, ctx: any) => {
+        try {
+          const actorRole = ctx?.session?.role
+          if (actorRole !== Role.ADMIN && actorRole !== Role.MANAGER)
+            throw new GraphQLError(
+              "You are not allowed to reset a user's password."
+            )
+
+          const user = await User.findById(_id).select("role")
+          if (!user) throw new GraphQLError("User not found")
+
+          // Same shape as the permissions rule: a MANAGER must not be able to
+          // take over an ADMIN's account by resetting its password.
+          if (actorRole === Role.MANAGER && user.role === Role.ADMIN)
+            throw new GraphQLError(
+              "A manager cannot reset an administrator's password."
+            )
+
+          const temporaryPassword = generateTempPassword()
+          user.password = await bcrypt.hash(temporaryPassword, 10)
+          user.mustChangePassword = true
+          await user.save()
+
+          return {
+            ok: true,
+            message: "Password reset successfully.",
+            // Shown once in the dialog - it is never retrievable afterwards.
+            data: temporaryPassword,
           }
         } catch (error) {
           throw error

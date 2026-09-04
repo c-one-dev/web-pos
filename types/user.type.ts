@@ -4,6 +4,10 @@ export enum Role {
   ADMIN = "ADMIN",
   MANAGER = "MANAGER",
   CASHIER = "CASHIER",
+  // Read-only across the whole app: every page is reachable, nothing can be
+  // created, edited, deactivated or processed. For an owner or auditor who
+  // needs to look without being able to touch anything.
+  NO_ROLE = "NO_ROLE",
 }
 
 export interface IUser {

@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/table"
 import { DetailSkeleton } from "@/components/custom/skeletons"
 import { toast } from "sonner"
+import { copyToClipboard } from "@/lib/clipboard"
 import { refetchOnlyReadyQueries } from "@/lib/refetch"
 import {
   Tooltip,
@@ -251,13 +252,14 @@ function CopyText({
               ? "font-medium text-primary hover:underline"
               : "text-muted-foreground"
           )}
-          onClick={() => {
+          onClick={async () => {
             if (!value) {
               toast.warning(`No ${toastLabel.toLowerCase()} to copy.`)
               return
             }
-            navigator.clipboard.writeText(value)
-            toast.success(`${toastLabel} copied to clipboard.`)
+            const copied = await copyToClipboard(value)
+            if (copied) toast.success(`${toastLabel} copied to clipboard.`)
+            else toast.error("Could not copy to clipboard.")
           }}
         >
           {value || fallback || "-"}
@@ -329,13 +331,14 @@ export default function RowViewDialog({
     }
   }
 
-  const handleCopyNotes = () => {
+  const handleCopyNotes = async () => {
     if (!savedNotes) {
       toast.warning("No notes to copy.")
       return
     }
-    navigator.clipboard.writeText(savedNotes)
-    toast.success("Notes copied to clipboard.")
+    const copied = await copyToClipboard(savedNotes)
+    if (copied) toast.success("Notes copied to clipboard.")
+    else toast.error("Could not copy to clipboard.")
   }
 
   const handleClose = () => {

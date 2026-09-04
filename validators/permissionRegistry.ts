@@ -45,6 +45,10 @@ export const permissionTree: PermissionNode[] = [
       {
         key: "pos.sale",
         label: "Process sale",
+        // Loading the register screen is reading, not selling - a read-only
+        // role can open it while `pos.sale.process` still gates the mutation
+        // that actually creates a sale.
+        fields: ["Query.processedRegister"],
         children: [
           {
             key: "pos.sale.process",
@@ -224,6 +228,9 @@ export const permissionTree: PermissionNode[] = [
               "Query.customerTable",
               "Query.customer",
               "Query.customerReport",
+              // What a customer still owes is part of reading their account;
+              // repaying it stays behind customers.settle / pos.sale.settle.
+              "Query.customerOutstandingSales",
             ],
           },
           {
@@ -346,6 +353,11 @@ export const permissionTree: PermissionNode[] = [
             key: "users.user.edit",
             label: "Edit an existing user",
             fields: ["Mutation.updateUser"],
+          },
+          {
+            key: "users.user.reset_password",
+            label: "Reset a user's password",
+            fields: ["Mutation.resetUserPassword"],
           },
           {
             key: "users.user.status",

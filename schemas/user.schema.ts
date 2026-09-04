@@ -5,6 +5,7 @@ export const userSchema = gql`
     ADMIN
     MANAGER
     CASHIER
+    NO_ROLE
   }
 
   type User {
@@ -88,5 +89,9 @@ export const userSchema = gql`
     changeUserStatus(_id: ID!): Response
     updateUserPermissions(_id: ID!, permissions: [String!]!): Response
     changePassword(oldPassword: String!, newPassword: String!): Response
+    # Issues a new temporary password for someone who is locked out. The
+    # password comes back once, in the response, and the user is forced to
+    # replace it at their next sign-in. ADMIN/MANAGER only.
+    resetUserPassword(_id: ID!): Response
   }
 `
