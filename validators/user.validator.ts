@@ -28,7 +28,9 @@ export const updateUserPermissionsSchema = z.object({
   _id: z.string().nonempty("User is required"),
   // Unknown keys are stripped (not rejected) by normalizePermissions in the
   // resolver — this only guards the shape.
-  permissions: z.array(z.string()),
+  // null clears the explicit list and restores the role default; an empty
+  // array is a real value meaning "nothing granted".
+  permissions: z.array(z.string()).nullable(),
 })
 
 export const changePasswordSchema = z.object({

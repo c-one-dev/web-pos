@@ -359,12 +359,18 @@ export const userResolver = {
           // Re-normalized server-side: unknown keys dropped, ancestors of any
           // granted key pulled back in - the client's tree state is a
           // convenience, not the source of truth.
-          const normalized = normalizePermissions(permissions ?? [])
-          const result = await User.findByIdAndUpdate(
-            _id,
-            { $set: { permissions: normalized } },
-            { returnDocument: "after" }
-          )
+          //
+          // A null list is the reset: the field is removed entirely so the
+          // user falls back to their role's default. Without this an explicit
+          // list, once saved, outlives every later role change - a user moved
+          // to NO_ROLE would keep the permissions they had as a CASHIER.
+          const update =
+            permissions === null || permissions === undefined
+              ? { $unset: { permissions: "" } }
+              : { $set: { permissions: normalizePermissions(permissions) } }
+          const result = await User.findByIdAndUpdate(_id, update, {
+            returnDocument: "after",
+          })
             .select("name surname role permissions")
             .lean()
           if (!result) throw new GraphQLError("User not found")

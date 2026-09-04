@@ -87,7 +87,10 @@ export const userSchema = gql`
     createUser(input: UserInput): Response
     updateUser(_id: ID!, input: UserInput): Response
     changeUserStatus(_id: ID!): Response
-    updateUserPermissions(_id: ID!, permissions: [String!]!): Response
+    # A null permissions list clears the explicit set, so the user falls back
+    # to their role default. An empty array is different - it means this user
+    # is allowed nothing.
+    updateUserPermissions(_id: ID!, permissions: [String!]): Response
     changePassword(oldPassword: String!, newPassword: String!): Response
     # Issues a new temporary password for someone who is locked out. The
     # password comes back once, in the response, and the user is forced to

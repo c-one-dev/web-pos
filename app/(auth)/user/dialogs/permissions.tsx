@@ -390,8 +390,20 @@ export default function PermissionsDialog({ _id, onClose }: Props) {
 
   const onSave = async () => {
     try {
+      // Ticks that exactly match the role default are saved as "no explicit
+      // list" rather than as a copy of it. Saving the copy would pin the user
+      // to today's default: change their role later and they would keep the
+      // old set, which is how a NO_ROLE user kept a cashier's edit rights.
+      const defaults = new Set(
+        normalizePermissions(user?.defaultPermissions ?? [])
+      )
+      const current = normalizePermissions([...granted])
+      const matchesDefault =
+        current.length === defaults.size &&
+        current.every((key) => defaults.has(key))
+
       const result: any = await updatePermissions({
-        variables: { _id, permissions: normalizePermissions([...granted]) },
+        variables: { _id, permissions: matchesDefault ? null : current },
       })
       if (result.data.updateUserPermissions.ok) {
         toast.success(result.data.updateUserPermissions.message)
