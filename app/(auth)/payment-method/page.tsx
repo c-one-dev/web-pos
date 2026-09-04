@@ -17,6 +17,7 @@ import { GearIcon, MagnifyingGlassIcon } from "@phosphor-icons/react"
 import { IPaymentMethodNode, PaymentType } from "@/types/paymentMethod.type"
 import { ColumnDef } from "@tanstack/react-table"
 import DataTable from "@/components/custom/data-table"
+import { usePermissions } from "@/hooks/use-permissions"
 import ColumnFilter from "@/components/custom/column-filter"
 import { FilterType } from "@/types/shared.type"
 import {
@@ -71,7 +72,13 @@ const GET_PAYMENT_METHODS = gql`
   }
 `
 
-function Actions({ row }: { row?: IPaymentMethodNode }) {
+function Actions({
+  row,
+  readOnly,
+}: {
+  row?: IPaymentMethodNode
+  readOnly?: boolean
+}) {
   const [open, setOpen] = useState(false)
   const data = useMemo(() => row, [row])
   const status = data?.isActive
@@ -88,7 +95,7 @@ function Actions({ row }: { row?: IPaymentMethodNode }) {
           _id={data?._id?.toString() || ""}
           onClose={() => setOpen(false)}
         />
-        {data?.name !== "CASH" && (
+        {!readOnly && data?.name !== "CASH" && (
           <>
             <FormDialog
               _id={data?._id?.toString()}
@@ -107,6 +114,16 @@ function Actions({ row }: { row?: IPaymentMethodNode }) {
 }
 
 export default function Page() {
+  // The server enforces these permissions per field either way
+  // (app/graphql/route.ts) - this keeps buttons out of the menu that would
+  // only fail, which is what a view-only role should see.
+  const { can } = usePermissions()
+  const isReadOnly = !can(
+    "store.payment_method.create",
+    "store.payment_method.edit",
+    "store.payment_method.status"
+  )
+
   // Pagination state
   const [rows, setRows] = useState<number>(10)
   const [page, setPage] = useState<{
@@ -311,7 +328,7 @@ export default function Page() {
     <div className="flex h-full w-full flex-col gap-1.5 p-2.5">
       <div className="flex items-center justify-between gap-1.5">
         <Label className="text-xl font-medium">Payment Method</Label>
-        <FormDialog />
+        {!isReadOnly && <FormDialog />}
       </div>
       <div className="flex justify-between">
         <InputGroup>
@@ -384,7 +401,7 @@ export default function Page() {
         loading={loading}
         columns={columns}
         data={nodes.slice((page.current - 1) * rows, page.current * rows)}
-        actionsColumn={<Actions />}
+        actionsColumn={<Actions readOnly={isReadOnly} />}
         rowView={<RowViewDialog />}
       />
     </div>

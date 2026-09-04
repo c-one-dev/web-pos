@@ -27,6 +27,7 @@ import {
 import ViewDialog from "./dialogs/view"
 import PermissionsDialog from "./dialogs/permissions"
 import { useSession } from "next-auth/react"
+import { usePermissions } from "@/hooks/use-permissions"
 import SortHeader from "@/components/custom/sort-header"
 import StatusDialog from "./dialogs/status"
 import ResetPasswordDialog from "./dialogs/reset-password"
@@ -86,6 +87,9 @@ function Actions({ row }: { row?: IUserNode }) {
   // role check in resolvers/user.resolver.ts (assertCanManagePermissions),
   // this just keeps the item out of a Cashier's menu. Nobody edits their own
   // permissions, so it's hidden on your own row too.
+  const { can } = usePermissions()
+  const canEdit = can("users.user.edit")
+  const canChangeStatus = can("users.user.status")
   const role = (session as any)?.user?.role
   const canManagePermissions =
     (role === "ADMIN" || role === "MANAGER") &&
@@ -109,10 +113,12 @@ function Actions({ row }: { row?: IUserNode }) {
           _id={data?._id?.toString() || ""}
           onClose={() => setOpen(false)}
         />
-        <FormDialog
-          _id={data?._id?.toString()}
-          onClose={() => setOpen(false)}
-        />
+        {canEdit && (
+          <FormDialog
+            _id={data?._id?.toString()}
+            onClose={() => setOpen(false)}
+          />
+        )}
         {canResetPassword && (
           <ResetPasswordDialog
             _id={data?._id?.toString() || ""}
@@ -125,17 +131,23 @@ function Actions({ row }: { row?: IUserNode }) {
             onClose={() => setOpen(false)}
           />
         )}
-        <StatusDialog
-          _id={data?._id?.toString() || ""}
-          status={status || false}
-          onClose={() => setOpen(false)}
-        />
+        {canChangeStatus && (
+          <StatusDialog
+            _id={data?._id?.toString() || ""}
+            status={status || false}
+            onClose={() => setOpen(false)}
+          />
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )
 }
 
 export default function Page() {
+  // Same rule as the row actions: hide what the server would refuse anyway.
+  const { can: canPage } = usePermissions()
+  const canCreateUser = canPage("users.user.create")
+
   // Pagination state
   const [rows, setRows] = useState<number>(10)
   const [page, setPage] = useState<{
@@ -354,7 +366,7 @@ export default function Page() {
     <div className="flex h-full w-full flex-col gap-1.5 p-2.5">
       <div className="flex items-center justify-between gap-1.5">
         <Label className="text-xl font-medium">User</Label>
-        <FormDialog />
+        {canCreateUser && <FormDialog />}
       </div>
       <div className="flex justify-between">
         <InputGroup>

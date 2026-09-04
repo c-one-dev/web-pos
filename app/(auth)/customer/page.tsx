@@ -18,6 +18,7 @@ import { GearIcon, MagnifyingGlassIcon } from "@phosphor-icons/react"
 import { ICustomerNode } from "@/types/customer.type"
 import { ColumnDef } from "@tanstack/react-table"
 import DataTable from "@/components/custom/data-table"
+import { usePermissions } from "@/hooks/use-permissions"
 import ColumnFilter from "@/components/custom/column-filter"
 import { FilterType } from "@/types/shared.type"
 import {
@@ -75,7 +76,13 @@ const GET_CUSTOMERS = gql`
   }
 `
 
-function Actions({ row }: { row?: ICustomerNode }) {
+function Actions({
+  row,
+  readOnly,
+}: {
+  row?: ICustomerNode
+  readOnly?: boolean
+}) {
   const [open, setOpen] = useState(false)
   const data = useMemo(() => row, [row])
   const status = data?.isActive
@@ -92,21 +99,35 @@ function Actions({ row }: { row?: ICustomerNode }) {
           _id={data?._id?.toString() || ""}
           onClose={() => setOpen(false)}
         />
-        <FormDialog
-          _id={data?._id?.toString()}
-          onClose={() => setOpen(false)}
-        />
-        <StatusDialog
-          _id={data?._id?.toString() || ""}
-          status={status || false}
-          onClose={() => setOpen(false)}
-        />
+        {!readOnly && (
+          <>
+            <FormDialog
+              _id={data?._id?.toString()}
+              onClose={() => setOpen(false)}
+            />
+            <StatusDialog
+              _id={data?._id?.toString() || ""}
+              status={status || false}
+              onClose={() => setOpen(false)}
+            />
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )
 }
 
 export default function Page() {
+  // The server enforces these permissions per field either way
+  // (app/graphql/route.ts) - this keeps buttons out of the menu that would
+  // only fail, which is what a view-only role should see.
+  const { can } = usePermissions()
+  const isReadOnly = !can(
+    "customers.customer.create",
+    "customers.customer.edit",
+    "customers.customer.status"
+  )
+
   // Pagination state
   const [rows, setRows] = useState<number>(10)
   const [page, setPage] = useState<{
@@ -284,8 +305,12 @@ export default function Page() {
       <div className="flex items-center justify-between gap-1.5">
         <Label className="text-xl font-medium">Customer</Label>
         <div className="flex items-center gap-1.5">
-          <ImportCustomers />
-          <FormDialog />
+          {!isReadOnly && (
+            <>
+              <ImportCustomers />
+              <FormDialog />
+            </>
+          )}
         </div>
       </div>
       <div className="flex justify-between">
@@ -359,7 +384,7 @@ export default function Page() {
         loading={loading}
         columns={columns}
         data={nodes.slice((page.current - 1) * rows, page.current * rows)}
-        actionsColumn={<Actions />}
+        actionsColumn={<Actions readOnly={isReadOnly} />}
         rowView={<RowViewDialog />}
       />
     </div>

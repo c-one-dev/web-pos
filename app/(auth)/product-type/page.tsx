@@ -17,6 +17,7 @@ import { GearIcon, MagnifyingGlassIcon } from "@phosphor-icons/react"
 import { IProductTypeNode } from "@/types/productType.type"
 import { ColumnDef } from "@tanstack/react-table"
 import DataTable from "@/components/custom/data-table"
+import { usePermissions } from "@/hooks/use-permissions"
 import { useTablePage } from "@/hooks/use-table-page"
 import ColumnFilter from "@/components/custom/column-filter"
 import { FilterType } from "@/types/shared.type"
@@ -73,7 +74,13 @@ const GET_PRODUCT_TYPES = gql`
   }
 `
 
-function Actions({ row }: { row?: IProductTypeNode }) {
+function Actions({
+  row,
+  readOnly,
+}: {
+  row?: IProductTypeNode
+  readOnly?: boolean
+}) {
   const [open, setOpen] = useState(false)
   const data = useMemo(() => row, [row])
   const status = data?.isActive
@@ -90,21 +97,35 @@ function Actions({ row }: { row?: IProductTypeNode }) {
           _id={data?._id?.toString() || ""}
           onClose={() => setOpen(false)}
         />
-        <FormDialog
-          _id={data?._id?.toString()}
-          onClose={() => setOpen(false)}
-        />
-        <StatusDialog
-          _id={data?._id?.toString() || ""}
-          status={status || false}
-          onClose={() => setOpen(false)}
-        />
+        {!readOnly && (
+          <>
+            <FormDialog
+              _id={data?._id?.toString()}
+              onClose={() => setOpen(false)}
+            />
+            <StatusDialog
+              _id={data?._id?.toString() || ""}
+              status={status || false}
+              onClose={() => setOpen(false)}
+            />
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )
 }
 
 export default function Page() {
+  // The server enforces these permissions per field either way
+  // (app/graphql/route.ts) - this keeps buttons out of the menu that would
+  // only fail, which is what a view-only role should see.
+  const { can } = usePermissions()
+  const isReadOnly = !can(
+    "products.type.create",
+    "products.type.edit",
+    "products.type.status"
+  )
+
   // Pagination state
   const [rows, setRows] = useState<number>(10)
   // Search state
@@ -211,8 +232,12 @@ export default function Page() {
       <div className="flex items-center justify-between gap-1.5">
         <Label className="text-xl font-medium">Product Type</Label>
         <div className="flex items-center gap-1.5">
-          <ImportProductTypes />
-          <FormDialog />
+          {!isReadOnly && (
+            <>
+              <ImportProductTypes />
+              <FormDialog />
+            </>
+          )}
         </div>
       </div>
       <div className="flex justify-between">
@@ -284,7 +309,7 @@ export default function Page() {
         loading={loading}
         columns={columns}
         data={nodes}
-        actionsColumn={<Actions />}
+        actionsColumn={<Actions readOnly={isReadOnly} />}
         rowView={<RowViewDialog />}
       />
     </div>
