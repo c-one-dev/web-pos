@@ -32,11 +32,24 @@ export const copyToClipboard = async (text: string): Promise<boolean> => {
     textarea.style.position = "fixed"
     textarea.style.top = "-1000px"
     textarea.style.opacity = "0"
-    document.body.appendChild(textarea)
+
+    // Mounted inside the open dialog when there is one. Radix traps focus
+    // within the dialog, so a textarea parked on document.body can never be
+    // focused - and execCommand copies from the focused selection, so the
+    // copy silently did nothing.
+    const active = document.activeElement as HTMLElement | null
+    const host =
+      active?.closest('[role="dialog"], [role="alertdialog"]') ?? document.body
+    host.appendChild(textarea)
+
+    textarea.focus({ preventScroll: true })
     textarea.select()
     textarea.setSelectionRange(0, text.length)
     const copied = document.execCommand("copy")
-    document.body.removeChild(textarea)
+    host.removeChild(textarea)
+    // Put focus back where the user left it, or the dialog loses its trap
+    // anchor and closing behaves oddly.
+    active?.focus?.()
     return copied
   } catch {
     return false

@@ -463,7 +463,20 @@ export default function FormDialog({ _id, onClose }: Props) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex items-center justify-between gap-2 border p-2 font-mono text-lg">
-            <span>{tempPassword}</span>
+            <span
+                  // Click selects the whole thing, so Ctrl+C always works
+                  // even if the clipboard API is blocked.
+                  className="cursor-text select-all"
+                  onClick={(event) => {
+                    const range = document.createRange()
+                    range.selectNodeContents(event.currentTarget)
+                    const selection = window.getSelection()
+                    selection?.removeAllRanges()
+                    selection?.addRange(range)
+                  }}
+                >
+                  {tempPassword}
+                </span>
             <Button
               type="button"
               variant="outline"
