@@ -4,6 +4,7 @@ import {
   userSchema,
   changePasswordSchema,
   resetUserPasswordSchema,
+  deleteUserSchema,
   updateUserPermissionsSchema,
 } from "./user.validator"
 import { productTypeSchema } from "./productType.validator"
@@ -61,6 +62,7 @@ export const mutationValidationRegistry: Record<
   updateUserPermissions: updateUserPermissionsSchema,
   changePassword: changePasswordSchema,
   resetUserPassword: resetUserPasswordSchema,
+  deleteUser: deleteUserSchema,
 
   createProductType: productTypeSchema,
   updateProductType: productTypeSchema,

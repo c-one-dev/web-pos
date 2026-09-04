@@ -43,3 +43,9 @@ export const changePasswordSchema = z.object({
 export const resetUserPasswordSchema = z.object({
   _id: z.string().nonempty("User is required"),
 })
+
+// Permanently deleting a user. The safety rules (who may do it, and whether
+// the account still has records attached) live in the resolver.
+export const deleteUserSchema = z.object({
+  _id: z.string().nonempty("User is required"),
+})

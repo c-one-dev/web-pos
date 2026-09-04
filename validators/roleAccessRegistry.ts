@@ -173,6 +173,8 @@ for (const key of NO_ROLE_DEFAULT_PERMISSIONS) {
 const ACTION_SUFFIXES = [
   "create",
   "edit",
+  "delete",
+  "reset_password",
   "status",
   "process",
   "settle",

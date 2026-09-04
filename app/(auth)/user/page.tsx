@@ -31,6 +31,7 @@ import { usePermissions } from "@/hooks/use-permissions"
 import SortHeader from "@/components/custom/sort-header"
 import StatusDialog from "./dialogs/status"
 import ResetPasswordDialog from "./dialogs/reset-password"
+import DeleteDialog from "./dialogs/delete"
 import Image from "next/image"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import RowViewDialog from "./dialogs/row-view"
@@ -90,6 +91,11 @@ function Actions({ row }: { row?: IUserNode }) {
   const { can } = usePermissions()
   const canEdit = can("users.user.edit")
   const canChangeStatus = can("users.user.status")
+  // Permanent removal: permission-gated, and never on your own row - the
+  // server refuses self-deletion anyway.
+  const canDelete =
+    can("users.user.delete") &&
+    (session as any)?.user?._id?.toString() !== data?._id?.toString()
   const role = (session as any)?.user?.role
   const canManagePermissions =
     (role === "ADMIN" || role === "MANAGER") &&
@@ -135,6 +141,12 @@ function Actions({ row }: { row?: IUserNode }) {
           <StatusDialog
             _id={data?._id?.toString() || ""}
             status={status || false}
+            onClose={() => setOpen(false)}
+          />
+        )}
+        {canDelete && (
+          <DeleteDialog
+            _id={data?._id?.toString() || ""}
             onClose={() => setOpen(false)}
           />
         )}

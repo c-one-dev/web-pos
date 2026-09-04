@@ -360,6 +360,11 @@ export const permissionTree: PermissionNode[] = [
             fields: ["Mutation.resetUserPassword"],
           },
           {
+            key: "users.user.delete",
+            label: "Permanently delete a user",
+            fields: ["Mutation.deleteUser"],
+          },
+          {
             key: "users.user.status",
             label: "Activate/deactivate a user",
             fields: ["Mutation.changeUserStatus"],

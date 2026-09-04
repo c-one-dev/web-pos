@@ -96,5 +96,9 @@ export const userSchema = gql`
     # password comes back once, in the response, and the user is forced to
     # replace it at their next sign-in. ADMIN/MANAGER only.
     resetUserPassword(_id: ID!): Response
+    # Permanently removes a user. Refused when the account has operational
+    # history (sales, payments, shifts, targets) - deactivate those instead,
+    # or their records would lose the name attached to them.
+    deleteUser(_id: ID!): Response
   }
 `

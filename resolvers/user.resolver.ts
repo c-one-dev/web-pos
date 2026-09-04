@@ -1,5 +1,10 @@
 import { GraphQLError } from "graphql"
 import User from "../models/user.model"
+import Sale from "../models/sale.model"
+import Payment from "../models/payment.model"
+import RegisterSession from "../models/registerSession.model"
+import SalesTarget from "../models/salesTarget.model"
+import ActivityLog from "../models/activityLog.model"
 import { Types, type PipelineStage } from "mongoose"
 import { randomBytes } from "crypto"
 import type { IDataTableArgs } from "../types/shared.type"
@@ -11,6 +16,7 @@ import {
   userSchema,
   changePasswordSchema,
   resetUserPasswordSchema,
+  deleteUserSchema,
   updateUserPermissionsSchema,
 } from "../validators/user.validator"
 import { normalizePermissions } from "../validators/permissionRegistry"
@@ -410,6 +416,70 @@ export const userResolver = {
             ok: true,
             message: "Password updated successfully.",
             data: null,
+          }
+        } catch (error) {
+          throw error
+        }
+      }
+    ),
+    // Permanently removes an account.
+    //
+    // Refused when the user has operational history. Sales, payments, shifts
+    // and targets all populate the user for display, so deleting one behind
+    // them turns a cashier's name into a blank in sale history and every
+    // shift report they closed. Deactivating keeps the name and stops the
+    // login, which is what "remove this person" usually means; hard delete is
+    // for accounts created by mistake.
+    deleteUser: validate(checkSchema(deleteUserSchema))(
+      async (_: any, { _id }: any, ctx: any) => {
+        try {
+          const actorRole = ctx?.session?.role
+          if (actorRole !== Role.ADMIN && actorRole !== Role.MANAGER)
+            throw new GraphQLError("You are not allowed to delete a user.")
+
+          if (ctx?.session?._id?.toString() === _id?.toString())
+            throw new GraphQLError("You cannot delete your own account.")
+
+          const target = await User.findById(_id).select("role name surname")
+          if (!target) throw new GraphQLError("User not found")
+
+          // Same containment rule as resetUserPassword: a manager must not be
+          // able to remove an administrator.
+          if (actorRole === Role.MANAGER && target.role === Role.ADMIN)
+            throw new GraphQLError("A manager cannot delete an administrator.")
+
+          const userId = new Types.ObjectId(_id)
+          const [sales, payments, sessions, targets] = await Promise.all([
+            Sale.countDocuments({ by: userId }),
+            Payment.countDocuments({ by: userId }),
+            RegisterSession.countDocuments({
+              $or: [{ openedBy: userId }, { closedBy: userId }],
+            }),
+            SalesTarget.countDocuments({ user: userId }),
+          ])
+
+          const blockers = [
+            sales && `${sales} sale${sales === 1 ? "" : "s"}`,
+            payments && `${payments} payment${payments === 1 ? "" : "s"}`,
+            sessions &&
+              `${sessions} register session${sessions === 1 ? "" : "s"}`,
+            targets && `${targets} sales target${targets === 1 ? "" : "s"}`,
+          ].filter(Boolean)
+
+          if (blockers.length)
+            throw new GraphQLError(
+              `${target.name} has ${blockers.join(", ")} on record and cannot be deleted. Deactivate the account instead.`
+            )
+
+          // The activity log keeps `userName` as plain text, so the audit
+          // trail survives the account. Only the dangling reference is cleared.
+          await ActivityLog.updateMany({ user: userId }, { $set: { user: null } })
+          await User.findByIdAndDelete(_id)
+
+          return {
+            ok: true,
+            message: "User deleted permanently.",
+            data: { _id },
           }
         } catch (error) {
           throw error
