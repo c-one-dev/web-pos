@@ -14,7 +14,7 @@ import { useEffect, useId } from "react"
 import { Spinner } from "@/components/ui/spinner"
 
 const signInSchema = z.object({
-  username: z.string().nonempty("Email must not be empty."),
+  username: z.string().nonempty("Username must not be empty."),
   password: z.string().nonempty("Password must not be empty."),
 })
 
@@ -138,7 +138,7 @@ function LoginForm() {
       <div className="space-y-1">
         <h1 className="font-heading text-xl font-bold">Welcome Back</h1>
         <p className="text-xs text-muted-foreground">
-          Enter Your POS Email Account and Password to access your account.
+          Enter your POS username and password to access your account.
         </p>
       </div>
 
@@ -157,7 +157,7 @@ function LoginForm() {
                 field.state.meta.isTouched && !field.state.meta.isValid
               return (
                 <Field data-invalid={isInvalid}>
-                  <FieldLabel htmlFor={field.name}>Email</FieldLabel>
+                  <FieldLabel htmlFor={field.name}>Username</FieldLabel>
                   <InputGroup>
                     <InputGroupInput
                       id={field.name}
