@@ -195,6 +195,24 @@ for (const key of NO_ROLE_DEFAULT_PERMISSIONS) {
     )
 }
 
+// Permissions that a role alone decides, whatever the Permissions dialog says.
+//
+// Ticking the box for a role not listed here does nothing: the key is stripped
+// out of the effective set below, so the server refuses the field and the UI
+// never offers the button. This is deliberately not configurable - voiding a
+// sale reverses money and account balances, and the business rule is that only
+// a MANAGER or an ADMIN may do it.
+export const ROLE_LOCKED_PERMISSIONS: Record<string, readonly string[]> = {
+  "pos.sale.void": ["ADMIN", "MANAGER"],
+}
+
+for (const key of Object.keys(ROLE_LOCKED_PERMISSIONS)) {
+  if (!permissionKeySet.has(key))
+    throw new Error(
+      `"${key}" in ROLE_LOCKED_PERMISSIONS is not a key in permissionTree.`
+    )
+}
+
 // The permission set actually in force for a user: their explicit list when
 // one has been saved, otherwise their role's default. An empty array is a real
 // value (an admin saved the dialog with nothing ticked) - only null/undefined
@@ -202,9 +220,13 @@ for (const key of NO_ROLE_DEFAULT_PERMISSIONS) {
 export const effectivePermissions = (
   role: string | undefined,
   explicit: readonly string[] | null | undefined
-): Set<string> =>
-  new Set(
+): Set<string> => {
+  const permissions = new Set(
     explicit
       ? normalizePermissions(explicit)
       : (roleDefaultPermissions[role ?? ""] ?? [])
   )
+  for (const [key, roles] of Object.entries(ROLE_LOCKED_PERMISSIONS))
+    if (!roles.includes(role ?? "")) permissions.delete(key)
+  return permissions
+}

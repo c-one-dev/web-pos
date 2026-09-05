@@ -34,6 +34,7 @@ import { DetailSkeleton } from "@/components/custom/skeletons"
 import { toast } from "sonner"
 import { copyToClipboard } from "@/lib/clipboard"
 import { refetchOnlyReadyQueries } from "@/lib/refetch"
+import { usePermissions } from "@/hooks/use-permissions"
 import {
   Tooltip,
   TooltipContent,
@@ -280,6 +281,10 @@ export default function RowViewDialog({
   external = false,
 }: Props) {
   const router = useRouter()
+  const { can } = usePermissions()
+  // Role-locked to MANAGER/ADMIN server-side (ROLE_LOCKED_PERMISSIONS), so
+  // this key is absent for everyone else no matter what the dialog ticked.
+  const canVoid = can("pos.sale.void")
   const { data, loading }: any = useQuery(GET_SALE, {
     variables: {
       _id,
@@ -459,38 +464,40 @@ export default function RowViewDialog({
             >
               <CopySimpleIcon /> Duplicate
             </Button>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  className="rounded-md"
-                  disabled={isVoided || loading || isPending}
-                >
-                  <ProhibitIcon /> {isVoided ? "Voided" : "Void"}
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Void this sale?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This marks sale {sale?.saleNumber} as voided and hands back
-                    anything it drew from the customer&apos;s account limit or
-                    store credit. Cash and other tenders must still be settled
-                    at the drawer. This cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    className="bg-destructive"
-                    onClick={handleVoid}
+            {canVoid && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="rounded-md"
+                    disabled={isVoided || loading || isPending}
                   >
-                    Yes, Void Sale
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+                    <ProhibitIcon /> {isVoided ? "Voided" : "Void"}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Void this sale?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This marks sale {sale?.saleNumber} as voided and hands
+                      back anything it drew from the customer&apos;s account
+                      limit or store credit. Cash and other tenders must still
+                      be settled at the drawer. This cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="bg-destructive"
+                      onClick={handleVoid}
+                    >
+                      Yes, Void Sale
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
           </div>
         </DrawerHeader>
 

@@ -723,7 +723,8 @@ export const saleResolver = {
             )
 
           const register =
-            input.register || (await Register.findOne().select("_id").lean())?._id
+            input.register ||
+            (await Register.findOne().select("_id").lean())?._id
           if (!register)
             throw new GraphQLError("No register exists to file the sale under")
 
@@ -1709,6 +1710,20 @@ export const saleResolver = {
       }
     ),
     voidSale: async (_: any, { _id }: any, ctx: any) => {
+      // Role rule, not a permission: voiding reverses money and account
+      // balances, so it stays with MANAGER and ADMIN whatever the Permissions
+      // dialog has ticked. ROLE_LOCKED_PERMISSIONS strips the permission for
+      // everyone else too - this is the second lock, so the rule survives a
+      // change to the permission wiring.
+      const actorRole = ctx?.session?.role
+      if (actorRole !== "ADMIN" && actorRole !== "MANAGER")
+        throw new GraphQLError(
+          "Only a manager or an administrator can void a sale.",
+          {
+            extensions: { code: "FORBIDDEN" },
+          }
+        )
+
       const session = await mongoose.startSession()
       try {
         let result: any

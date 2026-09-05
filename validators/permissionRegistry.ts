@@ -72,7 +72,8 @@ export const permissionTree: PermissionNode[] = [
           },
           {
             key: "pos.sale.void",
-            label: "Void a sale transaction",
+            // Role-locked: see ROLE_LOCKED_PERMISSIONS in roleAccessRegistry.
+            label: "Void a sale transaction (managers and admins only)",
             fields: ["Mutation.voidSale"],
           },
           {

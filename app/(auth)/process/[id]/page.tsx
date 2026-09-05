@@ -767,7 +767,7 @@ function ProcessSalePage({
                 {/* The panel itself never scrolls - the cart list inside it does - so
                     the totals and the Pay button stay on screen no matter how
                     long the order gets. */}
-                <div className="flex w-full min-h-0 shrink-0 flex-col justify-between gap-2.5 border-t p-2 lg:w-96 lg:overflow-hidden lg:border-t-0 lg:border-l">
+                <div className="flex min-h-0 w-full shrink-0 flex-col justify-between gap-2.5 border-t p-2 lg:w-96 lg:overflow-hidden lg:border-t-0 lg:border-l">
                   <AddCustomer
                     form={form}
                     open={openCustomerPicker}
@@ -1006,7 +1006,25 @@ function ProcessSalePage({
         description="Find a product by name, SKU or barcode and add it to the cart."
         className="sm:max-w-2xl"
       >
-        <Command>
+        <Command
+          // cmdk's default scorer is fuzzy: it matches the typed letters as a
+          // scattered subsequence, so "rice" also hits "Lucky Me Pancit Canton
+          // ORIginal" and the list stays full of things the cashier did not
+          // ask for. At a register that is noise, so match on real substrings
+          // instead - every typed word has to appear in the name, SKU or
+          // barcode. Ranking still favours a name that starts with the query.
+          filter={(value, search) => {
+            const haystack = value.toLowerCase()
+            const words = search
+              .toLowerCase()
+              .trim()
+              .split(/\s+/)
+              .filter(Boolean)
+            if (words.length === 0) return 1
+            if (!words.every((word) => haystack.includes(word))) return 0
+            return haystack.startsWith(words[0]) ? 1 : 0.5
+          }}
+        >
           <CommandInput placeholder="Search SKU, Barcode / Product Name" />
           <CommandList className="max-h-[60vh]">
             <CommandEmpty>No product found.</CommandEmpty>
