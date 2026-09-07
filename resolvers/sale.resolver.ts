@@ -1489,7 +1489,11 @@ export const saleResolver = {
     // open session is required: without one there'd be no shift to answer for
     // the cash.
     settleSales: validate(checkSchema(settleSalesSchema))(
-      async (_: any, { sales, method, register, note }: any, ctx: any) => {
+      async (
+        _: any,
+        { sales, method, register, note, reference }: any,
+        ctx: any
+      ) => {
         const session = await mongoose.startSession()
         try {
           let result: any
@@ -1516,6 +1520,16 @@ export const saleResolver = {
               throw new GraphQLError(
                 "An account balance can't be settled with On Account.",
                 { extensions: { code: "INVALID_METHOD" } }
+              )
+
+            // Same rule as checkout: a card or e-wallet settlement is only
+            // traceable with the provider's reference, so it is required
+            // here too rather than only asked for by the dialog.
+            const trimmedReference = reference?.trim() || ""
+            if (paymentMethod.type === "DIGITAL" && !trimmedReference)
+              throw new GraphQLError(
+                `A reference number is required when settling with ${paymentMethod.name}.`,
+                { extensions: { code: "REFERENCE_REQUIRED" } }
               )
 
             const now = new Date()
@@ -1563,6 +1577,7 @@ export const saleResolver = {
                     change: 0,
                     method,
                     date: now,
+                    reference: trimmedReference || undefined,
                     note: note || `Settlement for ${sale.saleNumber}`,
                     by: ctx.session._id,
                     sale: [sale._id],
@@ -1594,6 +1609,7 @@ export const saleResolver = {
                       amount,
                       method,
                       payment: payment._id,
+                      reference: trimmedReference || undefined,
                       note: note || "",
                       date: now,
                       by: ctx.session._id,

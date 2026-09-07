@@ -53,6 +53,9 @@ const SaleRefund = new Schema(
 const SaleSettlement = new Schema(
   {
     amount: { type: Number, required: true },
+    // Provider reference / card approval code, captured for DIGITAL methods
+    // exactly as an original tender captures one.
+    reference: { type: String },
     method: {
       type: Schema.Types.ObjectId,
       ref: "Payment_Method",

@@ -32,6 +32,8 @@ export const saleSchema = gql`
   type SaleSettlement {
     amount: Float
     method: PaymentMethod
+    # Provider reference / card approval code.
+    reference: String
     note: String
     date: String
     by: User
@@ -347,6 +349,8 @@ export const saleSchema = gql`
       method: ID!
       register: ID!
       note: String
+      # Required when the method is DIGITAL - the same rule checkout applies.
+      reference: String
     ): Response
     refundSaleItems(
       _id: ID!

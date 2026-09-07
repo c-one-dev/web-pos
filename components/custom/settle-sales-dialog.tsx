@@ -76,6 +76,7 @@ const GET_PAYMENT_METHODS = gql`
     paymentMethodOptions {
       value
       label
+      type
     }
   }
 `
@@ -86,12 +87,14 @@ const SETTLE_SALES = gql`
     $method: ID!
     $register: ID!
     $note: String
+    $reference: String
   ) {
     settleSales(
       sales: $sales
       method: $method
       register: $register
       note: $note
+      reference: $reference
     ) {
       ok
       message
@@ -115,6 +118,7 @@ export default function SettleSalesDialog({
 }: Props) {
   const register = useRegisterStore((state) => state.register)
   const [method, setMethod] = useState("")
+  const [reference, setReference] = useState("")
   const [note, setNote] = useState("")
   // saleId -> amount being settled now. Absent means the row is unticked.
   const [amounts, setAmounts] = useState<Record<string, number>>({})
@@ -179,8 +183,23 @@ export default function SettleSalesDialog({
     [methodData]
   )
 
+  // Which tenders need a reference captured, keyed off the method's own type
+  // rather than its name - DIGITAL is exactly the card, e-wallet and bank
+  // transfer methods. Same rule the Pay sheet applies at checkout, and
+  // settleSales enforces it again server-side.
+  const selectedMethod = methods.find((option: any) => option.value === method)
+  const needsReference = selectedMethod?.type === "DIGITAL"
+  // Card issuers call it an approval code, e-wallets call it a reference.
+  const referenceLabel = /card/i.test(selectedMethod?.label || "")
+    ? "Approval code"
+    : "Reference number"
+
   useEffect(() => {
     if (!open) return
+    // A reference belongs to one payment, so it must never be carried into
+    // the next one.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setReference("")
     // Everything owed is ticked in full by default - the common case is "the
     // customer is paying their bill", not "part of one sale".
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -221,6 +240,7 @@ export default function SettleSalesDialog({
           method,
           register,
           note,
+          reference: needsReference ? reference.trim() : null,
         },
       })
       if (result.data.settleSales.ok) {
@@ -330,6 +350,19 @@ export default function SettleSalesDialog({
               </Select>
             </div>
 
+            {needsReference && (
+              <div className="space-y-1.5">
+                <Label>{referenceLabel}</Label>
+                <Input
+                  value={reference}
+                  onChange={(e) => setReference(e.target.value)}
+                  placeholder={`ex. ${
+                    referenceLabel === "Approval code" ? "123456" : "0012345678"
+                  }`}
+                />
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <Label>Note (optional)</Label>
               <Textarea
@@ -360,7 +393,13 @@ export default function SettleSalesDialog({
             onClick={onSettle}
             loading={settling}
             disabled={
-              !!blockedReason || !method || selected.length === 0 || settling
+              !!blockedReason ||
+              !method ||
+              selected.length === 0 ||
+              // A card or e-wallet settlement without its reference is one
+              // nobody can trace back to the provider later.
+              (needsReference && !reference.trim()) ||
+              settling
             }
           >
             Settle {total > 0 ? peso(total) : ""}

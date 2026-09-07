@@ -40,6 +40,14 @@ export const paymentMethodSchema = gql`
     type: PaymentType
   }
 
+  # Option plus the method's type, so a picker can tell which tenders need a
+  # provider reference captured without loading the whole table.
+  type PaymentMethodOption {
+    label: String
+    value: String
+    type: PaymentType
+  }
+
   type Query {
     paymentMethod(_id: ID!): PaymentMethod
     paymentMethodTable(
@@ -49,7 +57,7 @@ export const paymentMethodSchema = gql`
       filter: [Filter]
       sort: Sort
     ): PaymentMethodConnection
-    paymentMethodOptions: [Option]
+    paymentMethodOptions: [PaymentMethodOption]
   }
 
   type Mutation {

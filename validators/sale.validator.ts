@@ -102,6 +102,13 @@ export const settleSalesSchema = z.object({
     .nonempty("Select at least one sale to settle"),
   method: z.string().nonempty("Payment method is required"),
   register: z.string().nonempty("Register is required"),
+  // Whether it is required depends on the method's type, which only the
+  // server knows - settleSales checks that.
+  reference: z
+    .string()
+    .max(100, "Reference must be at most 100 characters")
+    .optional()
+    .nullable(),
   note: z
     .string()
     .max(500, "Note must be at most 500 characters")

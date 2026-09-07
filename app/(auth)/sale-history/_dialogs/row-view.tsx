@@ -137,6 +137,7 @@ const GET_SALE = gql`
       settlements {
         amount
         note
+        reference
         date
         method {
           _id
@@ -838,6 +839,28 @@ export default function RowViewDialog({
                                 Settlement
                               </Badge>
                             </span>
+                            {settlement.reference ? (
+                              <span className="mt-0.5 flex items-start gap-1 text-xs text-muted-foreground">
+                                <ArrowElbowDownRightIcon className="mt-0.5 shrink-0" />
+                                <span className="flex flex-wrap items-center gap-1">
+                                  <span className="font-medium">
+                                    {/card/i.test(settlement.method?.name || "")
+                                      ? "Approval Code #"
+                                      : "Reference #"}
+                                  </span>
+                                  <CopyText
+                                    value={settlement.reference}
+                                    toastLabel={
+                                      /card/i.test(
+                                        settlement.method?.name || ""
+                                      )
+                                        ? "Approval code"
+                                        : "Reference"
+                                    }
+                                  />
+                                </span>
+                              </span>
+                            ) : null}
                             {settlement.note ? (
                               <span className="mt-0.5 flex items-start gap-1 text-xs text-muted-foreground">
                                 <ArrowElbowDownRightIcon className="mt-0.5 shrink-0" />

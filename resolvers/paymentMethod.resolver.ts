@@ -141,13 +141,14 @@ export const paymentMethodResolver = {
     paymentMethodOptions: async () => {
       try {
         const paymentMethods = await PaymentMethod.find({ isActive: true })
-          .select("_id name")
+          .select("_id name type")
           .lean()
         if (!paymentMethods || paymentMethods.length === 0)
           throw new GraphQLError("No paymentMethods found.")
         return paymentMethods.map((paymentMethod) => ({
           value: paymentMethod._id,
           label: paymentMethod.name,
+          type: paymentMethod.type,
         }))
       } catch (error) {
         throw error
