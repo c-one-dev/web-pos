@@ -444,6 +444,16 @@ export const registerSessionResolver = {
         // the convention Transaction by SKU already uses for its payments
         // column. paymentAmount is the sale's total net tender, not one
         // method's share - use the Payment Summary tab for per-method totals.
+        // The per-method tally is written when the shift closes: it records
+        // what was counted against what was expected, and must never change
+        // afterwards. While the shift is still open there is nothing to
+        // record yet, so the expectations are computed live - otherwise this
+        // tab reads "No payments recorded in this shift" all day, however
+        // much has been taken.
+        const paymentSummary = session.closedAt
+          ? session.tally || []
+          : (await resolveSummary(registerDoc, session)).expectedTotals
+
         const paymentDetails = buildPaymentDetails(sales, onAccountId)
         const transactions = buildTransactions(sales)
         const transactionsBySku = buildTransactionsBySku(sales)
@@ -478,7 +488,7 @@ export const registerSessionResolver = {
           }),
           numberOfTransactions: sales.length,
           avgSaleValue: sales.length ? paymentReceived / sales.length : 0,
-          paymentSummary: session.tally || [],
+          paymentSummary,
           paymentDetails,
           onAccountSales,
           addsPayouts: session.cashMovements || [],

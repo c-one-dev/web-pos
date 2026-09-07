@@ -705,24 +705,36 @@ export default function Page() {
     {
       id: "actual",
       header: () => <div className="text-right">Actual</div>,
+      // Nothing has been counted until the drawer is counted, and a shift
+      // still running has not been. Printing 0.00 there would read as an
+      // empty till rather than as an unanswered question.
       cell: ({ row }) => (
-        <div className="text-right">{currency(row.original.counted)}</div>
+        <div className="text-right">
+          {row.original.counted === null || row.original.counted === undefined
+            ? "—"
+            : currency(row.original.counted)}
+        </div>
       ),
     },
     {
       id: "difference",
       header: () => <div className="text-right">Difference</div>,
-      cell: ({ row }) => (
-        <div
-          className={
-            row.original.difference !== 0
-              ? "text-right font-medium text-destructive"
-              : "text-right font-medium"
-          }
-        >
-          {currency(row.original.difference)}
-        </div>
-      ),
+      cell: ({ row }) => {
+        const difference = row.original.difference
+        if (difference === null || difference === undefined)
+          return <div className="text-right">—</div>
+        return (
+          <div
+            className={
+              difference !== 0
+                ? "text-right font-medium text-destructive"
+                : "text-right font-medium"
+            }
+          >
+            {currency(difference)}
+          </div>
+        )
+      },
     },
   ]
 
