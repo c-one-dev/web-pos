@@ -80,6 +80,7 @@ const GET_SALE_HISTORY = gql`
           saleTotal
           currentSaleStatus
           currentSalePaymentStatus
+          isImported
           notes
           paymentNotes
         }
@@ -177,7 +178,13 @@ function Actions({ row }: { row?: ISaleHistoryNode }) {
     skip: !_id || !open,
   })
   const sale = saleData?.sale
-  const isEditable = !!sale?.isEditable
+  // A carried-over receipt was rung up in the previous system. It can be
+  // settled here - the debt is real and the customer pays it at this counter
+  // - but editing, voiding or refunding it would rewrite history this system
+  // never made, and a refund would hand out store credit for money it never
+  // took.
+  const isImported = !!data?.isImported
+  const isEditable = !!sale?.isEditable && !isImported
   // Refunds go back as store credit, so they need a customer to credit and a
   // sale that isn't voided. The dialog explains whichever rule is blocking;
   // the server enforces all of it again in refundSaleItems.
@@ -189,6 +196,7 @@ function Actions({ row }: { row?: ISaleHistoryNode }) {
     sale?.currentSaleStatus !== "VOIDED"
   const canRefund =
     can("pos.sale.refund") &&
+    !isImported &&
     !!sale?.customer &&
     sale?.currentSaleStatus !== "VOIDED"
 

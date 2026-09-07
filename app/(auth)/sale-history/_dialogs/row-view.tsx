@@ -299,9 +299,6 @@ export default function RowViewDialog({
 }: Props) {
   const router = useRouter()
   const { can } = usePermissions()
-  // Role-locked to MANAGER/ADMIN server-side (ROLE_LOCKED_PERMISSIONS), so
-  // this key is absent for everyone else no matter what the dialog ticked.
-  const canVoid = can("pos.sale.void")
   const { data, loading }: any = useQuery(GET_SALE, {
     variables: {
       _id,
@@ -369,6 +366,13 @@ export default function RowViewDialog({
   }
 
   const sale = data?.sale
+  // Role-locked to MANAGER/ADMIN server-side (ROLE_LOCKED_PERMISSIONS), so
+  // the permission key is absent for everyone else whatever the dialog
+  // ticked. Voiding also reverses what a sale did to the customer's balances
+  // here, and a carried-over receipt did none of that in this system - there
+  // is nothing to reverse, so it is settled or written off on the account
+  // instead.
+  const canVoid = can("pos.sale.void") && !sale?.isImported
   const refundedAmount = sale?.refundedAmount || 0
   const creditedChange = sale?.changeCreditedAmount || 0
   const refunds = sale?.refunds || []

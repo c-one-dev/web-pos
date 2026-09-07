@@ -121,6 +121,7 @@ export interface ISaleHistoryNode {
   saleTotal: number
   currentSaleStatus: SaleStatus
   currentSalePaymentStatus: SalePaymentStatus
+  isImported?: boolean
   notes: string
   paymentNotes: string
 }

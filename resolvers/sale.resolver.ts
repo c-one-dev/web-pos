@@ -140,9 +140,13 @@ export const saleResolver = {
       { first = 10, after, search, filter, sort }: IDataTableArgs
     ) => {
       try {
-        // Imported sales belong to the customer's own account view, not to
-        // this system's sale history - they were never rung up here.
-        const matchStage: Record<string, any> = { isImported: { $ne: true } }
+        // Carried-over receipts are listed here too, so "who owes us money"
+        // has one answer rather than one per page - filter Payment Status by
+        // PENDING and every unpaid sale is in the list, whichever system rang
+        // it up. They are still kept out of every money total (the dashboard,
+        // the sales report tiles, shift tallies), since this shop never took
+        // that money.
+        const matchStage: Record<string, any> = {}
 
         if (search)
           matchStage.$or = [
@@ -293,6 +297,7 @@ export const saleResolver = {
               saleTotal: 1,
               currentSaleStatus: 1,
               currentSalePaymentStatus: 1,
+              isImported: 1,
               notes: 1,
               paymentNotes: 1,
             },

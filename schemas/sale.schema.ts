@@ -232,6 +232,9 @@ export const saleSchema = gql`
     saleTotal: Float
     currentSaleStatus: SaleStatus
     currentSalePaymentStatus: SalePaymentStatus
+    # Carried over from the previous POS. Such a sale can be settled here but
+    # not edited, voided or refunded - none of those happened in this system.
+    isImported: Boolean
     notes: String
     paymentNotes: String
   }
