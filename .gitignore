@@ -44,3 +44,7 @@ next-env.d.ts
 certificates
 # Local environment - never committed. Values live on each machine.
 .env
+
+# Throwaway scripts used while debugging an import.
+*-scratch.mjs
+check-scratch.mjs
