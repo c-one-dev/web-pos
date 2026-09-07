@@ -609,7 +609,13 @@ export default function Page() {
       <div className="flex items-center gap-1.5">
         <Label className="text-xl font-medium">Sale History</Label>
       </div>
-      <div className="flex justify-between">
+      <SaleHistoryFilterBar
+        filters={bar}
+        onChange={(next) => {
+          setBar(next)
+          resetPage()
+        }}
+      >
         <InputGroup>
           <InputGroupInput
             data-search-input
@@ -629,14 +635,7 @@ export default function Page() {
             </InputGroupButton>
           </InputGroupAddon>
         </InputGroup>
-      </div>
-      <SaleHistoryFilterBar
-        filters={bar}
-        onChange={(next) => {
-          setBar(next)
-          resetPage()
-        }}
-      />
+      </SaleHistoryFilterBar>
       <div className="flex items-center justify-between">
         <span className="text-sm">
           Showing {(page.current - 1) * rows + 1}-

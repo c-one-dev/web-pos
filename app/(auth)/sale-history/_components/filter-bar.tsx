@@ -113,9 +113,14 @@ function FilterSelect({
 export default function SaleHistoryFilterBar({
   filters,
   onChange,
+  children,
 }: {
   filters: SaleHistoryFilters
   onChange: (next: SaleHistoryFilters) => void
+  // The search field, so it and the More filters button share one row - they
+  // are the same gesture ("narrow this list") and reading as two stacked rows
+  // made the page look like it had two toolbars.
+  children?: React.ReactNode
 }) {
   const [open, setOpen] = useState(false)
   const { data }: any = useQuery(GET_FILTER_OPTIONS, {
@@ -178,11 +183,12 @@ export default function SaleHistoryFilterBar({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center gap-1.5">
+        {children ? <div className="min-w-0 flex-1">{children}</div> : null}
         <Button
           type="button"
           variant="outline"
-          size="sm"
+          className="shrink-0"
           onClick={() => setOpen((previous) => !previous)}
         >
           {open ? <CaretUpIcon /> : <CaretDownIcon />}
@@ -193,7 +199,7 @@ export default function SaleHistoryFilterBar({
           <Button
             type="button"
             variant="ghost"
-            size="sm"
+            className="shrink-0"
             onClick={() => onChange(emptyFilters)}
           >
             Clear all
