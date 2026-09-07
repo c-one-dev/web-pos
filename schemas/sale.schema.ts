@@ -300,6 +300,16 @@ export const saleSchema = gql`
       search: String
       filter: [Filter]
       sort: Sort
+      # The filter bar above the table.
+      register: ID
+      outlet: ID
+      by: ID
+      method: ID
+      minTotal: Float
+      maxTotal: Float
+      # Carried-over receipts are listed by default; this hides them when
+      # only trade rung up here is wanted.
+      includeImported: Boolean
     ): SaleHistoryConnection
     customerSalesTable(
       customer: ID!

@@ -52,6 +52,10 @@ import {
 import { format, startOfToday, endOfDay } from "date-fns"
 import { ArrowElbowRightIcon } from "@phosphor-icons/react/dist/ssr"
 import { HandCoinsIcon } from "@phosphor-icons/react"
+import SaleHistoryFilterBar, {
+  emptyFilters,
+  type SaleHistoryFilters,
+} from "@/app/(auth)/sale-history/_components/filter-bar"
 
 const GET_SALE_HISTORY = gql`
   query SaleHistoryTable(
@@ -60,6 +64,13 @@ const GET_SALE_HISTORY = gql`
     $search: String
     $filter: [Filter]
     $sort: Sort
+    $register: ID
+    $outlet: ID
+    $by: ID
+    $method: ID
+    $minTotal: Float
+    $maxTotal: Float
+    $includeImported: Boolean
   ) {
     saleHistoryTable(
       first: $first
@@ -67,6 +78,13 @@ const GET_SALE_HISTORY = gql`
       search: $search
       filter: $filter
       sort: $sort
+      register: $register
+      outlet: $outlet
+      by: $by
+      method: $method
+      minTotal: $minTotal
+      maxTotal: $maxTotal
+      includeImported: $includeImported
     ) {
       total
       pages
@@ -291,12 +309,14 @@ export default function Page() {
       type: FilterType.DATE,
     },
   ])
+  const [bar, setBar] = useState<SaleHistoryFilters>(emptyFilters)
   const { data, fetchMore, loading } = useQuery(GET_SALE_HISTORY, {
     variables: {
       first: rows,
       search,
       filter,
       sort,
+      ...bar,
     },
     fetchPolicy: "cache-and-network",
   })
@@ -529,6 +549,7 @@ export default function Page() {
           search,
           filter,
           sort,
+          ...bar,
         },
         updateQuery: (prev: any, { fetchMoreResult: more }: any) => {
           if (!more) return prev
@@ -595,6 +616,13 @@ export default function Page() {
           </InputGroupAddon>
         </InputGroup>
       </div>
+      <SaleHistoryFilterBar
+        filters={bar}
+        onChange={(next) => {
+          setBar(next)
+          resetPage()
+        }}
+      />
       <div className="flex items-center justify-between">
         <span className="text-sm">
           Showing {(page.current - 1) * rows + 1}-

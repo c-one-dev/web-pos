@@ -137,7 +137,28 @@ export const saleResolver = {
     },
     saleHistoryTable: async (
       _: any,
-      { first = 10, after, search, filter, sort }: IDataTableArgs
+      {
+        first = 10,
+        after,
+        search,
+        filter,
+        sort,
+        register,
+        outlet,
+        by,
+        method,
+        minTotal,
+        maxTotal,
+        includeImported = true,
+      }: IDataTableArgs & {
+        register?: string
+        outlet?: string
+        by?: string
+        method?: string
+        minTotal?: number
+        maxTotal?: number
+        includeImported?: boolean
+      }
     ) => {
       try {
         // Carried-over receipts are listed here too, so "who owes us money"
@@ -147,6 +168,34 @@ export const saleResolver = {
         // the sales report tiles, shift tallies), since this shop never took
         // that money.
         const matchStage: Record<string, any> = {}
+
+        // The filter bar above the table. Each of these is optional and
+        // narrows the same list - they are applied before the count is taken
+        // so "Showing 1-10 out of N" reflects what is actually being asked
+        // for.
+        if (!includeImported) matchStage.isImported = { $ne: true }
+        if (register) matchStage.register = new Types.ObjectId(register)
+        if (by) matchStage.by = new Types.ObjectId(by)
+        // A sale carries its tenders inline, so filtering by method is a
+        // match on the array rather than a lookup.
+        if (method) matchStage["payments.method"] = new Types.ObjectId(method)
+        // An outlet owns registers; a sale only knows its register. Resolving
+        // the registers first keeps this a plain match instead of two more
+        // lookup stages on every row.
+        if (outlet) {
+          const registers = await Register.find({ outlet }).select("_id").lean()
+          matchStage.register = { $in: registers.map((r: any) => r._id) }
+        }
+        if (minTotal !== undefined && minTotal !== null)
+          matchStage.netAmount = {
+            ...(matchStage.netAmount || {}),
+            $gte: minTotal,
+          }
+        if (maxTotal !== undefined && maxTotal !== null)
+          matchStage.netAmount = {
+            ...(matchStage.netAmount || {}),
+            $lte: maxTotal,
+          }
 
         if (search)
           matchStage.$or = [
