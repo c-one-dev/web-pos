@@ -60,8 +60,16 @@ const currency = (value?: number | null) =>
 // deliberately larger and higher-contrast than the shared defaults. All of it
 // is applied here rather than in components/ui/{tabs,table}.tsx, which every
 // other page uses.
-const CLOSURE_TABS_LIST =
-  "relative w-full flex-wrap justify-start gap-1 border-b border-border bg-transparent p-0 group-data-horizontal/tabs:h-auto"
+// The strip scrolls sideways rather than wrapping. Seven tabs do not fit a
+// phone, and a wrapped second row sat on top of the table below it - the list
+// keeps the height of one row, so the overflow had nowhere to go.
+const CLOSURE_TABS_LIST = [
+  "relative w-full flex-nowrap justify-start gap-1 border-b border-border",
+  "bg-transparent p-0 group-data-horizontal/tabs:h-auto",
+  "overflow-x-auto overscroll-x-contain",
+  // Nothing to scroll on a wide screen, so the bar would only be visual noise.
+  "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+].join(" ")
 
 // 16px labels instead of 12px. The active tab is a solid green pill rather
 // than an underline - the pill is a single element behind the strip
@@ -272,8 +280,15 @@ function ClosureTabs({ children }: { children: ReactNode }) {
       })
     }
     measure()
-    // Re-measure when the strip reflows - a resize can rewrap the tabs and
-    // leave the pill stranded over the wrong one.
+    // A tab picked while off-screen has to be brought into view, or the strip
+    // looks unchanged and only the panel below it swaps.
+    triggerRefs.current[value]?.scrollIntoView({
+      block: "nearest",
+      inline: "nearest",
+      behavior: "smooth",
+    })
+    // Re-measure when the strip reflows - a resize changes each tab's offset
+    // and would leave the pill stranded over the wrong one.
     const list = listRef.current
     if (!list || typeof ResizeObserver === "undefined") return
     const observer = new ResizeObserver(measure)
