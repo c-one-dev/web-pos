@@ -70,17 +70,11 @@ const CLOSURE_TABS_LIST = [
   // strip is touched, and a tab nobody can see is a tab nobody finds. This
   // keeps the bar drawn whether or not anyone has scrolled yet.
   "overflow-x-scroll overscroll-x-contain",
-  // A slim bar with a visible track, so the runway reads as scrollable even
-  // when the thumb fills it. Extra bottom padding keeps it off the labels.
-  //
-  // scrollbar-color is the one that counts: setting scrollbar-width makes
-  // Chrome ignore the ::-webkit-scrollbar rules entirely, so those were
-  // painting nothing and the bar came out in the browser's default grey - all
-  // but invisible on this background. The webkit rules stay for Safari.
-  "pb-2 [scrollbar-width:thin] [scrollbar-color:var(--primary)_var(--muted)]",
-  "[&::-webkit-scrollbar]:h-1.5",
-  "[&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-muted",
-  "[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-primary",
+  // The native bar is hidden and drawn by hand underneath instead. Windows
+  // and macOS both fade an overlay scrollbar out when it is idle, and no CSS
+  // overrides that - so the one thing telling you there are more tabs
+  // disappeared whenever nobody was touching it.
+  "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
 ].join(" ")
 
 // 16px labels instead of 12px. The active tab is a solid green pill rather
@@ -293,6 +287,9 @@ function ClosureTabs({ children }: { children: ReactNode }) {
   // Keyed by tab value rather than read off a data attribute, so this does not
   // depend on which state attribute the Radix version happens to set.
   const triggerRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+  // Our own scrollbar: how wide the thumb is and how far along it sits, both
+  // as a fraction of the track.
+  const [bar, setBar] = useState({ width: 1, left: 0 })
   const [pill, setPill] = useState({
     left: 0,
     top: 0,
@@ -313,7 +310,24 @@ function ClosureTabs({ children }: { children: ReactNode }) {
         measured: true,
       })
     }
+    // Where the thumb sits, as fractions of the track: how much of the strip
+    // is on screen, and how far along it has been scrolled.
+    const measureBar = () => {
+      const list = listRef.current
+      if (!list) return
+      const { scrollWidth, clientWidth, scrollLeft } = list
+      if (scrollWidth <= clientWidth) {
+        setBar({ width: 1, left: 0 })
+        return
+      }
+      setBar({
+        width: clientWidth / scrollWidth,
+        left: scrollLeft / scrollWidth,
+      })
+    }
+
     measure()
+    measureBar()
     // A tab picked while off-screen has to be brought into view, or the strip
     // looks unchanged and only the panel below it swaps.
     triggerRefs.current[value]?.scrollIntoView({
@@ -324,11 +338,44 @@ function ClosureTabs({ children }: { children: ReactNode }) {
     // Re-measure when the strip reflows - a resize changes each tab's offset
     // and would leave the pill stranded over the wrong one.
     const list = listRef.current
-    if (!list || typeof ResizeObserver === "undefined") return
-    const observer = new ResizeObserver(measure)
+    if (!list) return
+    list.addEventListener("scroll", measureBar, { passive: true })
+    if (typeof ResizeObserver === "undefined") {
+      return () => list.removeEventListener("scroll", measureBar)
+    }
+    const observer = new ResizeObserver(() => {
+      measure()
+      measureBar()
+    })
     observer.observe(list)
-    return () => observer.disconnect()
+    return () => {
+      list.removeEventListener("scroll", measureBar)
+      observer.disconnect()
+    }
   }, [value])
+
+  // Dragging the thumb scrolls the strip, so it behaves like the scrollbar it
+  // replaces rather than being a read-only indicator.
+  const onThumbDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    const list = listRef.current
+    const track = event.currentTarget.parentElement
+    if (!list || !track) return
+    event.preventDefault()
+    const trackWidth = track.clientWidth
+    const startX = event.clientX
+    const startScroll = list.scrollLeft
+    const ratio = list.scrollWidth / trackWidth
+
+    const onMove = (move: PointerEvent) => {
+      list.scrollLeft = startScroll + (move.clientX - startX) * ratio
+    }
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove)
+      window.removeEventListener("pointerup", onUp)
+    }
+    window.addEventListener("pointermove", onMove)
+    window.addEventListener("pointerup", onUp)
+  }
 
   return (
     <Tabs value={value} onValueChange={setValue}>
@@ -361,6 +408,25 @@ function ClosureTabs({ children }: { children: ReactNode }) {
           </TabsTrigger>
         ))}
       </TabsList>
+      {/*
+        Our own scrollbar, drawn only when the strip actually overflows. It
+        is always on screen while it is - the native one fades out when idle
+        on both Windows and macOS, which is exactly when a reader needs to be
+        told there are more tabs.
+      */}
+      {bar.width < 1 && (
+        <div className="mt-1.5 h-1.5 w-full rounded-full bg-muted">
+          <div
+            role="presentation"
+            onPointerDown={onThumbDrag}
+            className="h-full cursor-grab rounded-full bg-primary/60 transition-colors hover:bg-primary active:cursor-grabbing"
+            style={{
+              width: `${bar.width * 100}%`,
+              marginLeft: `${bar.left * 100}%`,
+            }}
+          />
+        </div>
+      )}
       {children}
     </Tabs>
   )
