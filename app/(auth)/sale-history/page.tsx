@@ -457,13 +457,15 @@ export default function Page() {
         // A sale whose money is still owed reads "On Account" rather than
         // COMPLETED. Both are true - the sale finished, the payment has not -
         // but COMPLETED next to an unpaid balance invites the wrong reading,
-        // and On Account is what the shop already calls it. A voided sale
-        // still says VOIDED: that outranks anything about the money.
+        // and On Account is what the shop already calls it. Part-settled
+        // counts: the customer still owes the rest. A voided sale still says
+        // VOIDED, which outranks anything about the money.
         cell: ({ row }) => (
           <StatusBadge
             status={
               row.original.currentSaleStatus !== "VOIDED" &&
-              row.original.currentSalePaymentStatus === "PENDING"
+              (row.original.currentSalePaymentStatus === "PENDING" ||
+                row.original.currentSalePaymentStatus === "PARTIALLY_PAID")
                 ? "ON_ACCOUNT"
                 : row.original.currentSaleStatus
             }
