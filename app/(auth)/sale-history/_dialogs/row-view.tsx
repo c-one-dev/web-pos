@@ -131,6 +131,22 @@ const GET_SALE = gql`
           }
         }
       }
+      settledAmount
+      outstandingAmount
+      settlements {
+        amount
+        note
+        date
+        method {
+          _id
+          name
+        }
+        by {
+          _id
+          name
+          surname
+        }
+      }
       saleStatusHistory {
         status
         date
@@ -715,58 +731,103 @@ export default function RowViewDialog({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {sale?.payments?.length ? (
-                      sale.payments.map((payment: any, index: number) => (
-                        <TableRow key={index}>
-                          <TableCell className="font-medium">
-                            {format(Number(payment.date), "PP")}
-                          </TableCell>
-                          <TableCell>
-                            {payment.method.name}
-                            {/*
+                    {sale?.payments?.length
+                      ? sale.payments.map((payment: any, index: number) => (
+                          <TableRow key={index}>
+                            <TableCell className="font-medium">
+                              {format(Number(payment.date), "PP")}
+                            </TableCell>
+                            <TableCell>
+                              {payment.method.name}
+                              {/*
                               Labelled so the number is not just a bare string
                               under the method: card issuers call it an
                               approval code, e-wallets a reference, and anyone
                               reconciling later needs to know which they are
                               looking at.
                             */}
-                            {payment.reference ? (
-                              <span className="mt-0.5 flex items-start gap-1 text-xs text-muted-foreground">
-                                <ArrowElbowDownRightIcon className="mt-0.5 shrink-0" />
-                                <span className="flex flex-wrap items-center gap-1">
-                                  <span className="font-medium">
-                                    {/card/i.test(payment.method?.name || "")
-                                      ? "Approval Code #"
-                                      : "Reference #"}
+                              {payment.reference ? (
+                                <span className="mt-0.5 flex items-start gap-1 text-xs text-muted-foreground">
+                                  <ArrowElbowDownRightIcon className="mt-0.5 shrink-0" />
+                                  <span className="flex flex-wrap items-center gap-1">
+                                    <span className="font-medium">
+                                      {/card/i.test(payment.method?.name || "")
+                                        ? "Approval Code #"
+                                        : "Reference #"}
+                                    </span>
+                                    <CopyText
+                                      value={payment.reference}
+                                      toastLabel={
+                                        /card/i.test(payment.method?.name || "")
+                                          ? "Approval code"
+                                          : "Reference"
+                                      }
+                                    />
                                   </span>
+                                </span>
+                              ) : null}
+                              {payment.note ? (
+                                <span className="mt-0.5 flex items-start gap-1 text-xs text-muted-foreground">
+                                  <ArrowElbowDownRightIcon className="mt-0.5 shrink-0" />
                                   <CopyText
-                                    value={payment.reference}
-                                    toastLabel={
-                                      /card/i.test(payment.method?.name || "")
-                                        ? "Approval code"
-                                        : "Reference"
-                                    }
+                                    value={payment.note}
+                                    toastLabel="Note"
                                   />
                                 </span>
-                              </span>
-                            ) : null}
-                            {payment.note ? (
+                              ) : null}
+                            </TableCell>
+                            {/*
+                            A tender rung up here links to a Payment document
+                            naming the cashier. A carried-over sale's On
+                            Account line has none - it was tendered in the
+                            previous system - so it falls back to whoever
+                            imported the sale.
+                          */}
+                            <TableCell>
+                              {payment.payment?.by?.name ??
+                                sale?.by?.name ??
+                                "—"}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {peso(payment.amount - payment.change)}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      : null}
+                    {/*
+                      Settlements against the On Account portion. Listed with
+                      the tenders because that is where a reader looks for
+                      "what has been paid on this sale" - a repayment is not a
+                      tender, so it says so on the row.
+                    */}
+                    {sale?.settlements?.map(
+                      (settlement: any, index: number) => (
+                        <TableRow key={`settlement-${index}`}>
+                          <TableCell className="font-medium">
+                            {format(Number(settlement.date), "PP")}
+                          </TableCell>
+                          <TableCell>
+                            <span className="flex flex-wrap items-center gap-1.5">
+                              {settlement.method?.name || "-"}
+                              <Badge variant="outline" className="text-xs">
+                                Settlement
+                              </Badge>
+                            </span>
+                            {settlement.note ? (
                               <span className="mt-0.5 flex items-start gap-1 text-xs text-muted-foreground">
                                 <ArrowElbowDownRightIcon className="mt-0.5 shrink-0" />
-                                <CopyText
-                                  value={payment.note}
-                                  toastLabel="Note"
-                                />
+                                {settlement.note}
                               </span>
                             ) : null}
                           </TableCell>
-                          <TableCell>{payment.payment.by.name}</TableCell>
+                          <TableCell>{settlement.by?.name ?? "—"}</TableCell>
                           <TableCell className="text-right tabular-nums">
-                            {peso(payment.amount - payment.change)}
+                            {peso(settlement.amount)}
                           </TableCell>
                         </TableRow>
-                      ))
-                    ) : (
+                      )
+                    )}
+                    {!sale?.payments?.length && !sale?.settlements?.length ? (
                       <TableRow>
                         <TableCell
                           colSpan={4}
@@ -775,7 +836,7 @@ export default function RowViewDialog({
                           No payments
                         </TableCell>
                       </TableRow>
-                    )}
+                    ) : null}
                   </TableBody>
                 </Table>
               </div>
@@ -862,7 +923,7 @@ export default function RowViewDialog({
                           <TableCell>
                             <StatusBadge status={item.status} />
                           </TableCell>
-                          <TableCell>{item.by.name}</TableCell>
+                          <TableCell>{item.by?.name ?? "—"}</TableCell>
                         </TableRow>
                       ))
                     ) : (

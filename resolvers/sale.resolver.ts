@@ -102,6 +102,8 @@ export const saleResolver = {
             { path: "items.product" },
             { path: "payments.payment", populate: { path: "by" } },
             { path: "payments.method" },
+            { path: "settlements.method" },
+            { path: "settlements.by" },
             { path: "salePaymentStatusHistory.paymentRef" },
             { path: "salePaymentStatusHistory.by" },
             { path: "saleStatusHistory.by" },
