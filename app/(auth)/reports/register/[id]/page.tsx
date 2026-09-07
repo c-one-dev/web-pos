@@ -85,7 +85,13 @@ const CLOSURE_TABS_LIST = [
 // background.
 const CLOSURE_TAB_TRIGGER = [
   // z-10 keeps the label above the sliding pill, which is painted behind it.
-  "relative z-10 flex-none px-4 py-2.5 text-base text-muted-foreground",
+  // Smaller type and tighter padding as the screen narrows, so more of the
+  // seven tabs fit before the strip has to be scrolled. The sliding pill
+  // measures each trigger, so it follows these sizes on its own.
+  "relative z-10 flex-none text-muted-foreground",
+  "px-2.5 py-1.5 text-xs",
+  "sm:px-3 sm:py-2 sm:text-sm",
+  "lg:px-4 lg:py-2.5 lg:text-base",
   "hover:text-foreground data-active:font-semibold",
   // White-ish label on the green pill. The second rule re-states it for the
   // hovered-active case: plain `hover:text-foreground` above would otherwise
