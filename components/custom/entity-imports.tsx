@@ -82,6 +82,18 @@ const IMPORT_LEGACY_SALE = gql`
   }
 `
 
+const IMPORT_LEGACY_SALE_ITEMS = gql`
+  mutation ImportLegacySaleItems(
+    $saleNumber: String!
+    $items: [LegacySaleItemInput!]!
+  ) {
+    importLegacySaleItems(saleNumber: $saleNumber, items: $items) {
+      ok
+      message
+    }
+  }
+`
+
 const ADJUST_ACCOUNT_LIMIT = gql`
   mutation ImportAdjustAccountLimit(
     $_id: ID!
@@ -188,8 +200,18 @@ const MAX_NAME_ATTEMPTS = 50
 // makes nothing of it. Falls back to the browser for ISO and the other
 // ordinary shapes.
 const MONTHS = [
-  "jan", "feb", "mar", "apr", "may", "jun",
-  "jul", "aug", "sep", "oct", "nov", "dec",
+  "jan",
+  "feb",
+  "mar",
+  "apr",
+  "may",
+  "jun",
+  "jul",
+  "aug",
+  "sep",
+  "oct",
+  "nov",
+  "dec",
 ]
 
 const parseDate = (value?: string) => {
@@ -499,15 +521,18 @@ export function ImportCustomers({ onFinished }: { onFinished?: () => void }) {
 const CUSTOMER_ACCOUNT_COLUMNS: ImportColumn[] = [
   {
     key: "customer",
+    aliases: ["customer name"],
     required: true,
     hint: "must already exist, matched by display name",
     example: "Juan Dela Cruz",
   },
   {
+    // Not marked required: the items export has no such column, and a file
+    // of item lines is a valid thing to hand this importer. Rows that do
+    // need it are checked one by one below.
     key: "amount owed",
     aliases: ["outstanding"],
-    required: true,
-    hint: "what is still owed",
+    hint: "what is still owed - leave out when importing item lines",
     example: "1500",
   },
   {
@@ -532,7 +557,93 @@ const CUSTOMER_ACCOUNT_COLUMNS: ImportColumn[] = [
     hint: "shows in the limit history, e.g. the old invoice number",
     example: "carried over from HIKE",
   },
+  // The item columns of a Sales Transactions export. Each item sits on its
+  // own row under the order it belongs to, and is folded into that order by
+  // groupSaleItemRows below.
+  {
+    key: "item name",
+    aliases: ["item", "product"],
+    hint: "item line - listed under the sale it follows",
+    example: "C-One Shuttlecock",
+  },
+  {
+    key: "sku",
+    hint: "item line - the product is matched by this",
+    example: "1001601",
+  },
+  {
+    key: "quantity",
+    aliases: ["quantity sold", "qty"],
+    hint: "item line - how many were sold",
+    example: "36",
+  },
+  {
+    key: "line total",
+    aliases: ["sales (inc)", "sales inc"],
+    hint: "item line - what the line came to",
+    example: "2880",
+  },
 ]
+
+// One item line of a carried-over sale, as read off the file.
+type LegacyItem = { sku: string; name: string; quantity: number; price: number }
+
+// The key the folded item lines are parked under. JSON rather than a nested
+// value because a parsed row is flat strings by design - see ImportRow.
+const ITEMS_KEY = "__items"
+
+// Folds a Sales Transactions export into one row per order.
+//
+// That report writes the order on one row and each of its items on the rows
+// beneath it, with the order columns left blank. So a row carrying a sale
+// number opens a new order, and every row after it that names an item
+// belongs to that order.
+const groupSaleItemRows = (rows: ImportRow[]): ImportRow[] => {
+  const grouped: ImportRow[] = []
+  let current: ImportRow | null = null
+  let items: LegacyItem[] = []
+
+  const flush = () => {
+    if (!current) return
+    if (items.length) current[ITEMS_KEY] = JSON.stringify(items)
+    grouped.push(current)
+    current = null
+    items = []
+  }
+
+  for (const row of rows) {
+    if (row["sale number"]?.trim()) {
+      flush()
+      current = { ...row }
+      continue
+    }
+
+    const sku = row["sku"]?.trim()
+    const quantity = parseNumber(row["quantity"])
+    if (current && sku && quantity) {
+      const lineTotal = parseNumber(row["line total"])
+      const price =
+        lineTotal !== undefined
+          ? parseFloat((lineTotal / quantity).toFixed(2))
+          : parseNumber(row["price"])
+      if (price !== undefined)
+        items.push({
+          sku,
+          name: row["item name"]?.trim() || "",
+          quantity,
+          price,
+        })
+      continue
+    }
+
+    // Neither an order nor an item - a balances-only row, which stands on
+    // its own.
+    flush()
+    grouped.push(row)
+  }
+  flush()
+  return grouped
+}
 
 export function ImportCustomerAccounts({
   onFinished,
@@ -544,6 +655,10 @@ export function ImportCustomerAccounts({
     fetchPolicy: "cache-and-network",
   })
   const [importLegacySale] = useMutation(IMPORT_LEGACY_SALE, {
+    refetchQueries: ["CustomerSalesTable"],
+    onQueryUpdated: refetchOnlyReadyQueries,
+  })
+  const [importLegacySaleItems] = useMutation(IMPORT_LEGACY_SALE_ITEMS, {
     refetchQueries: ["CustomerSalesTable"],
     onQueryUpdated: refetchOnlyReadyQueries,
   })
@@ -566,9 +681,32 @@ export function ImportCustomerAccounts({
     const name = row["customer"]?.trim()
     const saleNumber = row["sale number"]?.trim()
     const owed = parseNumber(pick(row, "amount owed", "outstanding"))
+    const items: LegacyItem[] = row[ITEMS_KEY] ? JSON.parse(row[ITEMS_KEY]) : []
 
     // A report's own totals row carries figures but names nobody.
     if (!name && !saleNumber) return { ok: true, skipped: true }
+
+    // An items export names no outstanding amount, so its rows can only fill
+    // in the lines of a sale the balances export already brought over. A
+    // receipt that is not there - one that was paid off, or parked - is not
+    // this file's business and is passed over.
+    if (saleNumber && owed === undefined && items.length) {
+      const result: any = await importLegacySaleItems({
+        variables: { saleNumber, items },
+      }).catch((error: any) => {
+        const code = error?.graphQLErrors?.[0]?.extensions?.code
+        if (code === "SALE_NOT_IMPORTED") return { skipped: true }
+        throw error
+      })
+      if (result?.skipped) return { ok: true, skipped: true }
+      return result?.data?.importLegacySaleItems?.ok
+        ? { ok: true }
+        : {
+            ok: false,
+            error: result?.data?.importLegacySaleItems?.message ?? "Failed",
+          }
+    }
+
     if (!name) return { ok: false, error: "customer is required" }
 
     const customerId = findByName(customers, name)
@@ -594,7 +732,15 @@ export function ImportCustomerAccounts({
             outstanding: owed,
           },
         },
+      }).catch((error: any) => {
+        // Re-running a file after fixing a few rows is normal, so a receipt
+        // that is already here is passed over rather than reported as a
+        // failure the operator has to read through.
+        const message = error?.graphQLErrors?.[0]?.message ?? ""
+        if (/already been imported/i.test(message)) return { skipped: true }
+        throw error
       })
+      if (result?.skipped) return { ok: true, skipped: true }
       return result?.data?.importLegacySale?.ok
         ? { ok: true }
         : {
@@ -629,9 +775,10 @@ export function ImportCustomerAccounts({
   return (
     <ImportDialog
       title="Import Customer Accounts"
-      description="Carries customer account data over from another system. A row naming an old receipt is added to that customer's sales list, with no line items and kept out of sale history and the sales report. A row with only an amount reduces their available account limit instead. Neither creates sales here or takes money."
+      description="Carries customer account data over from another system, without creating sales here or taking money. A row naming an old receipt is added to that customer's sales list, kept out of sale history and the sales report; a row with only an amount reduces their available account limit instead. Import the balances export first — a later file of item lines fills in the items of the receipts it brought over, and passes over any receipt it does not recognise."
       columns={CUSTOMER_ACCOUNT_COLUMNS}
       importRow={importRow}
+      prepareRows={groupSaleItemRows}
       onFinished={() => {
         client.refetchQueries({ include: ["CustomerReportTable"] })
         onFinished?.()

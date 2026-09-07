@@ -32,6 +32,7 @@ import {
   updateSaleNotesSchema,
   refundSaleItemsSchema,
   legacySaleSchema,
+  legacySaleItemsSchema,
   settleSalesSchema,
 } from "./sale.validator"
 import { salesTargetSchema } from "./salesTarget.validator"
@@ -105,6 +106,7 @@ export const mutationValidationRegistry: Record<
 
   generateSale: saleSchema,
   importLegacySale: legacySaleSchema,
+  importLegacySaleItems: legacySaleItemsSchema,
   updateSale: saleSchema,
   voidSale: NO_VALIDATION,
   updateSaleNotes: updateSaleNotesSchema,

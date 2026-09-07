@@ -43,8 +43,7 @@ export type RowResult =
   // `skipped` is for a row that is not this importer's business at all - the
   // totals line an exported report ends with, say. It counts as neither an
   // import nor a failure.
-  | { ok: true; skipped?: boolean }
-  | { ok: false; error: string }
+  { ok: true; skipped?: boolean } | { ok: false; error: string }
 
 type Props = {
   title: string
@@ -55,6 +54,12 @@ type Props = {
    * keeps a bad row from stopping the rest of the file.
    */
   importRow: (row: ImportRow, index: number) => Promise<RowResult>
+  /**
+   * Reshapes the parsed file before anything is imported. For a report that
+   * spreads one record over several rows - an order line followed by its
+   * items - this is where those rows are folded into one.
+   */
+  prepareRows?: (rows: ImportRow[]) => ImportRow[]
   /** Runs once after an import that created at least one record. */
   onFinished?: () => void
   children?: React.ReactNode
@@ -67,6 +72,7 @@ export default function ImportDialog({
   description,
   columns,
   importRow,
+  prepareRows,
   onFinished,
   children,
 }: Props) {
@@ -91,7 +97,9 @@ export default function ImportDialog({
   const onFile = async (file?: File) => {
     if (!file) return
     try {
-      const parsed = await parseImportFile(file, columns)
+      const parsed = prepareRows
+        ? prepareRows(await parseImportFile(file, columns))
+        : await parseImportFile(file, columns)
       if (!parsed.length) {
         toast.error("That file has no data rows.")
         return

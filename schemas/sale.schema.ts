@@ -172,9 +172,10 @@ export const saleSchema = gql`
   }
 
   # One unpaid sale carried over from the previous POS. It records what the
-  # customer owed against a recognisable receipt number and its original date;
-  # there are no line items to show, since an export of balances does not
-  # carry them.
+  # customer owed against a recognisable receipt number and its original date.
+  # Line items arrive separately through importLegacySaleItems, because the
+  # export that carries the balances and the one that carries the items are
+  # two different reports.
   input LegacySaleInput {
     customer: ID!
     saleNumber: String!
@@ -182,6 +183,15 @@ export const saleSchema = gql`
     total: Float!
     outstanding: Float!
     register: ID
+  }
+
+  # A line on a carried-over sale. The product is matched by SKU, so the
+  # products have to be imported before the items are.
+  input LegacySaleItemInput {
+    sku: String!
+    name: String
+    quantity: Float!
+    price: Float!
   }
 
   input SaleInput {
@@ -306,6 +316,10 @@ export const saleSchema = gql`
   type Mutation {
     generateSale(input: SaleInput): Response
     importLegacySale(input: LegacySaleInput): Response
+    importLegacySaleItems(
+      saleNumber: String!
+      items: [LegacySaleItemInput!]!
+    ): Response
     updateSale(_id: ID!, input: SaleInput): Response
     voidSale(_id: ID!): Response
     updateSaleNotes(_id: ID!, notes: String): Response

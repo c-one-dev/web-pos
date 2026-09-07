@@ -112,6 +112,20 @@ export const settleSalesSchema = z.object({
 // A sale carried over from the previous POS. Only the figures a balance
 // export actually carries: who owed it, the old receipt number, when it was
 // rung up there, and how much of it is still outstanding.
+export const legacySaleItemsSchema = z.object({
+  saleNumber: z.string().nonempty("Sale number is required"),
+  items: z
+    .array(
+      z.object({
+        sku: z.string().nonempty("SKU is required"),
+        name: z.string().optional().nullable(),
+        quantity: z.number().positive("Quantity must be greater than zero"),
+        price: z.number().nonnegative("Price cannot be negative"),
+      })
+    )
+    .nonempty("At least one item is required"),
+})
+
 export const legacySaleSchema = z.object({
   customer: z.string().nonempty("Customer is required"),
   saleNumber: z.string().nonempty("Sale number is required"),

@@ -11,6 +11,7 @@ import {
   refundSaleItemsSchema,
   settleSalesSchema,
   legacySaleSchema,
+  legacySaleItemsSchema,
 } from "../validators/sale.validator"
 import { isISOString } from "../helpers/isoString"
 import Register from "@/models/register.model"
@@ -19,6 +20,7 @@ import Payment from "@/models/payment.model"
 import Customer from "@/models/customer.model"
 import { checkSalesPaymentStatus, outstandingAmount } from "@/helpers/salesFn"
 import PaymentMethod from "@/models/paymentMethod.model"
+import Product from "@/models/product.model"
 
 const CURSOR_TYPE = "sale"
 
@@ -785,6 +787,88 @@ export const saleResolver = {
             ok: true,
             message: "Sale imported successfully.",
             data: generateSaleNode(result),
+          }
+        } catch (error) {
+          throw error
+        }
+      }
+    ),
+    // Fills in the line items of an already-imported sale.
+    //
+    // The previous POS splits this across two reports: the On Account export
+    // carries the balances but no items, the Sales Transactions export
+    // carries the items but no outstanding amount. So the balances are
+    // imported first (importLegacySale) and the items are attached here,
+    // matched on the receipt number. Re-running replaces the items rather
+    // than adding to them, so a corrected file can simply be imported again.
+    importLegacySaleItems: validate(checkSchema(legacySaleItemsSchema))(
+      async (_: any, { saleNumber, items }: any) => {
+        try {
+          const sale = await Sale.findOne({ saleNumber }).select(
+            "isImported total items"
+          )
+          if (!sale)
+            throw new GraphQLError(
+              `Sale ${saleNumber} has not been imported yet`,
+              { extensions: { code: "SALE_NOT_IMPORTED" } }
+            )
+          if (!sale.isImported)
+            throw new GraphQLError(
+              `Sale ${saleNumber} was rung up in this system, so its items cannot be overwritten by an import`
+            )
+
+          const skus: string[] = items.map((item: any) => item.sku.trim())
+          const products = await Product.find({ sku: { $in: skus } })
+            .select("_id sku name")
+            .lean()
+          const bySku = new Map(
+            products.map((product: any) => [product.sku, product])
+          )
+
+          const missing = skus.filter((sku) => !bySku.has(sku))
+          if (missing.length)
+            throw new GraphQLError(
+              `No product with SKU ${[...new Set(missing)].join(", ")} - import the products first`,
+              { extensions: { code: "PRODUCT_NOT_FOUND" } }
+            )
+
+          const lines = items.map((item: any) => {
+            const product: any = bySku.get(item.sku.trim())
+            const subTotal = parseFloat((item.price * item.quantity).toFixed(2))
+            return {
+              product: product._id,
+              snapshotName: item.name?.trim() || product.name,
+              snapshotPrice: item.price,
+              quantity: item.quantity,
+              discount: 0,
+              price: item.price,
+              subTotal,
+              total: subTotal,
+              refundedQuantity: 0,
+            }
+          })
+
+          // The sale's total came from the balances export and is what the
+          // customer actually owes, so it is left alone. Anything the lines
+          // add up to above it was a discount on the original receipt.
+          const subTotal = parseFloat(
+            lines
+              .reduce((sum: number, line: any) => sum + line.total, 0)
+              .toFixed(2)
+          )
+          const discount =
+            subTotal > sale.total
+              ? parseFloat((subTotal - sale.total).toFixed(2))
+              : 0
+
+          sale.items = lines
+          sale.subTotal = discount > 0 ? subTotal : sale.total
+          sale.discount = discount
+          await sale.save({ timestamps: false })
+
+          return {
+            ok: true,
+            message: `${lines.length} item(s) added to sale ${saleNumber}.`,
           }
         } catch (error) {
           throw error
