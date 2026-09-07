@@ -19,11 +19,13 @@ function Table({
         // than its column gives no other clue that it continues.
         "overflow-x-scroll",
         // Slim, with a visible track so the runway reads as scrollable.
-        "[scrollbar-width:thin]",
+        // scrollbar-color is what Chrome honours once scrollbar-width is set -
+        // it ignores the ::-webkit-scrollbar rules from that point on, which
+        // left the bar in its default grey. Those stay for Safari.
+        "[scrollbar-width:thin] [scrollbar-color:var(--primary)_var(--muted)]",
         "[&::-webkit-scrollbar]:h-1.5",
         "[&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-muted",
-        "[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-primary/40",
-        "[&::-webkit-scrollbar-thumb:hover]:bg-primary/60",
+        "[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-primary",
         containerClassName
       )}
     >

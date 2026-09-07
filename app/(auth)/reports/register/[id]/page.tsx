@@ -72,11 +72,15 @@ const CLOSURE_TABS_LIST = [
   "overflow-x-scroll overscroll-x-contain",
   // A slim bar with a visible track, so the runway reads as scrollable even
   // when the thumb fills it. Extra bottom padding keeps it off the labels.
-  "pb-2 [scrollbar-width:thin]",
+  //
+  // scrollbar-color is the one that counts: setting scrollbar-width makes
+  // Chrome ignore the ::-webkit-scrollbar rules entirely, so those were
+  // painting nothing and the bar came out in the browser's default grey - all
+  // but invisible on this background. The webkit rules stay for Safari.
+  "pb-2 [scrollbar-width:thin] [scrollbar-color:var(--primary)_var(--muted)]",
   "[&::-webkit-scrollbar]:h-1.5",
   "[&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-muted",
-  "[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-primary/40",
-  "[&::-webkit-scrollbar-thumb:hover]:bg-primary/60",
+  "[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-primary",
 ].join(" ")
 
 // 16px labels instead of 12px. The active tab is a solid green pill rather
@@ -1044,7 +1048,7 @@ export default function Page() {
         </div>
       </div>
 
-      <Card className="rounded-lg">
+      <Card className="shrink-0 rounded-lg">
         <CardContent className="flex flex-col gap-3">
           <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-3">
             <div className="flex items-start gap-2.5">
@@ -1108,7 +1112,7 @@ export default function Page() {
         </CardContent>
       </Card>
 
-      <Card className="rounded-lg">
+      <Card className="shrink-0 rounded-lg">
         <CardContent className="flex flex-col gap-2.5">
           <Label className="text-sm font-semibold">Sales Summary</Label>
           <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
@@ -1149,7 +1153,7 @@ export default function Page() {
 
       {/* min-w-0 lets the tables inside actually scroll: without it a wide
           table stretches this column and gets clipped by the card instead. */}
-      <Card className="min-w-0 rounded-lg">
+      <Card className="min-w-0 shrink-0 rounded-lg">
         <CardContent className="flex min-w-0 flex-col gap-2">
           {paymentTypeOptions.length > 0 && (
             <div className="flex justify-end">
