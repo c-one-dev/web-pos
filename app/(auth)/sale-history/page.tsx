@@ -476,10 +476,19 @@ export default function Page() {
             label="Sale Status"
             filterKey="currentSaleStatus"
             filterType={FilterType.SELECT}
-            options={Object.values(SaleStatus).map((status) => ({
-              label: status.replaceAll("_", " "),
-              value: status,
-            }))}
+            // Matches what the column actually shows. ON ACCOUNT is not a
+            // stored status - the resolver turns it into "finished, still
+            // owed" - and SaleStatus.PENDING is dropped because nothing in
+            // this system ever writes it, so filtering by it found nothing.
+            options={[
+              { label: "ON ACCOUNT", value: "ON_ACCOUNT" },
+              ...Object.values(SaleStatus)
+                .filter((status) => status !== SaleStatus.PENDING)
+                .map((status) => ({
+                  label: status.replaceAll("_", " "),
+                  value: status,
+                })),
+            ]}
             filter={filter}
             onFilterChange={onFilter}
           />

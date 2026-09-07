@@ -219,6 +219,27 @@ export const saleResolver = {
 
         if (filter && filter.length > 0)
           matchStage.$and = filter.map(({ type, key, value }) => {
+            // "On Account" is what the Sale Status column shows for a sale
+            // whose money is still owed, so the filter offers it - but it is
+            // not a stored status. It means a sale that finished with its
+            // payment unsettled, which is two fields rather than one.
+            if (key === "currentSaleStatus" && value === "ON_ACCOUNT")
+              return {
+                currentSaleStatus: { $ne: "VOIDED" },
+                currentSalePaymentStatus: {
+                  $in: ["PENDING", "PARTIALLY_PAID"],
+                },
+              }
+            // And COMPLETED has to mean what it now shows: finished AND
+            // settled. Without this it also returns every sale displaying
+            // On Account, since those are stored as COMPLETED too.
+            if (key === "currentSaleStatus" && value === "COMPLETED")
+              return {
+                currentSaleStatus: "COMPLETED",
+                currentSalePaymentStatus: {
+                  $nin: ["PENDING", "PARTIALLY_PAID"],
+                },
+              }
             switch (type) {
               case "TEXT":
               case "SELECT":
