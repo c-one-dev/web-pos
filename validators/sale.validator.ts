@@ -133,4 +133,5 @@ export const legacySaleSchema = z.object({
   total: z.number().nonnegative("Total cannot be negative"),
   outstanding: z.number().nonnegative("Outstanding cannot be negative"),
   register: z.string().optional().nullable(),
+  paymentMethod: z.string().optional().nullable(),
 })

@@ -743,13 +743,56 @@ export const saleResolver = {
                 ? "PARTIALLY_PAID"
                 : "PENDING"
 
+          // The tender that created the debt. Without it the sale looks
+          // untendered: outstandingAmount() reads the On Account portion off
+          // the payments, so a sale with none shows nothing owing, the
+          // customer's outstanding total reads zero, and the sale never
+          // appears in the settle-payment list - it could not be paid off at
+          // all.
+          const onAccountId = process.env.NEXT_PUBLIC_ON_ACCOUNT_ID
+          if (!onAccountId)
+            throw new GraphQLError(
+              "NEXT_PUBLIC_ON_ACCOUNT_ID is not set, so a carried-over sale cannot record what is owed"
+            )
+
+          // How the already-paid part was paid in the old system. Recorded as
+          // a settlement, with no register on it, so it shows on the receipt
+          // without ever landing in a shift's cash tally here.
+          const methodName = input.paymentMethod?.trim()
+          const settlementMethod =
+            settled > 0 && methodName
+              ? await PaymentMethod.findOne({
+                  name: { $regex: `^${methodName}$`, $options: "i" },
+                })
+                  .select("_id")
+                  .lean()
+              : null
+
           const [result] = await Sale.create(
             [
               {
                 saleNumber: input.saleNumber,
                 customer: input.customer,
                 items: [],
-                payments: [],
+                payments: [
+                  {
+                    method: onAccountId,
+                    amount: total,
+                    change: 0,
+                    date,
+                  },
+                ],
+                settlements: settlementMethod
+                  ? [
+                      {
+                        amount: settled,
+                        method: settlementMethod._id,
+                        note: "Settled in the previous POS",
+                        date,
+                        by: ctx.session._id,
+                      },
+                    ]
+                  : [],
                 subTotal: total,
                 discount: 0,
                 total,

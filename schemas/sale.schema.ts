@@ -183,6 +183,9 @@ export const saleSchema = gql`
     total: Float!
     outstanding: Float!
     register: ID
+    # How the already-paid part was paid in the old system, by method name
+    # ("Cash", "BPI QR"). Recorded as a settlement so the receipt shows it.
+    paymentMethod: String
   }
 
   # A line on a carried-over sale. The product is matched by SKU, so the

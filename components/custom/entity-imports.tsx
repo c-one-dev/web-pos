@@ -563,6 +563,12 @@ const CUSTOMER_ACCOUNT_COLUMNS: ImportColumn[] = [
     hint: "a parked (unfinished) order is never imported",
     example: "On Account",
   },
+  {
+    key: "payment method",
+    aliases: ["payment types", "payment type"],
+    hint: "how the already-paid part was paid, e.g. Cash or BPI QR",
+    example: "BPI QR",
+  },
   // The item columns of a Sales Transactions export. Each item sits on its
   // own row under the order it belongs to, and is folded into that order by
   // groupSaleItemRows below.
@@ -750,6 +756,7 @@ export function ImportCustomerAccounts({
             date,
             total,
             outstanding: total,
+            paymentMethod: pick(row, "payment method"),
           },
         },
       })
@@ -784,6 +791,7 @@ export function ImportCustomerAccounts({
             date,
             total,
             outstanding: owed,
+            paymentMethod: pick(row, "payment method"),
           },
         },
       }).catch((error: any) => {
