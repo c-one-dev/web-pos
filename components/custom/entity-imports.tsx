@@ -8,6 +8,7 @@ import ImportDialog, {
 } from "@/components/custom/import-dialog"
 import type { ImportRow } from "@/lib/import-file"
 import { refetchOnlyReadyQueries } from "@/lib/refetch"
+import { errorCodeOf, errorMessageOf } from "@/lib/graphql-error"
 import { Button } from "@/components/ui/button"
 import { UploadSimpleIcon } from "@phosphor-icons/react"
 
@@ -189,8 +190,7 @@ const parseBoolean = (value?: string) => {
 const isDuplicateName = (message?: string) =>
   !!message && /E11000/.test(message) && /index:\s*name_1/.test(message)
 
-const errorMessage = (error: any) =>
-  error?.graphQLErrors?.[0]?.message ?? error?.message ?? ""
+const errorMessage = (error: any) => errorMessageOf(error)
 
 // Enough to clear any realistic pile-up of the same name without spinning on a
 // server that keeps reporting a clash for some other reason.
@@ -694,8 +694,7 @@ export function ImportCustomerAccounts({
       const result: any = await importLegacySaleItems({
         variables: { saleNumber, items },
       }).catch((error: any) => {
-        const code = error?.graphQLErrors?.[0]?.extensions?.code
-        if (code === "SALE_NOT_IMPORTED") return { skipped: true }
+        if (errorCodeOf(error) === "SALE_NOT_IMPORTED") return { skipped: true }
         throw error
       })
       if (result?.skipped) return { ok: true, skipped: true }
@@ -736,8 +735,8 @@ export function ImportCustomerAccounts({
         // Re-running a file after fixing a few rows is normal, so a receipt
         // that is already here is passed over rather than reported as a
         // failure the operator has to read through.
-        const message = error?.graphQLErrors?.[0]?.message ?? ""
-        if (/already been imported/i.test(message)) return { skipped: true }
+        if (/already been imported/i.test(errorMessageOf(error)))
+          return { skipped: true }
         throw error
       })
       if (result?.skipped) return { ok: true, skipped: true }

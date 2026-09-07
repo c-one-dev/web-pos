@@ -24,6 +24,7 @@ import {
   parseImportFile,
   type ImportRow,
 } from "@/lib/import-file"
+import { errorFieldsOf, errorMessageOf } from "@/lib/graphql-error"
 
 export type ImportColumn = {
   /** Header text expected in the file, lower-cased. */
@@ -83,6 +84,7 @@ export default function ImportDialog({
   const [progress, setProgress] = useState(0)
   const [failures, setFailures] = useState<Outcome[]>([])
   const [succeeded, setSucceeded] = useState<number | null>(null)
+  const [passedOver, setPassedOver] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const reset = () => {
@@ -90,6 +92,7 @@ export default function ImportDialog({
     setFileName("")
     setFailures([])
     setSucceeded(null)
+    setPassedOver(0)
     setProgress(0)
     if (inputRef.current) inputRef.current.value = ""
   }
@@ -142,10 +145,7 @@ export default function ImportDialog({
         // extensions.fields and puts only "Form validation error." on top.
         // Showing the top line alone tells the importer nothing about which
         // column is wrong.
-        const graphQLError = error?.graphQLErrors?.[0]
-        const fields = graphQLError?.extensions?.fields as
-          | { path: string; message: string }[]
-          | undefined
+        const fields = errorFieldsOf(error)
         problems.push({
           index,
           error: fields?.length
@@ -154,7 +154,7 @@ export default function ImportDialog({
                   field.path ? `${field.path}: ${field.message}` : field.message
                 )
                 .join("; ")
-            : (graphQLError?.message ?? error?.message ?? "Unknown error"),
+            : errorMessageOf(error),
         })
       }
       done++
@@ -162,6 +162,7 @@ export default function ImportDialog({
     }
 
     setFailures(problems)
+    setPassedOver(skipped)
     setSucceeded(rows.length - problems.length - skipped)
     setRunning(false)
     if (rows.length - problems.length > 0) onFinished?.()
@@ -273,15 +274,26 @@ export default function ImportDialog({
                     className="shrink-0 text-primary"
                   />
                 )}
+                {/* Skipped and failed are different outcomes and were both
+                    reported as "skipped", which read as though nothing had
+                    gone wrong. A skipped row is one this file was never
+                    responsible for; a failed row is one that should have
+                    imported and did not. */}
                 <p className="text-sm">
                   <span className="font-semibold">{succeeded}</span> imported
+                  {passedOver > 0 && (
+                    <>
+                      , <span className="font-semibold">{passedOver}</span>{" "}
+                      skipped
+                    </>
+                  )}
                   {failures.length > 0 && (
                     <>
                       ,{" "}
                       <span className="font-semibold text-destructive">
                         {failures.length}
                       </span>{" "}
-                      skipped
+                      failed
                     </>
                   )}
                   .
