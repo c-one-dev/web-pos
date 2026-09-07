@@ -66,16 +66,17 @@ const currency = (value?: number | null) =>
 const CLOSURE_TABS_LIST = [
   "relative w-full flex-nowrap justify-start gap-1 border-b border-border",
   "bg-transparent p-0 group-data-horizontal/tabs:h-auto",
-  "overflow-x-auto overscroll-x-contain",
-  // A slim scrollbar rather than none: without it there is nothing to say the
-  // strip goes on past the edge, and a hidden tab is a tab nobody finds. The
-  // browser only paints it when the tabs actually overflow, so a wide screen
-  // still shows a clean strip. Extra bottom padding keeps the bar off the
-  // labels.
-  "pb-1.5 [scrollbar-width:thin]",
+  // `scroll` rather than `auto`: auto lets the browser hide the bar until the
+  // strip is touched, and a tab nobody can see is a tab nobody finds. This
+  // keeps the bar drawn whether or not anyone has scrolled yet.
+  "overflow-x-scroll overscroll-x-contain",
+  // A slim bar with a visible track, so the runway reads as scrollable even
+  // when the thumb fills it. Extra bottom padding keeps it off the labels.
+  "pb-2 [scrollbar-width:thin]",
   "[&::-webkit-scrollbar]:h-1.5",
-  "[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border",
-  "[&::-webkit-scrollbar-track]:bg-transparent",
+  "[&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-muted",
+  "[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-primary/40",
+  "[&::-webkit-scrollbar-thumb:hover]:bg-primary/60",
 ].join(" ")
 
 // 16px labels instead of 12px. The active tab is a solid green pill rather
