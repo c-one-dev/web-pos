@@ -54,6 +54,10 @@ export const salesTargetResolver = {
             {
               $match: {
                 currentSaleStatus: { $ne: "VOIDED" },
+                // An imported receipt is credited to whoever ran the import,
+                // so counting them would hand that person the whole shop's
+                // history as progress against their target.
+                isImported: { $ne: true },
                 createdAt: { $gte: start, $lte: end },
               },
             },

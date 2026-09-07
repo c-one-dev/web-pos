@@ -251,6 +251,10 @@ export const paymentResolver = {
           {
             $match: {
               currentSaleStatus: { $ne: "VOIDED" },
+              // Receipts carried over from the previous POS keep their own
+              // dates, so one dated inside the range would be reported as
+              // trade this shop did - money it never took.
+              isImported: { $ne: true },
               createdAt: { $gte: rangeStart, $lte: rangeEnd },
             },
           },
@@ -292,6 +296,7 @@ export const paymentResolver = {
             {
               $match: {
                 currentSaleStatus: { $ne: "VOIDED" },
+                isImported: { $ne: true },
                 createdAt: { $gte: rangeStart, $lte: rangeEnd },
               },
             },
