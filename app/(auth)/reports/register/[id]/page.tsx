@@ -222,12 +222,14 @@ function SummaryCard({
   return (
     <Card size="sm" className="rounded-lg">
       <CardContent className="flex items-center justify-between gap-3">
-        <div className="flex flex-col gap-1.5">
+        {/* min-w-0 or the amount refuses to shrink and pushes the icon out of
+            the card on a narrow screen. */}
+        <div className="flex min-w-0 flex-col gap-1.5">
           <span
             className={
               emphasis
-                ? "text-xl font-semibold text-primary"
-                : "text-xl font-semibold"
+                ? "truncate text-xl font-semibold text-primary"
+                : "truncate text-xl font-semibold"
             }
           >
             {value}
@@ -236,7 +238,9 @@ function SummaryCard({
             {label}
           </span>
         </div>
-        <span className="text-muted-foreground [&_svg]:size-6">{icon}</span>
+        <span className="shrink-0 text-muted-foreground [&_svg]:size-6">
+          {icon}
+        </span>
       </CardContent>
     </Card>
   )
@@ -1064,7 +1068,7 @@ export default function Page() {
               </div>
             </div>
           </div>
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
             <SummaryCard
               icon={<HandCoinsIcon />}
               label="Payment received"
@@ -1088,7 +1092,7 @@ export default function Page() {
       <Card className="rounded-lg">
         <CardContent className="flex flex-col gap-2.5">
           <Label className="text-sm font-semibold">Sales Summary</Label>
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
             <SummaryCard
               icon={<ChartLineUpIcon />}
               label="Total Sales (inc)"
@@ -1124,8 +1128,10 @@ export default function Page() {
         </CardContent>
       </Card>
 
-      <Card className="rounded-lg">
-        <CardContent className="flex flex-col gap-2">
+      {/* min-w-0 lets the tables inside actually scroll: without it a wide
+          table stretches this column and gets clipped by the card instead. */}
+      <Card className="min-w-0 rounded-lg">
+        <CardContent className="flex min-w-0 flex-col gap-2">
           {paymentTypeOptions.length > 0 && (
             <div className="flex justify-end">
               <Select value={paymentType} onValueChange={setPaymentType}>
@@ -1146,7 +1152,7 @@ export default function Page() {
             </div>
           )}
           <ClosureTabs>
-            <TabsContent value="payment-summary" className="pt-4">
+            <TabsContent value="payment-summary" className="min-w-0 pt-4">
               <TotalsTable
                 data={filteredPaymentSummary}
                 loading={loading}
@@ -1154,7 +1160,7 @@ export default function Page() {
                 emptyLabel="No payments recorded in this shift."
               />
             </TabsContent>
-            <TabsContent value="payment-details" className="pt-4">
+            <TabsContent value="payment-details" className="min-w-0 pt-4">
               <PagedTab<PaymentDetailRow>
                 query={GET_CLOSURE_PAYMENT_DETAILS}
                 field="closurePaymentDetails"
@@ -1164,7 +1170,7 @@ export default function Page() {
                 rowView={<SaleRowViewDialog external />}
               />
             </TabsContent>
-            <TabsContent value="on-account" className="pt-4">
+            <TabsContent value="on-account" className="min-w-0 pt-4">
               <PagedTab<PaymentDetailRow>
                 query={GET_CLOSURE_PAYMENT_DETAILS}
                 field="closurePaymentDetails"
@@ -1174,7 +1180,7 @@ export default function Page() {
                 rowView={<SaleRowViewDialog external />}
               />
             </TabsContent>
-            <TabsContent value="adds-payouts" className="pt-4">
+            <TabsContent value="adds-payouts" className="min-w-0 pt-4">
               <TotalsTable
                 data={detail.addsPayouts}
                 loading={loading}
@@ -1182,7 +1188,7 @@ export default function Page() {
                 emptyLabel="No cash movements in this shift."
               />
             </TabsContent>
-            <TabsContent value="transactions" className="pt-4">
+            <TabsContent value="transactions" className="min-w-0 pt-4">
               <PagedTab<TransactionRow>
                 query={GET_CLOSURE_TRANSACTIONS}
                 field="closureTransactions"
@@ -1192,7 +1198,7 @@ export default function Page() {
                 rowView={<SaleRowViewDialog external />}
               />
             </TabsContent>
-            <TabsContent value="by-sku" className="pt-4">
+            <TabsContent value="by-sku" className="min-w-0 pt-4">
               <PagedTab<SkuRow>
                 query={GET_CLOSURE_BY_SKU}
                 field="closureTransactionsBySku"
@@ -1202,7 +1208,7 @@ export default function Page() {
                 rowView={<SaleRowViewDialog external />}
               />
             </TabsContent>
-            <TabsContent value="cogs" className="pt-4">
+            <TabsContent value="cogs" className="min-w-0 pt-4">
               <PagedTab<CogsRow>
                 query={GET_CLOSURE_COGS}
                 field="closureCogs"
