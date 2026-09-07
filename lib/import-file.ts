@@ -91,19 +91,83 @@ const cellToString = (value: unknown): string => {
   return String(value)
 }
 
+// The namespaces ExcelJS reads by bare tag name, so a prefix on any of them
+// hides the tag from it. Left out on purpose: relationships (r:id), doc-props
+// value types (vt:) and Dublin Core (dc:/cp:) - ExcelJS expects those
+// prefixed, exactly as they normally appear.
+const UNPREFIXED_NAMESPACES = [
+  "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
+  "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties",
+]
+
+const escapeRegExp = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+
+// Rewrites <x:sheets> back to <sheets>.
+//
+// Excel writes these namespaces as the default one, but some exporters
+// (HIKE's among them) bind them to a prefix instead. ExcelJS matches tag
+// names literally, so it never finds <sheets> in such a file and fails with
+// "Cannot read properties of undefined (reading 'sheets')" - and then the
+// same way on docProps/app.xml.
+const unprefixNamespaces = (xml: string) => {
+  let result = xml
+  for (const namespace of UNPREFIXED_NAMESPACES) {
+    const pattern = escapeRegExp(namespace)
+    const declaration = result.match(
+      new RegExp(`xmlns:([A-Za-z_][\\w.-]*)="${pattern}"`)
+    )
+    if (!declaration) continue
+    const prefix = declaration[1]
+    result = result
+      .replace(
+        new RegExp(`xmlns:${prefix}="${pattern}"`, "g"),
+        `xmlns="${namespace}"`
+      )
+      .replace(new RegExp(`<${prefix}:`, "g"), "<")
+      .replace(new RegExp(`</${prefix}:`, "g"), "</")
+  }
+  return result
+}
+
+// Unzips the workbook, unprefixes every XML part and zips it back up, so
+// ExcelJS gets the shape it can read.
+const normaliseWorkbook = async (buffer: ArrayBuffer): Promise<ArrayBuffer> => {
+  const JSZip = (await import("jszip")).default
+  const source = await JSZip.loadAsync(buffer)
+  const target = new JSZip()
+  for (const entry of Object.values(source.files)) {
+    if (entry.dir) continue
+    if (entry.name.endsWith(".xml") || entry.name.endsWith(".rels"))
+      target.file(entry.name, unprefixNamespaces(await entry.async("string")))
+    else target.file(entry.name, await entry.async("uint8array"))
+  }
+  return target.generateAsync({ type: "arraybuffer" })
+}
+
 async function parseXlsx(
   file: File,
   columns: ColumnSpec[] = []
 ): Promise<ImportRow[]> {
   const workbook = new ExcelJS.Workbook()
-  await workbook.xlsx.load(await file.arrayBuffer())
+  const buffer = await file.arrayBuffer()
+  try {
+    await workbook.xlsx.load(buffer)
+  } catch {
+    // Second chance for a prefixed-namespace workbook. Done on failure
+    // rather than up front so an ordinary Excel file is not unzipped and
+    // rezipped for nothing.
+    await workbook.xlsx.load(await normaliseWorkbook(buffer))
+  }
   const sheet = workbook.worksheets[0]
   if (!sheet) return []
 
   const aliases = buildAliasMap(columns)
   const cellsOf = (rowNumber: number) => {
     const values: string[] = []
-    sheet.getRow(rowNumber).eachCell((cell) => values.push(cellToString(cell.value)))
+    sheet
+      .getRow(rowNumber)
+      .eachCell((cell) => values.push(cellToString(cell.value)))
     return values
   }
   const headerRow = findHeaderRow(cellsOf, sheet.rowCount, aliases)
