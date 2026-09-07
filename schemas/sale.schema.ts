@@ -127,6 +127,8 @@ export const saleSchema = gql`
     register: Register
     by: User
     isOnAccount: Boolean
+    # Carried over from the previous POS rather than rung up here.
+    isImported: Boolean
     isEditable: Boolean
     createdAt: String
     updatedAt: String

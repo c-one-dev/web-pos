@@ -81,6 +81,7 @@ const GET_SALE = gql`
       notes
       currentSaleStatus
       isOnAccount
+      isImported
       isEditable
       createdAt
       customer {
@@ -731,7 +732,15 @@ export default function RowViewDialog({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {sale?.payments?.length
+                    {/*
+                      The On Account line on a carried-over sale is not a
+                      payment - it is the debt itself, written so the balance
+                      can be worked out. Listing it as a payment method reads
+                      as though the customer paid on account, when the whole
+                      point is that they have not. What they have since repaid
+                      shows below as settlements.
+                    */}
+                    {!sale?.isImported && sale?.payments?.length
                       ? sale.payments.map((payment: any, index: number) => (
                           <TableRow key={index}>
                             <TableCell className="font-medium">
@@ -827,7 +836,8 @@ export default function RowViewDialog({
                         </TableRow>
                       )
                     )}
-                    {!sale?.payments?.length && !sale?.settlements?.length ? (
+                    {(sale?.isImported || !sale?.payments?.length) &&
+                    !sale?.settlements?.length ? (
                       <TableRow>
                         <TableCell
                           colSpan={4}

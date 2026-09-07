@@ -29,9 +29,11 @@ export const salesReportResolver = {
         const sortOrder = sort?.order === "ASC" ? 1 : -1
 
         const baseStages: PipelineStage[] = [
-          // Sales carried over from the previous POS have no line items and
-          // took no money here, so they are not this system's revenue.
-          { $match: { isImported: { $ne: true } } },
+          // Carried-over receipts are listed here, the way they read in the
+          // old system's own transactions report. They stay out of the money
+          // tiles above (paymentSummary) and out of every other trading
+          // figure - this is a list of what was rung up, not of what this
+          // shop took.
           {
             $lookup: {
               from: "customers",
@@ -148,6 +150,18 @@ export const salesReportResolver = {
               as: "paymentMethodDocs",
             },
           },
+          // A carried-over receipt's only tender is the On Account line that
+          // records the debt, which is not a payment - so its payment types
+          // come from what has actually been settled. An unpaid one names
+          // nothing, exactly as the old system's export leaves it blank.
+          {
+            $lookup: {
+              from: "payment_methods",
+              localField: "settlements.method",
+              foreignField: "_id",
+              as: "settlementMethodDocs",
+            },
+          },
           {
             $lookup: {
               from: "products",
@@ -165,9 +179,12 @@ export const salesReportResolver = {
               byName: 1,
               total: 1,
               currentSaleStatus: 1,
+              currentSalePaymentStatus: 1,
               isOnAccount: 1,
+              isImported: 1,
               items: 1,
               paymentMethodDocs: 1,
+              settlementMethodDocs: 1,
               productDocs: 1,
             },
           },
@@ -196,10 +213,15 @@ export const salesReportResolver = {
                 discounts: item.discount * item.quantity,
               })),
               currentSaleStatus: edge.currentSaleStatus,
+              currentSalePaymentStatus: edge.currentSalePaymentStatus,
               isOnAccount: edge.isOnAccount,
+              isImported: !!edge.isImported,
               paymentTypes: [
                 ...new Set(
-                  (edge.paymentMethodDocs || []).map((pm: any) => pm.name)
+                  (edge.isImported
+                    ? edge.settlementMethodDocs || []
+                    : edge.paymentMethodDocs || []
+                  ).map((pm: any) => pm.name)
                 ),
               ],
               total: edge.total,

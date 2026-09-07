@@ -181,7 +181,9 @@ const GET_SALES_TRANSACTIONS = gql`
           }
           outletName
           currentSaleStatus
+          currentSalePaymentStatus
           isOnAccount
+          isImported
           paymentTypes
           total
           byName
@@ -549,7 +551,11 @@ async function exportSalesReportPdf({
         sale.customerName,
         sale.itemsSummary || "-",
         sale.outletName,
-        sale.isOnAccount ? "On Account" : sale.currentSaleStatus,
+        sale.isImported
+          ? sale.currentSalePaymentStatus
+          : sale.isOnAccount
+            ? "On Account"
+            : sale.currentSaleStatus,
         sale.paymentTypes?.join(", ") || "-",
         pdfCurrency(sale.total),
         sale.byName,
@@ -1204,7 +1210,9 @@ type SalesTransactionNode = {
   items: SalesTransactionItem[]
   outletName: string
   currentSaleStatus: string
+  currentSalePaymentStatus: string
   isOnAccount: boolean
+  isImported: boolean
   paymentTypes: string[]
   total: number
   byName: string
@@ -1327,7 +1335,16 @@ function SalesTransactionsTab({ range }: { range: DateRange }) {
         id: "currentSaleStatus",
         header: "Status",
         cell: ({ row }) => (
-          <StatusBadge status={row.original.currentSaleStatus} />
+          // A carried-over receipt is reported by whether it has been paid,
+          // which is how the previous system's own transactions report read
+          // it - COMPLETED would say nothing about a debt still owed.
+          <StatusBadge
+            status={
+              row.original.isImported
+                ? row.original.currentSalePaymentStatus
+                : row.original.currentSaleStatus
+            }
+          />
         ),
       },
       {

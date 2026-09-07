@@ -18,7 +18,12 @@ export const salesReportSchema = gql`
     items: [SalesTransactionItem]
     outletName: String
     currentSaleStatus: SaleStatus
+    # What is shown in the Status column for a carried-over receipt: the old
+    # system reported those by whether they had been paid, not by whether the
+    # sale completed.
+    currentSalePaymentStatus: SalePaymentStatus
     isOnAccount: Boolean
+    isImported: Boolean
     paymentTypes: [String]
     total: Float
     byName: String
