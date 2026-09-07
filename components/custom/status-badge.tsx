@@ -12,6 +12,10 @@ const STATUS_VARIANTS: Record<string, BadgeVariant> = {
   COMPLETED: "success",
   REFUNDED: "info",
   VOIDED: "destructive",
+  // A completed sale whose money is still owed. Not a stored status - the
+  // sale is COMPLETED and its payment PENDING - but the pair reads better as
+  // one word in a table, and it is what the previous system called it.
+  ON_ACCOUNT: "warning",
   // Sale payment status
   PAID: "success",
   UNPAID: "destructive",

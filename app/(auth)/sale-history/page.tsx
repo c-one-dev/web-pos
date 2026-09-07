@@ -454,8 +454,20 @@ export default function Page() {
             onSortChange={setSort}
           />
         ),
+        // A sale whose money is still owed reads "On Account" rather than
+        // COMPLETED. Both are true - the sale finished, the payment has not -
+        // but COMPLETED next to an unpaid balance invites the wrong reading,
+        // and On Account is what the shop already calls it. A voided sale
+        // still says VOIDED: that outranks anything about the money.
         cell: ({ row }) => (
-          <StatusBadge status={row.original.currentSaleStatus} />
+          <StatusBadge
+            status={
+              row.original.currentSaleStatus !== "VOIDED" &&
+              row.original.currentSalePaymentStatus === "PENDING"
+                ? "ON_ACCOUNT"
+                : row.original.currentSaleStatus
+            }
+          />
         ),
         footer: () => (
           <ColumnFilter
