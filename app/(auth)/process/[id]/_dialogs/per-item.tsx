@@ -109,10 +109,18 @@ function PerItem({
             <Input
               value={item?.quantity}
               type="number"
-              min={1}
+              // Court time is sold by the hour and laundry by the kilo, so a
+              // line can legitimately be 2.5 or 0.33. Kept above zero rather
+              // than above one: a whole-number floor is what stopped those
+              // being rung up at all.
+              min={0.01}
+              step="any"
+              inputMode="decimal"
               onChange={(e) => {
                 {
-                  const quantity = Math.max(1, parseInt(e.target.value) || 1)
+                  const typed = parseFloat(e.target.value)
+                  const quantity =
+                    Number.isFinite(typed) && typed > 0 ? typed : 1
                   form.setFieldValue(`items`, () => {
                     const itemPrice = item.snapshotPrice - item.discount
                     const itemTotal = quantity * itemPrice
@@ -274,10 +282,7 @@ function PerItem({
                     className="text-muted-foreground line-through"
                     align="inline-end"
                   >
-                    ₱
-                    {parseFloat(
-                      String(item.snapshotPrice * parseInt(item.quantity))
-                    ).toFixed(2)}
+                    ₱{(item.snapshotPrice * Number(item.quantity)).toFixed(2)}
                   </InputGroupAddon>
                 </>
               )}

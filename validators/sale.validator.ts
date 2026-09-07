@@ -6,7 +6,8 @@ const saleItemSchema = z
     snapshotName: z.string(),
     snapshotPrice: z.number().nonnegative(),
     price: z.number().nonnegative(),
-    quantity: z.number().int().positive(),
+    // Not an integer: a line can be 2.5 hours of court or 5.5kg of laundry.
+    quantity: z.number().positive(),
     subTotal: z.number().nonnegative(),
     discount: z.number().nonnegative(),
     total: z.number().nonnegative(),
@@ -76,8 +77,7 @@ export const refundSaleItemsSchema = z.object({
         itemIndex: z.number().int().nonnegative(),
         quantity: z
           .number()
-          .int()
-          .positive("Refund quantity must be at least 1"),
+          .positive("Refund quantity must be greater than zero"),
       })
     )
     .nonempty("Select at least one item to refund"),

@@ -107,7 +107,19 @@ const CLOSURE_TAB_TRIGGER = [
 // under the 16px tab labels so the wide tabs (Transaction by SKU has nine
 // columns) do not force horizontal scrolling. Rows stay taller than default
 // so the denser type is not cramped.
-const CLOSURE_TABLE_TEXT = "text-sm [&_td]:py-2.5 [&_th]:h-11 [&_th]:text-sm"
+const CLOSURE_TABLE_TEXT = [
+  "text-sm [&_td]:py-2.5 [&_th]:h-11 [&_th]:text-sm",
+  // The header stays put while the rows scroll under it - a column of pesos
+  // means nothing once its name has scrolled away.
+  "[&_thead]:sticky [&_thead]:top-0 [&_thead]:z-10 [&_thead]:bg-background",
+].join(" ")
+
+// The table keeps a height and scrolls inside it. Without one, a wide table's
+// horizontal bar sits at the bottom of the whole table - past the fold on a
+// small screen, so the columns off to the right look simply missing. Capping
+// the height puts that bar back on screen, and holds the page steady as tabs
+// with different row counts swap in.
+const CLOSURE_TABLE_CONTAINER = "max-h-[60vh] overflow-y-auto"
 
 const GET_CLOSURE_DETAIL = gql`
   query RegisterSessionClosureDetail($_id: ID!) {
@@ -657,6 +669,7 @@ function TotalsTable<T>({
           noFooter
           rowView={rowView}
           className={CLOSURE_TABLE_TEXT}
+          containerClassName={CLOSURE_TABLE_CONTAINER}
         />
       </div>
     </div>

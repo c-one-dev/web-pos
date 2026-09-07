@@ -21,12 +21,14 @@ export const saleSchema = gql`
     product: Product
     snapshotName: String
     snapshotPrice: Float
-    quantity: Int
+    # Fractional on purpose: court time is sold by the hour, laundry by the
+    # kilo, and the previous POS already carried lines like 2.5 and 3.6071.
+    quantity: Float
     discount: Float
     price: Float
     subTotal: Float
     total: Float
-    refundedQuantity: Int
+    refundedQuantity: Float
   }
 
   type SaleSettlement {
@@ -48,7 +50,7 @@ export const saleSchema = gql`
   type SaleRefundItem {
     itemIndex: Int
     snapshotName: String
-    quantity: Int
+    quantity: Float
     amount: Float
   }
 
@@ -62,7 +64,7 @@ export const saleSchema = gql`
 
   input RefundItemInput {
     itemIndex: Int!
-    quantity: Int!
+    quantity: Float!
   }
 
   type SalePayment {
@@ -159,7 +161,7 @@ export const saleSchema = gql`
     product: ID
     snapshotName: String
     snapshotPrice: Float
-    quantity: Int
+    quantity: Float
     discount: Float
     price: Float
     subTotal: Float

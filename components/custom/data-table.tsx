@@ -38,6 +38,9 @@ type Props<TData, TValue> = {
   // it, so a caller can enlarge a whole table without restyling the shared
   // primitive for every other page.
   className?: string
+  // Merged onto the scroll container instead - a caller that wants the table
+  // to keep a height and scroll inside it passes that here.
+  containerClassName?: string
 }
 
 export default function DataTable<TData, TValue>({
@@ -49,6 +52,7 @@ export default function DataTable<TData, TValue>({
   onRowClick,
   noFooter = false,
   className,
+  containerClassName,
 }: Props<TData, TValue>) {
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
@@ -74,7 +78,10 @@ export default function DataTable<TData, TValue>({
           setOpen: setOpenView,
           onClose: onCloseView,
         })}
-      <Table className={cn("border", className)}>
+      <Table
+        className={cn("border", className)}
+        containerClassName={containerClassName}
+      >
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow key={headerGroup.id}>

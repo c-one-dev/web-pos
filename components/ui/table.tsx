@@ -4,11 +4,28 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-function Table({ className, ...props }: React.ComponentProps<"table">) {
+function Table({
+  className,
+  containerClassName,
+  ...props
+}: React.ComponentProps<"table"> & { containerClassName?: string }) {
   return (
     <div
       data-slot="table-container"
-      className="relative w-full overflow-x-auto"
+      className={cn(
+        "relative w-full",
+        // `scroll` rather than `auto`: a bar the browser only paints once you
+        // touch the table is a bar nobody knows is there, and a table wider
+        // than its column gives no other clue that it continues.
+        "overflow-x-scroll",
+        // Slim, with a visible track so the runway reads as scrollable.
+        "[scrollbar-width:thin]",
+        "[&::-webkit-scrollbar]:h-1.5",
+        "[&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-muted",
+        "[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-primary/40",
+        "[&::-webkit-scrollbar-thumb:hover]:bg-primary/60",
+        containerClassName
+      )}
     >
       <table
         data-slot="table"
