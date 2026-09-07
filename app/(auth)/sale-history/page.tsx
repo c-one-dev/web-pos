@@ -375,7 +375,12 @@ export default function Page() {
                 </span>
               </span>
             )}
-            {row.original.paymentNotes != "" &&
+            {/*
+              A carried-over receipt has no payment notes at all, and `!= ""`
+              lets null through - so this has to test for a value, not for an
+              empty string.
+            */}
+            {row.original.paymentNotes &&
               row.original.paymentNotes
                 .split(", ")
                 .map((note: string, index: number) => (
