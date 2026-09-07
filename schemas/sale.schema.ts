@@ -305,8 +305,9 @@ export const saleSchema = gql`
       outlet: ID
       by: ID
       method: ID
-      minTotal: Float
-      maxTotal: Float
+      # Order value: one of < <= > >= = against totalValue.
+      totalOperator: String
+      totalValue: Float
       # Carried-over receipts are listed by default; this hides them when
       # only trade rung up here is wanted.
       includeImported: Boolean

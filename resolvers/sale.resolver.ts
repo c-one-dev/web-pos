@@ -147,16 +147,16 @@ export const saleResolver = {
         outlet,
         by,
         method,
-        minTotal,
-        maxTotal,
+        totalOperator,
+        totalValue,
         includeImported = true,
       }: IDataTableArgs & {
         register?: string
         outlet?: string
         by?: string
         method?: string
-        minTotal?: number
-        maxTotal?: number
+        totalOperator?: string
+        totalValue?: number
         includeImported?: boolean
       }
     ) => {
@@ -186,15 +186,24 @@ export const saleResolver = {
           const registers = await Register.find({ outlet }).select("_id").lean()
           matchStage.register = { $in: registers.map((r: any) => r._id) }
         }
-        if (minTotal !== undefined && minTotal !== null)
+        // Order value, as an operator against one amount rather than a band -
+        // "over 5,000" is the question people actually ask, and a from/to
+        // pair makes them fill in two boxes to express it.
+        const TOTAL_OPERATORS: Record<string, string> = {
+          "<": "$lt",
+          "<=": "$lte",
+          ">": "$gt",
+          ">=": "$gte",
+          "=": "$eq",
+        }
+        if (
+          totalOperator &&
+          totalValue !== undefined &&
+          totalValue !== null &&
+          TOTAL_OPERATORS[totalOperator]
+        )
           matchStage.netAmount = {
-            ...(matchStage.netAmount || {}),
-            $gte: minTotal,
-          }
-        if (maxTotal !== undefined && maxTotal !== null)
-          matchStage.netAmount = {
-            ...(matchStage.netAmount || {}),
-            $lte: maxTotal,
+            [TOTAL_OPERATORS[totalOperator]]: totalValue,
           }
 
         if (search)

@@ -21,9 +21,10 @@ import { CaretDownIcon, CaretUpIcon, XIcon } from "@phosphor-icons/react"
  * The filter bar above Sale History.
  *
  * The table's own column filters stay where they are - they answer "find this
- * sale". These answer "show me this slice of trading": one till, one cashier,
- * one payment method, a value band. They are collapsed by default so the page
- * still opens on the list rather than on a wall of dropdowns.
+ * sale". These answer "show me this slice of trading": one outlet, one till,
+ * one cashier, one payment method, sales over or under an amount. They are
+ * collapsed by default so the page still opens on the list rather than on a
+ * wall of dropdowns.
  */
 
 export type SaleHistoryFilters = {
@@ -31,10 +32,20 @@ export type SaleHistoryFilters = {
   outlet?: string
   by?: string
   method?: string
-  minTotal?: number
-  maxTotal?: number
+  totalOperator?: string
+  totalValue?: number
   includeImported: boolean
 }
+
+// Order value is asked as a comparison - "over 5,000", "exactly 100" - so the
+// filter takes an operator and one amount rather than a from/to pair.
+const TOTAL_OPERATORS: Option[] = [
+  { value: "<", label: "< (Less than)" },
+  { value: "<=", label: "<= (Less than or equal to)" },
+  { value: ">", label: "> (Greater than)" },
+  { value: ">=", label: ">= (Greater than or equal to)" },
+  { value: "=", label: "= (Equal)" },
+]
 
 export const emptyFilters: SaleHistoryFilters = { includeImported: true }
 
@@ -152,10 +163,12 @@ export default function SaleHistoryFilterBar({
       label: `Payment: ${nameOf(methods, filters.method)}`,
       clear: () => set({ method: undefined }),
     })
-  if (filters.minTotal !== undefined || filters.maxTotal !== undefined)
+  // Only once both halves are filled in - an operator with no amount filters
+  // nothing, so it should not look as though it does.
+  if (filters.totalOperator && filters.totalValue !== undefined)
     chips.push({
-      label: `Value: ${filters.minTotal ?? "any"} - ${filters.maxTotal ?? "any"}`,
-      clear: () => set({ minTotal: undefined, maxTotal: undefined }),
+      label: `Order value ${filters.totalOperator} ${filters.totalValue}`,
+      clear: () => set({ totalOperator: undefined, totalValue: undefined }),
     })
   if (!filters.includeImported)
     chips.push({
@@ -214,36 +227,30 @@ export default function SaleHistoryFilterBar({
             options={methods}
             onChange={(value) => set({ method: value })}
           />
+          <FilterSelect
+            label="Order value"
+            value={filters.totalOperator}
+            options={TOTAL_OPERATORS}
+            onChange={(value) =>
+              set({
+                totalOperator: value,
+                // Dropping the operator drops the amount with it, or the chip
+                // would claim a filter that is no longer being applied.
+                totalValue: value ? filters.totalValue : undefined,
+              })
+            }
+          />
           <div className="flex flex-col gap-1.5">
-            <Label className="text-xs text-muted-foreground">
-              Order value from
-            </Label>
+            <Label className="text-xs text-muted-foreground">Amount</Label>
             <Input
               type="number"
               inputMode="decimal"
               placeholder="Any"
-              value={filters.minTotal ?? ""}
+              disabled={!filters.totalOperator}
+              value={filters.totalValue ?? ""}
               onChange={(event) =>
                 set({
-                  minTotal: event.currentTarget.value
-                    ? Number(event.currentTarget.value)
-                    : undefined,
-                })
-              }
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-xs text-muted-foreground">
-              Order value to
-            </Label>
-            <Input
-              type="number"
-              inputMode="decimal"
-              placeholder="Any"
-              value={filters.maxTotal ?? ""}
-              onChange={(event) =>
-                set({
-                  maxTotal: event.currentTarget.value
+                  totalValue: event.currentTarget.value
                     ? Number(event.currentTarget.value)
                     : undefined,
                 })

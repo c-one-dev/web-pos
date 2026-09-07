@@ -68,8 +68,8 @@ const GET_SALE_HISTORY = gql`
     $outlet: ID
     $by: ID
     $method: ID
-    $minTotal: Float
-    $maxTotal: Float
+    $totalOperator: String
+    $totalValue: Float
     $includeImported: Boolean
   ) {
     saleHistoryTable(
@@ -82,8 +82,8 @@ const GET_SALE_HISTORY = gql`
       outlet: $outlet
       by: $by
       method: $method
-      minTotal: $minTotal
-      maxTotal: $maxTotal
+      totalOperator: $totalOperator
+      totalValue: $totalValue
       includeImported: $includeImported
     ) {
       total
