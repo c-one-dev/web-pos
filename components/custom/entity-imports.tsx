@@ -557,6 +557,12 @@ const CUSTOMER_ACCOUNT_COLUMNS: ImportColumn[] = [
     hint: "shows in the limit history, e.g. the old invoice number",
     example: "carried over from HIKE",
   },
+  {
+    key: "status",
+    aliases: ["sale status", "order status"],
+    hint: "a parked (unfinished) order is never imported",
+    example: "On Account",
+  },
   // The item columns of a Sales Transactions export. Each item sits on its
   // own row under the order it belongs to, and is folded into that order by
   // groupSaleItemRows below.
@@ -686,24 +692,73 @@ export function ImportCustomerAccounts({
     // A report's own totals row carries figures but names nobody.
     if (!name && !saleNumber) return { ok: true, skipped: true }
 
-    // An items export names no outstanding amount, so its rows can only fill
-    // in the lines of a sale the balances export already brought over. A
-    // receipt that is not there - one that was paid off, or parked - is not
-    // this file's business and is passed over.
+    // An items export names no outstanding amount. Its rows normally fill in
+    // the lines of a sale the balances export already brought over - but that
+    // export is taken on a day of its own, so a receipt rung up after it was
+    // taken appears here and nowhere else. Rather than leave those off the
+    // customer's account entirely, the receipt is created from what this file
+    // does say and its full total is treated as still owed.
+    //
+    // That is an assumption, and the only one available: this report shows
+    // what was rung up, not what has since been paid. A receipt already
+    // part-settled comes in overstated, so a balances export covering the
+    // same dates is still the better source when there is one.
     if (saleNumber && owed === undefined && items.length) {
-      const result: any = await importLegacySaleItems({
-        variables: { saleNumber, items },
-      }).catch((error: any) => {
-        if (errorCodeOf(error) === "SALE_NOT_IMPORTED") return { skipped: true }
-        throw error
+      const attach = async () => {
+        const result: any = await importLegacySaleItems({
+          variables: { saleNumber, items },
+        })
+        return result?.data?.importLegacySaleItems?.ok
+          ? ({ ok: true } as RowResult)
+          : ({
+              ok: false,
+              error: result?.data?.importLegacySaleItems?.message ?? "Failed",
+            } as RowResult)
+      }
+
+      try {
+        return await attach()
+      } catch (error: any) {
+        if (errorCodeOf(error) !== "SALE_NOT_IMPORTED") throw error
+      }
+
+      // A parked order is an unfinished basket, not a sale. Importing one
+      // would invent a debt nobody owes.
+      const status = pick(row, "status")
+      if (status && /parked/i.test(status)) return { ok: true, skipped: true }
+
+      // A row with no customer at all is not a sale this system can file -
+      // but a named customer that cannot be found is a real problem worth
+      // reporting rather than passing over in silence.
+      if (!name) return { ok: true, skipped: true }
+      const customerId = findByName(customers, name)
+      if (!customerId)
+        return { ok: false, error: `customer "${name}" not found` }
+
+      const date = parseDate(row["date"])
+      if (!date)
+        return { ok: false, error: `date "${row["date"]}" is not a date` }
+      const total = parseNumber(row["total"])
+      if (total === undefined)
+        return { ok: false, error: "total is missing or not a number" }
+
+      const created: any = await importLegacySale({
+        variables: {
+          input: {
+            customer: customerId,
+            saleNumber,
+            date,
+            total,
+            outstanding: total,
+          },
+        },
       })
-      if (result?.skipped) return { ok: true, skipped: true }
-      return result?.data?.importLegacySaleItems?.ok
-        ? { ok: true }
-        : {
-            ok: false,
-            error: result?.data?.importLegacySaleItems?.message ?? "Failed",
-          }
+      if (!created?.data?.importLegacySale?.ok)
+        return {
+          ok: false,
+          error: created?.data?.importLegacySale?.message ?? "Failed",
+        }
+      return attach()
     }
 
     if (!name) return { ok: false, error: "customer is required" }
@@ -774,7 +829,7 @@ export function ImportCustomerAccounts({
   return (
     <ImportDialog
       title="Import Customer Accounts"
-      description="Carries customer account data over from another system, without creating sales here or taking money. A row naming an old receipt is added to that customer's sales list, kept out of sale history and the sales report; a row with only an amount reduces their available account limit instead. Import the balances export first — a later file of item lines fills in the items of the receipts it brought over, and passes over any receipt it does not recognise."
+      description="Carries customer account data over from another system, without creating sales here or taking money. A row naming an old receipt is added to that customer's sales list, kept out of sale history and the sales report; a row with only an amount reduces their available account limit instead. Import the balances export first, since it is the file that knows what is still owed — a later file of item lines fills in the items of the receipts it brought over, and brings over any receipt it cannot find, treating that receipt's total as still owed. Parked orders are never imported."
       columns={CUSTOMER_ACCOUNT_COLUMNS}
       importRow={importRow}
       prepareRows={groupSaleItemRows}
