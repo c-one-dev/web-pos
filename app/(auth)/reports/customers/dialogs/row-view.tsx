@@ -214,8 +214,20 @@ export default function RowViewDrawer({ _id, open, setOpen, onClose }: Props) {
       {
         id: "currentSaleStatus",
         header: "Status",
+        // Same reading as Sale History: a sale with money still owed says On
+        // Account, not COMPLETED. On this table especially - it sits next to
+        // an Outstanding column in red, and the two disagreeing is what makes
+        // people doubt the figures. A voided sale still says VOIDED.
         cell: ({ row }) => (
-          <StatusBadge status={row.original.currentSaleStatus} />
+          <StatusBadge
+            status={
+              row.original.currentSaleStatus !== "VOIDED" &&
+              (row.original.currentSalePaymentStatus === "PENDING" ||
+                row.original.currentSalePaymentStatus === "PARTIALLY_PAID")
+                ? "ON_ACCOUNT"
+                : row.original.currentSaleStatus
+            }
+          />
         ),
       },
     ],

@@ -405,8 +405,20 @@ export default function RowViewDialog({
                 <span className="font-mono text-sm font-normal text-muted-foreground">
                   {sale?.saleNumber || "-"}
                 </span>
+                {/* Reads On Account while money is owed, the same as the
+                    tables this drawer opens from - the header saying
+                    COMPLETED beside a PENDING badge is what made people ask
+                    whether the sale had been paid. */}
                 {sale?.currentSaleStatus && (
-                  <StatusBadge status={sale.currentSaleStatus} />
+                  <StatusBadge
+                    status={
+                      sale.currentSaleStatus !== "VOIDED" &&
+                      (sale.currentSalePaymentStatus === "PENDING" ||
+                        sale.currentSalePaymentStatus === "PARTIALLY_PAID")
+                        ? "ON_ACCOUNT"
+                        : sale.currentSaleStatus
+                    }
+                  />
                 )}
                 {sale?.currentSalePaymentStatus && (
                   <StatusBadge status={sale.currentSalePaymentStatus} />
