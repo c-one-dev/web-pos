@@ -30,6 +30,9 @@ const resolveSummary = async (registerDoc: any, session: any) => {
   const matchStage = {
     register: new Types.ObjectId(registerDoc._id),
     currentSaleStatus: { $ne: "VOIDED" },
+    // A carried-over receipt never went through this drawer, so it must not
+    // land in a shift's expected totals.
+    isImported: { $ne: true },
     createdAt: { $gte: start, $lte: end },
   }
 
@@ -277,6 +280,7 @@ const loadShiftSales = async (_id: string) => {
   const sales = await Sale.find({
     register: registerDoc._id,
     currentSaleStatus: { $ne: "VOIDED" },
+    isImported: { $ne: true },
     createdAt: {
       $gte: session.openedAt,
       $lte: session.closedAt || new Date(),
@@ -396,10 +400,12 @@ export const registerSessionResolver = {
         const onAccountId = process.env.NEXT_PUBLIC_ON_ACCOUNT_ID
 
         // Same scoping convention as resolveSummary above: sales on this
-        // register within the shift's time window, voided sales excluded.
+        // register within the shift's time window, voided and carried-over
+        // sales excluded.
         const sales = await Sale.find({
           register: registerDoc._id,
           currentSaleStatus: { $ne: "VOIDED" },
+          isImported: { $ne: true },
           createdAt: { $gte: start, $lte: end },
         })
           .populate(["customer", "by", "payments.method", "items.product"])

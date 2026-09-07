@@ -87,6 +87,12 @@ export const dashboardResolver = {
         const dateGranularity = resolveDateGranularity(rangeStart, rangeEnd)
         const matchStage = {
           currentSaleStatus: { $ne: "VOIDED" },
+          // A carried-over receipt was rung up in the previous system, so it
+          // is not trade this shop did today - counting one would put money
+          // on the dashboard that never crossed this counter, and credit it
+          // to whoever ran the import. Sale history and the sales report
+          // leave them out for the same reason.
+          isImported: { $ne: true },
           createdAt: {
             $gte: rangeStart,
             $lte: rangeEnd,
