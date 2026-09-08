@@ -124,7 +124,12 @@ const CLOSURE_TABLE_TEXT = [
 // small screen, so the columns off to the right look simply missing. Capping
 // the height puts that bar back on screen, and holds the page steady as tabs
 // with different row counts swap in.
-const CLOSURE_TABLE_CONTAINER = "max-h-[60vh] overflow-y-auto"
+// The height a full page of rows would take is reserved by the table itself,
+// via a CSS variable the tab sets - so a tab holding one row draws a box the
+// same size as one holding eight, instead of a short table above a stretch of
+// blank card. Capped so 100 rows per page does not reserve a screenful.
+const CLOSURE_TABLE_CONTAINER =
+  "max-h-[60vh] min-h-[var(--closure-body)] overflow-y-auto"
 
 const GET_CLOSURE_DETAIL = gql`
   query RegisterSessionClosureDetail($_id: ID!) {
@@ -669,7 +674,7 @@ function TotalsTable<T>({
   if (!loading && !points.length)
     return (
       <div
-        className="flex w-full items-center justify-center text-sm text-muted-foreground"
+        className="flex w-full items-center justify-center rounded-none border border-foreground/20 text-sm text-muted-foreground"
         style={{ minHeight: reservedBodyHeight }}
       >
         {emptyLabel}
@@ -731,7 +736,11 @@ function TotalsTable<T>({
           </ButtonGroup>
         </div>
       </div>
-      <div style={{ minHeight: reservedBodyHeight }}>
+      <div
+        style={
+          { "--closure-body": `${reservedBodyHeight}px` } as React.CSSProperties
+        }
+      >
         <DataTable
           loading={loading}
           columns={columns}
