@@ -203,6 +203,7 @@ type TransactionRow = {
   date: string
   saleNumber: string
   status: string
+  paymentStatus?: string
   customerName: string
   discount: number
   saleTotal: number
@@ -454,6 +455,7 @@ const GET_CLOSURE_TRANSACTIONS = gql`
           date
           saleNumber
           status
+          paymentStatus
           customerName
           discount
           saleTotal
@@ -1002,7 +1004,20 @@ export default function Page() {
     {
       id: "status",
       header: "Status",
-      cell: ({ row }) => <StatusBadge status={row.original.status} />,
+      // Reads On Account while the money is owed, as Sale History and the
+      // customer's own sales list do. COMPLETED beside an On Account tender
+      // is the pair that had people asking whether the sale had been paid.
+      cell: ({ row }) => (
+        <StatusBadge
+          status={
+            row.original.status !== "VOIDED" &&
+            (row.original.paymentStatus === "PENDING" ||
+              row.original.paymentStatus === "PARTIALLY_PAID")
+              ? "ON_ACCOUNT"
+              : row.original.status
+          }
+        />
+      ),
     },
     {
       id: "customerName",

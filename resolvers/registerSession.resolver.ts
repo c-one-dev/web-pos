@@ -292,6 +292,7 @@ const buildTransactions = (sales: any[]) =>
       _id: s._id,
       saleNumber: s.saleNumber,
       status: s.currentSaleStatus,
+      paymentStatus: s.currentSalePaymentStatus,
       customerName: s.customer?.name || "Walk-in",
       discount: s.discount,
       saleTotal: s.total,

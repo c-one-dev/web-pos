@@ -116,6 +116,9 @@ export const registerSessionSchema = gql`
     _id: ID
     saleNumber: String
     status: SaleStatus
+    # Whether the money has arrived. A sale can be COMPLETED and still owed
+    # for, and the Status column reads the pair rather than the sale alone.
+    paymentStatus: SalePaymentStatus
     customerName: String
     discount: Float
     saleTotal: Float
