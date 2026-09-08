@@ -105,6 +105,9 @@ export const registerSessionSchema = gql`
     paymentAmount: Float
     type: String
     isOnAccount: Boolean
+    # An account balance repaid in this shift, rather than a tender on a sale
+    # rung up in it.
+    isSettlement: Boolean
     userName: String
   }
 

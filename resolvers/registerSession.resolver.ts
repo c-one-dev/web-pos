@@ -213,6 +213,76 @@ const buildPaymentDetails = (sales: any[], onAccountId?: string) =>
       }
     })
 
+// Account balances repaid during the shift. They are payments taken at this
+// counter like any other - the tally expects the cash - but they land on a
+// sale rung up in an earlier shift, so nothing built from this shift's sales
+// would ever show them. Listed alongside the tenders with the receipt they
+// paid off, so Payment Details accounts for every peso the drawer expects.
+const buildSettlementDetails = (settlements: any[]) =>
+  settlements.map((row: any) => ({
+    date: row.settlement.date,
+    _id: row._id,
+    saleNumber: row.saleNumber,
+    saleTotal: row.total,
+    paymentAmount: row.settlement.amount,
+    type: row.settlement.method?.name || "-",
+    isOnAccount: false,
+    isSettlement: true,
+    userName: fullName(row.settlement.by),
+  }))
+
+// The settlements taken on this register during the shift, with the sale each
+// one paid off.
+const loadShiftSettlements = async (_id: string) => {
+  const session = await RegisterSession.findById(_id).lean()
+  if (!session) throw new GraphQLError("Register session not found")
+  const start = session.openedAt
+  const end = session.closedAt || new Date()
+
+  const rows = await Sale.aggregate([
+    { $match: { "settlements.register": session.register } },
+    { $unwind: "$settlements" },
+    {
+      $match: {
+        "settlements.register": session.register,
+        "settlements.date": { $gte: start, $lte: end },
+      },
+    },
+    {
+      $lookup: {
+        from: "payment_methods",
+        localField: "settlements.method",
+        foreignField: "_id",
+        as: "method",
+      },
+    },
+    { $unwind: { path: "$method", preserveNullAndEmptyArrays: true } },
+    {
+      $lookup: {
+        from: "users",
+        localField: "settlements.by",
+        foreignField: "_id",
+        as: "by",
+      },
+    },
+    { $unwind: { path: "$by", preserveNullAndEmptyArrays: true } },
+    {
+      $project: {
+        saleNumber: 1,
+        total: 1,
+        settlement: {
+          amount: "$settlements.amount",
+          date: "$settlements.date",
+          method: "$method",
+          by: "$by",
+        },
+      },
+    },
+    { $sort: { "settlement.date": 1 } },
+  ])
+  return rows
+}
+
 const buildTransactions = (sales: any[]) =>
   sales.map((s: any) => ({
     date: s.createdAt,
@@ -569,7 +639,13 @@ export const registerSessionResolver = {
         // builders for why those two grains differ.
         let rows = onAccountOnly
           ? buildPaymentRows(sales, onAccountId).filter((p) => p.isOnAccount)
-          : buildPaymentDetails(sales, onAccountId)
+          : [
+              ...buildPaymentDetails(sales, onAccountId),
+              ...buildSettlementDetails(await loadShiftSettlements(_id)),
+            ].sort(
+              (a: any, b: any) =>
+                new Date(a.date).getTime() - new Date(b.date).getTime()
+            )
         // A split payment joins its methods ("Gcash, Cash"), so match on
         // membership - an equality test would drop every multi-tender sale.
         if (type)

@@ -33,6 +33,7 @@ import { Button } from "@/components/ui/button"
 import { ReportPageSkeleton } from "@/components/custom/skeletons"
 import { Card, CardContent } from "@/components/ui/card"
 import { StatusBadge } from "@/components/custom/status-badge"
+import { Badge } from "@/components/ui/badge"
 import {
   Select,
   SelectContent,
@@ -182,6 +183,7 @@ type PaymentDetailRow = {
   paymentAmount: number
   type: string
   isOnAccount?: boolean
+  isSettlement?: boolean
   userName: string
 }
 type AddsPayoutRow = {
@@ -517,6 +519,7 @@ const GET_CLOSURE_PAYMENT_DETAILS = gql`
           paymentAmount
           type
           isOnAccount
+          isSettlement
           userName
         }
       }
@@ -884,7 +887,23 @@ export default function Page() {
         <div className="text-right">{currency(row.original.paymentAmount)}</div>
       ),
     },
-    { id: "type", header: "Type", cell: ({ row }) => row.original.type },
+    {
+      id: "type",
+      header: "Type",
+      // A repayment is marked, or the row reads as a sale paid in cash when
+      // it is an old debt being cleared - and the sale number beside it
+      // belongs to a receipt from another day.
+      cell: ({ row }) => (
+        <span className="flex flex-wrap items-center gap-1.5">
+          {row.original.type}
+          {row.original.isSettlement && (
+            <Badge variant="outline" className="text-[10px]">
+              Settlement
+            </Badge>
+          )}
+        </span>
+      ),
+    },
     {
       id: "userName",
       header: "User",
