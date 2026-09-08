@@ -678,12 +678,7 @@ function TotalsTable<T>({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="flex items-center justify-between">
-        <span className="text-base text-muted-foreground">
-          Showing {total === 0 ? 0 : (page.current - 1) * rows + 1}-
-          {page.current === page.max ? total : page.current * rows} out of{" "}
-          {total} result{total === 1 ? "" : "s"}.
-        </span>
+      <div className="flex items-center justify-end">
         <div className="flex gap-1.5">
           <Select
             value={rows.toString()}
@@ -751,11 +746,14 @@ function TotalsTable<T>({
           containerClassName={CLOSURE_TABLE_CONTAINER}
         />
       </div>
-      {/* How many rows the tab holds, under the table where a report's total
-          is looked for - the line above counts the page being shown. */}
+      {/* Under the table, where a report's total is looked for. One line
+          rather than two: the page range and the row count are the same
+          figures, and printing them separately only invited comparing them. */}
       <div className="flex justify-end text-sm text-muted-foreground">
-        Total: <span className="ml-1 font-medium text-foreground">{total}</span>
-        <span className="ml-1">item{total === 1 ? "" : "s"}</span>
+        Showing {total === 0 ? 0 : (page.current - 1) * rows + 1}-
+        {page.current === page.max ? total : page.current * rows} out of{" "}
+        <span className="mx-1 font-medium text-foreground">{total}</span>
+        item{total === 1 ? "" : "s"}.
       </div>
     </div>
   )
