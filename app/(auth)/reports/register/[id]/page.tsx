@@ -570,6 +570,8 @@ function PagedTab<T>({
   columns,
   emptyLabel,
   rowView,
+  sumField,
+  sumLabel,
 }: {
   query: any
   field: string
@@ -577,6 +579,8 @@ function PagedTab<T>({
   columns: ColumnDef<T>[]
   emptyLabel: string
   rowView?: ReactNode
+  sumField?: string
+  sumLabel?: string
 }) {
   const [rows, setRows] = useState<number>(8)
   const baseVars = useMemo(() => variables, [variables])
@@ -601,6 +605,8 @@ function PagedTab<T>({
     <TotalsTable
       data={nodes.slice((page.current - 1) * rows, page.current * rows)}
       total={total}
+      sumField={sumField}
+      sumLabel={sumLabel}
       loading={loading}
       columns={columns}
       emptyLabel={emptyLabel}
@@ -620,6 +626,8 @@ function PagedTab<T>({
 function TotalsTable<T>({
   data,
   total: serverTotal,
+  sumField,
+  sumLabel,
   loading,
   columns,
   emptyLabel,
@@ -632,6 +640,10 @@ function TotalsTable<T>({
 }: {
   data?: T[]
   total?: number
+  // Names the money column to add up. The figure is the total of the rows
+  // on screen, so it moves with the page and the rows-per-page.
+  sumField?: string
+  sumLabel?: string
   loading: boolean
   columns: ColumnDef<T>[]
   emptyLabel: string
@@ -662,6 +674,19 @@ function TotalsTable<T>({
       current: Math.min(prev.current, max),
     }))
   const page = serverPage ?? localPage
+
+  // Server-paged callers hand in the page already sliced; locally-paged ones
+  // hand in everything and are cut here. Both the grid and the total below
+  // read this, so the figure always matches what is on screen.
+  const visibleRows = serverPaged
+    ? points
+    : points.slice((page.current - 1) * rows, page.current * rows)
+  const sum = sumField
+    ? visibleRows.reduce(
+        (run: number, row: any) => run + (row?.[sumField] || 0),
+        0
+      )
+    : undefined
 
   // Reserve a consistent body height so switching tabs doesn't make the page
   // jump - a tab with 3 rows takes the same space as one with 8, and an empty
@@ -744,11 +769,7 @@ function TotalsTable<T>({
         <DataTable
           loading={loading}
           columns={columns}
-          data={
-            serverPaged
-              ? points
-              : points.slice((page.current - 1) * rows, page.current * rows)
-          }
+          data={visibleRows}
           noFooter
           rowView={rowView}
           // Matches the height the container reserves, so the grid reaches
@@ -761,11 +782,19 @@ function TotalsTable<T>({
       {/* Under the table, where a report's total is looked for. One line
           rather than two: the page range and the row count are the same
           figures, and printing them separately only invited comparing them. */}
-      <div className="flex justify-end text-sm text-muted-foreground">
-        Showing {total === 0 ? 0 : (page.current - 1) * rows + 1}-
-        {page.current === page.max ? total : page.current * rows} out of{" "}
-        <span className="mx-1 font-medium text-foreground">{total}</span>
-        item{total === 1 ? "" : "s"}.
+      <div className="flex flex-col items-end gap-0.5 text-sm">
+        <div className="text-muted-foreground">
+          Showing {total === 0 ? 0 : (page.current - 1) * rows + 1}-
+          {page.current === page.max ? total : page.current * rows} out of{" "}
+          <span className="mx-1 font-medium text-foreground">{total}</span>
+          item{total === 1 ? "" : "s"}.
+        </div>
+        {sum !== undefined && (
+          <div className="text-foreground">
+            {sumLabel || "Total on this page"}:{" "}
+            <span className="text-base font-semibold">{currency(sum)}</span>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -1281,6 +1310,8 @@ export default function Page() {
                 data={filteredPaymentSummary}
                 loading={loading}
                 columns={paymentSummaryColumns}
+                sumField="expected"
+                sumLabel="Total expected on this page"
                 emptyLabel="No payments recorded in this shift."
               />
             </TabsContent>
@@ -1289,6 +1320,8 @@ export default function Page() {
                 query={GET_CLOSURE_PAYMENT_DETAILS}
                 field="closurePaymentDetails"
                 variables={paymentDetailVars}
+                sumField="paymentAmount"
+                sumLabel="Total payments on this page"
                 columns={paymentDetailColumns}
                 emptyLabel="No payments recorded in this shift."
                 rowView={<SaleRowViewDialog external />}
@@ -1299,6 +1332,8 @@ export default function Page() {
                 query={GET_CLOSURE_PAYMENT_DETAILS}
                 field="closurePaymentDetails"
                 variables={onAccountVars}
+                sumField="paymentAmount"
+                sumLabel="Total payments on this page"
                 columns={paymentDetailColumns}
                 emptyLabel="No on-account sales in this shift."
                 rowView={<SaleRowViewDialog external />}
@@ -1316,6 +1351,8 @@ export default function Page() {
               <PagedTab<TransactionRow>
                 query={GET_CLOSURE_TRANSACTIONS}
                 field="closureTransactions"
+                sumField="saleTotal"
+                sumLabel="Total sales on this page"
                 variables={sessionVars}
                 columns={transactionColumns}
                 emptyLabel="No transactions in this shift."
@@ -1326,6 +1363,8 @@ export default function Page() {
               <PagedTab<SkuRow>
                 query={GET_CLOSURE_BY_SKU}
                 field="closureTransactionsBySku"
+                sumField="saleTotal"
+                sumLabel="Total sales on this page"
                 variables={sessionVars}
                 columns={skuColumns}
                 emptyLabel="No items sold in this shift."
@@ -1336,6 +1375,8 @@ export default function Page() {
               <PagedTab<CogsRow>
                 query={GET_CLOSURE_COGS}
                 field="closureCogs"
+                sumField="purchaseCost"
+                sumLabel="Total cost on this page"
                 variables={sessionVars}
                 columns={cogsColumns}
                 emptyLabel="No items sold in this shift."
