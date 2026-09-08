@@ -642,9 +642,12 @@ export const registerSessionResolver = {
           : [
               ...buildPaymentDetails(sales, onAccountId),
               ...buildSettlementDetails(await loadShiftSettlements(_id)),
+              // Newest first: on a busy shift the row someone is looking for
+              // is almost always the one just taken, and it was landing at
+              // the bottom of the last page.
             ].sort(
               (a: any, b: any) =>
-                new Date(a.date).getTime() - new Date(b.date).getTime()
+                new Date(b.date).getTime() - new Date(a.date).getTime()
             )
         // A split payment joins its methods ("Gcash, Cash"), so match on
         // membership - an equality test would drop every multi-tender sale.
