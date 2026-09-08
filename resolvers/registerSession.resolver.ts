@@ -283,37 +283,52 @@ const loadShiftSettlements = async (_id: string) => {
   return rows
 }
 
+// Newest first, like Payment Details: the sale being looked for on a busy
+// shift is nearly always the one just rung up.
 const buildTransactions = (sales: any[]) =>
-  sales.map((s: any) => ({
-    date: s.createdAt,
-    _id: s._id,
-    saleNumber: s.saleNumber,
-    status: s.currentSaleStatus,
-    customerName: s.customer?.name || "Walk-in",
-    discount: s.discount,
-    saleTotal: s.total,
-    userName: fullName(s.by),
-  }))
-
-const buildTransactionsBySku = (sales: any[]) =>
-  sales.flatMap((s: any) =>
-    (s.items || []).map((item: any) => ({
-      sku: item.product?.sku || "-",
-      _id: s._id,
+  sales
+    .map((s: any) => ({
       date: s.createdAt,
+      _id: s._id,
       saleNumber: s.saleNumber,
-      quantity: item.quantity,
-      salesExTax: item.total,
-      totalTax: 0,
-      salesInc: item.total,
-      discountOffers: item.discount * item.quantity,
-      orderDiscounts: s.discount,
+      status: s.currentSaleStatus,
+      customerName: s.customer?.name || "Walk-in",
+      discount: s.discount,
       saleTotal: s.total,
-      payments: [
-        ...new Set((s.payments || []).map((p: any) => p.method?.name)),
-      ].join(", "),
+      userName: fullName(s.by),
     }))
-  )
+    .sort(
+      (a: any, b: any) =>
+        new Date(b.date).getTime() - new Date(a.date).getTime()
+    )
+
+// Newest sale first, as on the Transactions tab. A sale's own lines keep the
+// order they were rung up in - within one receipt that reads as the basket
+// was filled, not backwards.
+const buildTransactionsBySku = (sales: any[]) =>
+  [...sales]
+    .sort(
+      (a: any, b: any) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    )
+    .flatMap((s: any) =>
+      (s.items || []).map((item: any) => ({
+        sku: item.product?.sku || "-",
+        _id: s._id,
+        date: s.createdAt,
+        saleNumber: s.saleNumber,
+        quantity: item.quantity,
+        salesExTax: item.total,
+        totalTax: 0,
+        salesInc: item.total,
+        discountOffers: item.discount * item.quantity,
+        orderDiscounts: s.discount,
+        saleTotal: s.total,
+        payments: [
+          ...new Set((s.payments || []).map((p: any) => p.method?.name)),
+        ].join(", "),
+      }))
+    )
 
 const buildCogs = (sales: any[]) => {
   const cogsMap = new Map<string, any>()
