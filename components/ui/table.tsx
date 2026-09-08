@@ -4,36 +4,110 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * A table that scrolls sideways with a scrollbar that stays on screen.
+ *
+ * Windows and macOS both fade an overlay scrollbar out when it is idle, and
+ * no CSS overrides that - so on a narrow screen the only thing saying a table
+ * continues past its right edge vanished a second after it appeared. The
+ * native bar is hidden and a thumb is drawn beneath the table instead, sized
+ * and positioned from the container's own scroll offsets, and draggable like
+ * the bar it replaces.
+ */
 function Table({
   className,
   containerClassName,
   ...props
 }: React.ComponentProps<"table"> & { containerClassName?: string }) {
+  const containerRef = React.useRef<HTMLDivElement>(null)
+  const tableRef = React.useRef<HTMLTableElement>(null)
+  // Thumb width and offset as fractions of the track. width: 1 means the
+  // table fits, and the bar is not drawn at all.
+  const [bar, setBar] = React.useState({ width: 1, left: 0 })
+
+  React.useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    const measure = () => {
+      const { scrollWidth, clientWidth, scrollLeft } = container
+      if (scrollWidth <= clientWidth + 1) {
+        setBar({ width: 1, left: 0 })
+        return
+      }
+      setBar({
+        width: clientWidth / scrollWidth,
+        left: scrollLeft / scrollWidth,
+      })
+    }
+
+    measure()
+    container.addEventListener("scroll", measure, { passive: true })
+    if (typeof ResizeObserver === "undefined")
+      return () => container.removeEventListener("scroll", measure)
+
+    // The table is observed as well as its container: rows arriving change
+    // how wide the content is without the container resizing at all.
+    const observer = new ResizeObserver(measure)
+    observer.observe(container)
+    if (tableRef.current) observer.observe(tableRef.current)
+    return () => {
+      container.removeEventListener("scroll", measure)
+      observer.disconnect()
+    }
+  }, [])
+
+  const onThumbDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    const container = containerRef.current
+    const track = event.currentTarget.parentElement
+    if (!container || !track) return
+    event.preventDefault()
+    const startX = event.clientX
+    const startScroll = container.scrollLeft
+    const ratio = container.scrollWidth / track.clientWidth
+
+    const onMove = (move: PointerEvent) => {
+      container.scrollLeft = startScroll + (move.clientX - startX) * ratio
+    }
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove)
+      window.removeEventListener("pointerup", onUp)
+    }
+    window.addEventListener("pointermove", onMove)
+    window.addEventListener("pointerup", onUp)
+  }
+
   return (
-    <div
-      data-slot="table-container"
-      className={cn(
-        "relative w-full",
-        // `scroll` rather than `auto`: a bar the browser only paints once you
-        // touch the table is a bar nobody knows is there, and a table wider
-        // than its column gives no other clue that it continues.
-        "overflow-x-scroll",
-        // Slim, with a visible track so the runway reads as scrollable.
-        // scrollbar-color is what Chrome honours once scrollbar-width is set -
-        // it ignores the ::-webkit-scrollbar rules from that point on, which
-        // left the bar in its default grey. Those stay for Safari.
-        "[scrollbar-width:thin] [scrollbar-color:var(--primary)_var(--muted)]",
-        "[&::-webkit-scrollbar]:h-1.5",
-        "[&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-muted",
-        "[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-primary",
-        containerClassName
+    <div data-slot="table-wrapper" className="w-full">
+      <div
+        ref={containerRef}
+        data-slot="table-container"
+        className={cn(
+          "relative w-full overflow-x-scroll",
+          "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          containerClassName
+        )}
+      >
+        <table
+          ref={tableRef}
+          data-slot="table"
+          className={cn("w-full caption-bottom text-xs", className)}
+          {...props}
+        />
+      </div>
+      {bar.width < 1 && (
+        <div className="mt-1.5 h-1.5 w-full rounded-full bg-muted">
+          <div
+            role="presentation"
+            onPointerDown={onThumbDrag}
+            className="h-full cursor-grab rounded-full bg-primary/60 transition-colors hover:bg-primary active:cursor-grabbing"
+            style={{
+              width: `${bar.width * 100}%`,
+              marginLeft: `${bar.left * 100}%`,
+            }}
+          />
+        </div>
       )}
-    >
-      <table
-        data-slot="table"
-        className={cn("w-full caption-bottom text-xs", className)}
-        {...props}
-      />
     </div>
   )
 }
