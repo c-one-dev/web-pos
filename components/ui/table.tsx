@@ -91,7 +91,16 @@ function Table({
         <table
           ref={tableRef}
           data-slot="table"
-          className={cn("w-full caption-bottom text-xs", className)}
+          className={cn(
+            "w-full caption-bottom text-xs",
+            // The shared --border is the palette's lightest grey, which on a
+            // white card leaves a table looking like floating text. Tables
+            // need their grid read as a grid, so they take a stronger line -
+            // stated as an alpha of the foreground so it holds up in dark
+            // mode too.
+            "border-foreground/20 [&_tr]:border-foreground/15",
+            className
+          )}
           {...props}
         />
       </div>
