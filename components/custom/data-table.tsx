@@ -41,6 +41,12 @@ type Props<TData, TValue> = {
   // Merged onto the scroll container instead - a caller that wants the table
   // to keep a height and scroll inside it passes that here.
   containerClassName?: string
+  /**
+   * Pad the body out to this many rows with empty ones, so a short page still
+   * draws a full grid rather than a few lines adrift in a tall bordered box.
+   * The blanks are hidden from assistive tech - they carry no data.
+   */
+  fillRows?: number
 }
 
 export default function DataTable<TData, TValue>({
@@ -53,6 +59,7 @@ export default function DataTable<TData, TValue>({
   noFooter = false,
   className,
   containerClassName,
+  fillRows,
 }: Props<TData, TValue>) {
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
@@ -200,6 +207,26 @@ export default function DataTable<TData, TValue>({
               </TableCell>
             </TableRow>
           )}
+          {/* Blank rows to the requested count. Same height as a real row, so
+              the grid runs to the bottom of the box whether the page holds one
+              row or a full eight. */}
+          {!loading &&
+            fillRows &&
+            table.getRowModel().rows.length > 0 &&
+            table.getRowModel().rows.length < fillRows &&
+            Array.from({
+              length: fillRows - table.getRowModel().rows.length,
+            }).map((_, index) => (
+              <TableRow
+                key={`filler-${index}`}
+                aria-hidden
+                className="hover:bg-transparent"
+              >
+                <TableCell colSpan={columns.length + (actionsColumn ? 1 : 0)}>
+                  &nbsp;
+                </TableCell>
+              </TableRow>
+            ))}
         </TableBody>
       </Table>
     </>

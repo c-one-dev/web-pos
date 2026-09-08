@@ -751,6 +751,9 @@ function TotalsTable<T>({
           }
           noFooter
           rowView={rowView}
+          // Matches the height the container reserves, so the grid reaches
+          // the bottom of the box instead of stopping after the real rows.
+          fillRows={Math.min(rows, 8)}
           className={CLOSURE_TABLE_TEXT}
           containerClassName={CLOSURE_TABLE_CONTAINER}
         />
