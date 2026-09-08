@@ -186,6 +186,10 @@ export const salesReportResolver = {
               paymentMethodDocs: 1,
               settlementMethodDocs: 1,
               productDocs: 1,
+              discount: 1,
+              notes: 1,
+              payments: 1,
+              salePaymentStatusHistory: 1,
             },
           },
         ])
@@ -226,6 +230,40 @@ export const salesReportResolver = {
               ],
               total: edge.total,
               byName: edge.byName || "-",
+              // The moment the sale went fully PAID. Read from the payment
+              // status history rather than the sale's own date, because a
+              // sale tendered on account is completed when it is settled -
+              // often days later - and until then this is deliberately empty.
+              completedDate:
+                (edge.salePaymentStatusHistory || [])
+                  .filter((entry: any) => entry.status === "PAID")
+                  .map((entry: any) => entry.date)
+                  .sort(
+                    (a: any, b: any) =>
+                      new Date(b).getTime() - new Date(a).getTime()
+                  )[0] || null,
+              // Sale notes and every payment reference in one cell, matching
+              // how the old system printed them.
+              notes: [
+                edge.notes,
+                ...(edge.payments || []).flatMap((payment: any) => [
+                  payment.reference,
+                  payment.note,
+                ]),
+              ]
+                .map((part: any) => (part || "").trim())
+                .filter(Boolean)
+                .join("\n"),
+              itemDiscount: (edge.items || []).reduce(
+                (sum: number, item: any) =>
+                  sum + (item.discount || 0) * (item.quantity || 0),
+                0
+              ),
+              saleDiscount: edge.discount || 0,
+              quantitySold: (edge.items || []).reduce(
+                (sum: number, item: any) => sum + (item.quantity || 0),
+                0
+              ),
             },
             cursor: toCursor({
               type: CURSOR_TYPE,

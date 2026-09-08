@@ -42,6 +42,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { ColumnDef } from "@tanstack/react-table"
@@ -187,6 +188,11 @@ const GET_SALES_TRANSACTIONS = gql`
           paymentTypes
           total
           byName
+          completedDate
+          notes
+          itemDiscount
+          saleDiscount
+          quantitySold
         }
       }
       pageInfo {
@@ -288,6 +294,107 @@ const TAB_LABELS: Record<string, string> = {
   transactions: "Sales Transactions",
   "by-category": "Sales by Category",
   users: "Sales by User",
+}
+
+// "SalesVSPayment" - one row per sale, pairing what was sold against how it
+// was paid. Deliberately separate from the tab exports above: it always covers
+// every transaction in the range regardless of which tab is open, because it
+// is a reconciliation sheet rather than a view of the screen.
+//
+// Completed date is the sale's PAID moment, so it is EMPTY for anything still
+// owed - an unsettled on-account sale shows a created date and no completed
+// date, which is the whole point of the report.
+async function exportSalesVsPaymentExcel({
+  client,
+  range,
+}: {
+  client: ReturnType<typeof useApolloClient>
+  range: DateRange
+}) {
+  const start = startOfDay(range.from || startOfToday()).toISOString()
+  const end = endOfDay(range.to || range.from || startOfToday()).toISOString()
+
+  const { data: outletsData } = await client.query({
+    query: GET_SALES_OUTLETS,
+    variables: { start, end },
+    fetchPolicy: "network-only",
+  })
+  const outlets: string[] = (outletsData as any)?.salesOutlets || []
+
+  // The server clamps `first` at MAX_PAGE_SIZE (500), so a single large
+  // request would silently truncate. Page through instead.
+  const rows: any[] = []
+  let after: string | null = null
+  for (;;) {
+    const { data }: any = await client.query({
+      query: GET_SALES_TRANSACTIONS,
+      variables: { first: 500, after, start, end },
+      fetchPolicy: "network-only",
+    })
+    const connection = data?.salesTransactionTable
+    if (!connection) break
+    rows.push(...(connection.edges || []).map((edge: any) => edge.node))
+    if (!connection.pageInfo?.hasNextPage) break
+    after = connection.pageInfo.endCursor
+    if (!after) break
+  }
+
+  const title = "SalesVSPayment"
+  const workbook = new ExcelJS.Workbook()
+  const sheet = workbook.addWorksheet(title.slice(0, 31))
+
+  sheet.columns = [
+    { header: "Outlet", key: "outlet", width: 22 },
+    { header: "Item discount", key: "itemDiscount", width: 14 },
+    { header: "Notes", key: "notes", width: 40 },
+    { header: "Sale discount", key: "saleDiscount", width: 14 },
+    { header: "User", key: "user", width: 20 },
+    { header: "Status", key: "status", width: 14 },
+    { header: "Completed date", key: "completedDate", width: 22 },
+    { header: "Payment type", key: "paymentType", width: 18 },
+    { header: "Customer name", key: "customerName", width: 22 },
+    { header: "Quantity sold", key: "quantitySold", width: 14 },
+    { header: "Order #", key: "orderNumber", width: 14 },
+    { header: "Order total", key: "orderTotal", width: 14 },
+    { header: "Created date", key: "createdDate", width: 22 },
+  ]
+
+  addTitleRows(sheet, title, range, sheet.columns.length, outlets)
+  const headerRow = sheet.addRow(
+    sheet.columns.map((column: any) => column.header)
+  )
+  styleHeaderRow(headerRow)
+
+  // Matches how the old system printed a date: "31 Aug, 2026 - 3:56pm".
+  const stamp = (value?: string | null) =>
+    value ? format(Number(value), "dd MMM, yyyy - h:mmaaa") : ""
+
+  for (const row of rows) {
+    const added = sheet.addRow({
+      outlet: row.outletName || "-",
+      itemDiscount: row.itemDiscount || 0,
+      notes: row.notes || "",
+      saleDiscount: row.saleDiscount || 0,
+      user: row.byName || "-",
+      // An on-account sale is reported by whether it is paid, not by whether
+      // the sale completed - the same rule the Status column on screen uses.
+      status: row.isOnAccount ? "OnAccount" : row.currentSaleStatus,
+      completedDate: stamp(row.completedDate),
+      paymentType: (row.paymentTypes || []).join(", "),
+      customerName: row.customerName || "Walk in",
+      quantitySold: row.quantitySold || 0,
+      orderNumber: row.saleNumber,
+      orderTotal: row.total || 0,
+      createdDate: stamp(row.date),
+    })
+    // Notes hold several references separated by newlines; without this they
+    // render as one unreadable line.
+    added.getCell("notes").alignment = { wrapText: true, vertical: "top" }
+    for (const key of ["itemDiscount", "saleDiscount", "orderTotal"])
+      added.getCell(key).numFmt = '"₱"#,##0.00'
+  }
+
+  await downloadExcelWorkbook(workbook, title, range)
 }
 
 async function exportSalesReportExcel({
@@ -678,6 +785,17 @@ function ExportButton({
     }
   }
 
+  const handleSalesVsPaymentExport = async () => {
+    setIsExporting(true)
+    try {
+      await exportSalesVsPaymentExcel({ client, range })
+    } catch (error: any) {
+      toast.error(error.message || "Failed to export.")
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   const handlePdfExport = async () => {
     setIsExporting(true)
     try {
@@ -709,6 +827,12 @@ function ExportButton({
         <DropdownMenuItem onSelect={handlePdfExport}>
           <FilePdfIcon />
           PDF
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {/* Covers every transaction in the range, not just the open tab. */}
+        <DropdownMenuItem onSelect={handleSalesVsPaymentExport}>
+          <FileXlsIcon />
+          SalesVSPayment
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

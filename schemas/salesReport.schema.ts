@@ -27,6 +27,15 @@ export const salesReportSchema = gql`
     paymentTypes: [String]
     total: Float
     byName: String
+    # When the sale became fully PAID. Null while anything is still owed -
+    # an on-account sale has no completed date until it is settled.
+    completedDate: String
+    # Sale notes plus every payment reference / note, which is where a GCash
+    # or card reference ends up.
+    notes: String
+    itemDiscount: Float
+    saleDiscount: Float
+    quantitySold: Float
   }
 
   type SalesTransactionEdge {
