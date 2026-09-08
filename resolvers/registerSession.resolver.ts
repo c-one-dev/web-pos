@@ -412,9 +412,45 @@ export const registerSessionResolver = {
           .sort({ createdAt: 1 })
           .lean()
 
-        const paymentReceived = sales.reduce(
-          (sum, s: any) => sum + s.netAmount,
+        // Money actually taken in this shift, which is not the same as what
+        // was sold: an On Account tender is a debt, so the goods leave and
+        // nothing goes in the drawer. Counting it here reported takings the
+        // shift never had, and put the closing count out by the same amount.
+        //
+        // Settlements are the other half of that: a customer repaying an old
+        // account balance hands over real money, on a sale that may have been
+        // rung up months ago, so it is added from its own query rather than
+        // from this shift's sales.
+        const [settlementTotals] = await Sale.aggregate([
+          { $match: { "settlements.register": registerDoc._id } },
+          { $unwind: "$settlements" },
+          {
+            $match: {
+              "settlements.register": registerDoc._id,
+              "settlements.date": { $gte: start, $lte: end },
+            },
+          },
+          { $group: { _id: null, total: { $sum: "$settlements.amount" } } },
+        ])
+        const settledInShift = settlementTotals?.total || 0
+
+        const tendersReceived = sales.reduce(
+          (sum, s: any) =>
+            sum +
+            (s.payments || [])
+              .filter((payment: any) => {
+                const method = payment.method?._id || payment.method
+                return method?.toString() !== onAccountId
+              })
+              .reduce(
+                (paid: number, payment: any) =>
+                  paid + (payment.amount || 0) - (payment.change || 0),
+                0
+              ),
           0
+        )
+        const paymentReceived = parseFloat(
+          (tendersReceived + settledInShift).toFixed(2)
         )
         const totalSalesInc = sales.reduce((sum, s: any) => sum + s.total, 0)
         const itemDiscounts = sales.reduce(
@@ -487,7 +523,10 @@ export const registerSessionResolver = {
             createdAt: { $gte: start, $lte: end },
           }),
           numberOfTransactions: sales.length,
-          avgSaleValue: sales.length ? paymentReceived / sales.length : 0,
+          // Average of what was SOLD, not of what was collected - now that
+          // those differ, dividing takings by the number of sales would
+          // report a smaller average on any shift with an account sale in it.
+          avgSaleValue: sales.length ? totalSalesInc / sales.length : 0,
           paymentSummary,
           paymentDetails,
           onAccountSales,
