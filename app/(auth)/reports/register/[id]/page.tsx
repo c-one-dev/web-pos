@@ -751,6 +751,12 @@ function TotalsTable<T>({
           containerClassName={CLOSURE_TABLE_CONTAINER}
         />
       </div>
+      {/* How many rows the tab holds, under the table where a report's total
+          is looked for - the line above counts the page being shown. */}
+      <div className="flex justify-end text-sm text-muted-foreground">
+        Total: <span className="ml-1 font-medium text-foreground">{total}</span>
+        <span className="ml-1">item{total === 1 ? "" : "s"}</span>
+      </div>
     </div>
   )
 }

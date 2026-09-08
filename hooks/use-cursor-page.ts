@@ -20,16 +20,19 @@ export function useCursorPage(
   rows: number,
   baseVars: Record<string, any>
 ) {
-  const [page, setPage] = useState<{
-    current: number
-    loaded: number
-    max: number
-  }>({ current: 1, loaded: 1, max: 1 })
+  // Only what cannot be derived is stored. `max` used to be state, written
+  // from inside the memo below - which meant reset() could clobber it to 1
+  // and nothing would put it back: the memo only re-runs when `data` changes,
+  // and with cache-and-network the data is often already there on the first
+  // render, so the mount effect's reset landed last. The page count then read
+  // "1 of 1" over 28 results until something changed the page size.
+  const [page, setPage] = useState<{ current: number; loaded: number }>({
+    current: 1,
+    loaded: 1,
+  })
 
   const { total, nodes, endCursor } = useMemo(() => {
     const connection = data?.[field]
-    // eslint-disable-next-line react-hooks/set-state-in-render
-    setPage((prev) => ({ ...prev, max: connection?.pages || 1 }))
     return {
       total: connection?.total || 0,
       nodes: connection?.edges?.map((edge: any) => edge.node) || [],
@@ -37,15 +40,18 @@ export function useCursorPage(
     }
   }, [data, field])
 
-  const reset = useCallback(
-    () => setPage({ current: 1, loaded: 1, max: 1 }),
-    []
-  )
+  const max = Math.max(1, Math.ceil(total / rows))
+  // A page that no longer exists - the last page after the rows-per-page went
+  // up, say - falls back to the last one there is.
+  const current = Math.min(page.current, max)
+
+  const reset = useCallback(() => setPage({ current: 1, loaded: 1 }), [])
 
   const onNext = async () => {
+    if (current >= max) return
     // Only hit the server for a page not yet loaded; anything already in the
     // cache is just a slice offset.
-    if (page.current === page.loaded) {
+    if (current === page.loaded) {
       await fetchMore({
         variables: { ...baseVars, first: rows, after: endCursor },
         updateQuery: (prev: any, { fetchMoreResult: more }: any) => {
@@ -70,9 +76,17 @@ export function useCursorPage(
   }
 
   const onPrev = () => {
-    if (page.current === 1) return
-    setPage((prev) => ({ ...prev, current: prev.current - 1 }))
+    if (current === 1) return
+    setPage((prev) => ({ ...prev, current: Math.max(1, prev.current - 1) }))
   }
 
-  return { page, total, nodes, endCursor, reset, onNext, onPrev }
+  return {
+    page: { current, max, loaded: page.loaded },
+    total,
+    nodes,
+    endCursor,
+    reset,
+    onNext,
+    onPrev,
+  }
 }
