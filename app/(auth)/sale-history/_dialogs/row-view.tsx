@@ -197,6 +197,23 @@ const peso = (value: number) =>
     currency: "PHP",
   }).format(value || 0)
 
+// Date above the time, the time muted and a size down. Stacked rather than
+// joined by a separator: these sit in a narrow Date column that would
+// otherwise wrap mid-value, and because the date is what someone scans for -
+// the time only matters once they have found the right day.
+function DateCell({ value }: { value?: string | number | null }) {
+  if (!value) return <span className="text-muted-foreground">-</span>
+  const date = new Date(Number(value))
+  if (Number.isNaN(date.getTime()))
+    return <span className="text-muted-foreground">-</span>
+  return (
+    <span className="flex flex-col leading-tight">
+      <span>{format(date, "PP")}</span>
+      <span className="text-xs text-muted-foreground">{format(date, "p")}</span>
+    </span>
+  )
+}
+
 // One boxed block per topic, so every section of the drawer gets the same
 // header treatment instead of each repeating its own muted wrapper.
 function Section({
@@ -761,7 +778,7 @@ export default function RowViewDialog({
                       ? sale.payments.map((payment: any, index: number) => (
                           <TableRow key={index}>
                             <TableCell className="font-medium">
-                              {format(Number(payment.date), "PP")}
+                              <DateCell value={payment.date} />
                             </TableCell>
                             <TableCell>
                               {payment.method.name}
@@ -830,7 +847,7 @@ export default function RowViewDialog({
                       (settlement: any, index: number) => (
                         <TableRow key={`settlement-${index}`}>
                           <TableCell className="font-medium">
-                            {format(Number(settlement.date), "PP")}
+                            <DateCell value={settlement.date} />
                           </TableCell>
                           <TableCell>
                             <span className="flex flex-wrap items-center gap-1.5">
@@ -916,7 +933,7 @@ export default function RowViewDialog({
                       {refunds.map((refund: any, index: number) => (
                         <TableRow key={index}>
                           <TableCell className="font-medium">
-                            {format(Number(refund.date), "PP")}
+                            <DateCell value={refund.date} />
                           </TableCell>
                           <TableCell>
                             {refund.items
@@ -967,7 +984,7 @@ export default function RowViewDialog({
                       sale.saleStatusHistory.map((item: any, index: number) => (
                         <TableRow key={index}>
                           <TableCell className="font-medium">
-                            {format(Number(item.date), "PP")}
+                            <DateCell value={item.date} />
                           </TableCell>
                           <TableCell>
                             <StatusBadge status={item.status} />
