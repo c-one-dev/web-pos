@@ -556,9 +556,12 @@ export const registerSessionResolver = {
         // this rather than from the grouped rows below, because a split
         // payment only puts *part* of the sale on account - grouping first
         // would report the whole sale total as owed.
-        const onAccountSales = buildPaymentRows(sales, onAccountId).filter(
-          (p) => p.isOnAccount
-        )
+        const onAccountSales = buildPaymentRows(sales, onAccountId)
+          .filter((p) => p.isOnAccount)
+          .sort(
+            (a: any, b: any) =>
+              new Date(b.date).getTime() - new Date(a.date).getTime()
+          )
 
         // Payment Details is one row per SALE: a sale settled with more than
         // one tender shows a single line with the methods joined, matching
@@ -653,7 +656,12 @@ export const registerSessionResolver = {
         // On Account is per-payment, Payment Details is per-sale - see the
         // builders for why those two grains differ.
         let rows = onAccountOnly
-          ? buildPaymentRows(sales, onAccountId).filter((p) => p.isOnAccount)
+          ? buildPaymentRows(sales, onAccountId)
+              .filter((p) => p.isOnAccount)
+              .sort(
+                (a: any, b: any) =>
+                  new Date(b.date).getTime() - new Date(a.date).getTime()
+              )
           : [
               ...buildPaymentDetails(sales, onAccountId),
               ...buildSettlementDetails(await loadShiftSettlements(_id)),
