@@ -17,7 +17,7 @@ import {
   InputGroupAddon,
   InputGroupInput,
 } from "@/components/ui/input-group"
-import { cn } from "@/lib/utils"
+import { cn, roundMoney } from "@/lib/utils"
 import {
   Tooltip,
   TooltipContent,
@@ -51,9 +51,41 @@ function PerItem({
   const [amountText, setAmountText] = useState<string>(() =>
     (item?.discount || 0).toString()
   )
+  // Same raw-text trick for Qty. Bound straight to item.quantity the box could
+  // never hold an in-progress value: backspacing gave "" -> NaN -> forced back
+  // to 1, so it looked stuck on 1, and typing "0.5" over it produced "1.5"
+  // because the leading "0" was rewritten to "1" before the ".5" arrived.
+  // Resynced on open, since adding the same product again bumps the quantity
+  // from the tile grid while this sheet is shut.
+  const [quantityText, setQuantityText] = useState<string>(() =>
+    String(item?.quantity ?? 1)
+  )
+
+  const commitQuantity = (quantity: number) =>
+    form.setFieldValue(`items`, () => {
+      const itemPrice = item.snapshotPrice - item.discount
+      return state.items.map((i: any, idx: number) => {
+        if (idx === index) {
+          return {
+            ...i,
+            quantity,
+            subTotal: roundMoney(quantity * item.snapshotPrice),
+            price: itemPrice,
+            total: roundMoney(quantity * itemPrice),
+          }
+        } else return i
+      })
+    })
 
   return (
-    <Sheet open={open} onOpenChange={setOpen} modal={true}>
+    <Sheet
+      open={open}
+      onOpenChange={(next) => {
+        if (next) setQuantityText(String(item?.quantity ?? 1))
+        setOpen(next)
+      }}
+      modal={true}
+    >
       <Tooltip>
         <TooltipTrigger asChild>
           <SheetTrigger asChild>{children}</SheetTrigger>
@@ -107,7 +139,7 @@ function PerItem({
           <div className="space-y-2">
             <Label>Qty.</Label>
             <Input
-              value={item?.quantity}
+              value={quantityText}
               type="number"
               // Court time is sold by the hour and laundry by the kilo, so a
               // line can legitimately be 2.5 or 0.33. Kept above zero rather
@@ -117,26 +149,21 @@ function PerItem({
               step="any"
               inputMode="decimal"
               onChange={(e) => {
-                {
-                  const typed = parseFloat(e.target.value)
-                  const quantity =
-                    Number.isFinite(typed) && typed > 0 ? typed : 1
-                  form.setFieldValue(`items`, () => {
-                    const itemPrice = item.snapshotPrice - item.discount
-                    const itemTotal = quantity * itemPrice
-                    return state.items.map((i: any, idx: number) => {
-                      if (idx === index) {
-                        return {
-                          ...i,
-                          quantity,
-                          subTotal: quantity * item.snapshotPrice,
-                          price: itemPrice,
-                          total: itemTotal,
-                        }
-                      } else return i
-                    })
-                  })
-                }
+                const raw = e.target.value
+                setQuantityText(raw)
+                const typed = parseFloat(raw)
+                // Empty, "0" and "0." are all legal keystrokes on the way to
+                // "0.5", so leave the cart on its last good quantity and let
+                // the box show what was typed. onBlur settles it.
+                if (!Number.isFinite(typed) || typed <= 0) return
+                commitQuantity(typed)
+              }}
+              onBlur={() => {
+                const typed = parseFloat(quantityText)
+                // A line priced at nothing is not a sale, so an abandoned edit
+                // snaps back to the quantity the cart still holds.
+                if (!Number.isFinite(typed) || typed <= 0)
+                  setQuantityText(String(item.quantity))
               }}
               onFocus={(e) => e.currentTarget.select()}
             />
@@ -187,7 +214,7 @@ function PerItem({
                         ((discount / 100) * item.snapshotPrice).toFixed(2)
                       )
                       const itemPrice = item.snapshotPrice - discountAmount
-                      const itemTotal = item.quantity * itemPrice
+                      const itemTotal = roundMoney(item.quantity * itemPrice)
                       return state.items.map((i: any, idx: number) => {
                         if (idx === index) {
                           return {
@@ -224,7 +251,7 @@ function PerItem({
                   )
                   form.setFieldValue(`items`, () => {
                     const itemPrice = item.snapshotPrice - discount
-                    const itemTotal = item.quantity * itemPrice
+                    const itemTotal = roundMoney(item.quantity * itemPrice)
                     return state.items.map((i: any, idx: number) => {
                       if (idx === index) {
                         return {

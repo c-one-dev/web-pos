@@ -274,9 +274,12 @@ function Pay({
   const subTotal = state.subTotal
   const discount = state.discount
   const total = state.total
-  const numberOfItems = state.items.reduce(
-    (acc: number, item: any) => acc + item.quantity,
-    0
+  // Lines can be fractional (2.5 hours, 0.33 kg), so trim the float noise
+  // rather than printing 2.5000000000000004 next to "Items".
+  const numberOfItems = parseFloat(
+    state.items
+      .reduce((acc: number, item: any) => acc + item.quantity, 0)
+      .toFixed(3)
   )
   const [amountTendered, setAmountTendered] = useState<number>(total)
   const [note, setNote] = useState<string>("")

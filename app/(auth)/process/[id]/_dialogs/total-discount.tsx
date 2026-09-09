@@ -15,7 +15,7 @@ import {
   InputGroupAddon,
   InputGroupInput,
 } from "@/components/ui/input-group"
-import { cn } from "@/lib/utils"
+import { cn, roundMoney } from "@/lib/utils"
 
 function TotalDiscount({
   children,
@@ -107,7 +107,10 @@ function TotalDiscount({
                       ((percentDiscount / 100) * originalTotal).toFixed(2)
                     )
                     form.setFieldValue("discount", discountAmount)
-                    form.setFieldValue("total", originalTotal - discountAmount)
+                    form.setFieldValue(
+                      "total",
+                      roundMoney(originalTotal - discountAmount)
+                    )
                   }}
                   onFocus={(e) => e.currentTarget.select()}
                 />
@@ -134,7 +137,10 @@ function TotalDiscount({
                     Math.max(0, parseFloat(raw) || 0)
                   )
                   form.setFieldValue("discount", discount)
-                  form.setFieldValue("total", originalTotal - discount)
+                  form.setFieldValue(
+                    "total",
+                    roundMoney(originalTotal - discount)
+                  )
                 }}
                 onFocus={(e) => e.currentTarget.select()}
               />

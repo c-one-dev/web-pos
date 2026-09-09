@@ -34,7 +34,7 @@ import {
   useTransition,
 } from "react"
 import Image from "next/image"
-import { cn } from "@/lib/utils"
+import { cn, roundMoney } from "@/lib/utils"
 import {
   Command,
   CommandDialog,
@@ -479,14 +479,16 @@ function ProcessSalePage({
               existingItem.product === item.product &&
               item.price == item.snapshotPrice
             ) {
+              // A fractional line stays fractional - ringing the same product
+              // up again on a 0.5 line makes it 1.5, not 2.
               const newQty = item.quantity + 1
               const itemPrice = item.snapshotPrice - item.discount
               return {
                 ...item,
-                subTotal: item.snapshotPrice * newQty,
+                subTotal: roundMoney(item.snapshotPrice * newQty),
                 quantity: newQty,
                 price: itemPrice,
-                total: itemPrice * newQty,
+                total: roundMoney(itemPrice * newQty),
               }
             }
             return item
@@ -517,9 +519,11 @@ function ProcessSalePage({
 
   useEffect(() => {
     if (items.length > 0) {
-      const total = items.reduce((acc: any, curr: any) => acc + curr.total, 0)
+      const total = roundMoney(
+        items.reduce((acc: any, curr: any) => acc + curr.total, 0)
+      )
       form.setFieldValue("subTotal", total)
-      form.setFieldValue("total", total - discount)
+      form.setFieldValue("total", roundMoney(total - discount))
     } else {
       form.setFieldValue("discount", 0)
       form.setFieldValue("total", 0)
