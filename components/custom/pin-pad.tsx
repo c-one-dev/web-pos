@@ -1,4 +1,5 @@
 "use client"
+import { useEffect } from "react"
 import { cn } from "@/lib/utils"
 
 type Props = {
@@ -34,6 +35,26 @@ export default function PinPad({
   }
 
   const clear = () => onChange("")
+  const backspace = () => onChange(value.slice(0, -1))
+
+  useEffect(() => {
+    if (disabled) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (/^[0-9]$/.test(e.key)) {
+        e.preventDefault()
+        press(e.key)
+      } else if (e.key === "Backspace") {
+        e.preventDefault()
+        backspace()
+      } else if (e.key === "Escape") {
+        e.preventDefault()
+        clear()
+      }
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, disabled, maxLength])
 
   return (
     <div className="flex flex-col items-center gap-6">
@@ -90,6 +111,14 @@ export default function PinPad({
             className="flex size-14 items-center justify-center rounded-full border text-xl transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
           >
             0
+          </button>
+          <button
+            type="button"
+            disabled={disabled || !value.length}
+            onClick={backspace}
+            className="flex h-14 items-center justify-center px-3 text-xs font-medium tracking-wide text-muted-foreground uppercase transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+          >
+            Backspace
           </button>
           <button
             type="button"
