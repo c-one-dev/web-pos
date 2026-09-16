@@ -71,7 +71,11 @@ export const paymentSchema = gql`
       start: String
       end: String
     ): PaymentConnection
-    paymentSummary(start: String!, end: String!): PaymentSummary
+    paymentSummary(
+      start: String!
+      end: String!
+      paidOnly: Boolean
+    ): PaymentSummary
     paymentTypeSummary(start: String!, end: String!): [PaymentTypeSummaryNode]
   }
 

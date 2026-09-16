@@ -99,34 +99,13 @@ export const paymentResolver = {
 
         const sortKey = sort?.key || "_id"
         const sortOrder = sort?.order === "ASC" ? 1 : -1
-        const total = await Payment.countDocuments(matchStage)
 
-        if (after) {
-          const { id, type, value } = fromCursor(after)
-          if (type !== CURSOR_TYPE) throw new Error("Invalid cursor")
-          const cursorId = new Types.ObjectId(id)
-          const cursorValue = isISOString(value) ? new Date(value) : value
-
-          matchStage.$and = [
-            ...(matchStage.$and || []),
-            {
-              $or: [
-                {
-                  [sortKey]:
-                    sortOrder === 1
-                      ? { $gt: cursorValue }
-                      : { $lt: cursorValue },
-                },
-                {
-                  [sortKey]: cursorValue,
-                  _id: sortOrder === 1 ? { $gt: cursorId } : { $lt: cursorId },
-                },
-              ],
-            },
-          ]
-        }
-
-        const pipeline: PipelineStage[] = [
+        // The lookups and the fields they feed - paymentDate, methodName,
+        // byName, saleList - are what the filters above target, so the count
+        // has to run through these same stages. Counting the raw collection
+        // instead returns 0 the moment any filter is set, which leaves the
+        // table showing "0 results" and no way to page past the first ten.
+        const baseStages: PipelineStage[] = [
           {
             $lookup: {
               from: "payment_methods",
@@ -190,6 +169,45 @@ export const paymentResolver = {
               },
             },
           },
+        ]
+
+        // Counted before the cursor clause is appended below, so every page
+        // reports the size of the whole filtered set rather than what is
+        // left after it.
+        const [countResult] = await Payment.aggregate([
+          ...baseStages,
+          { $match: matchStage },
+          { $count: "total" },
+        ])
+        const total = countResult?.total || 0
+
+        if (after) {
+          const { id, type, value } = fromCursor(after)
+          if (type !== CURSOR_TYPE) throw new Error("Invalid cursor")
+          const cursorId = new Types.ObjectId(id)
+          const cursorValue = isISOString(value) ? new Date(value) : value
+
+          matchStage.$and = [
+            ...(matchStage.$and || []),
+            {
+              $or: [
+                {
+                  [sortKey]:
+                    sortOrder === 1
+                      ? { $gt: cursorValue }
+                      : { $lt: cursorValue },
+                },
+                {
+                  [sortKey]: cursorValue,
+                  _id: sortOrder === 1 ? { $gt: cursorId } : { $lt: cursorId },
+                },
+              ],
+            },
+          ]
+        }
+
+        const pipeline: PipelineStage[] = [
+          ...baseStages,
           { $match: matchStage },
           {
             $sort: { [sortKey]: sortOrder, _id: sortOrder },
@@ -241,11 +259,95 @@ export const paymentResolver = {
     },
     paymentSummary: async (
       _: any,
-      { start, end }: { start: string; end: string }
+      {
+        start,
+        end,
+        paidOnly = false,
+      }: { start: string; end: string; paidOnly?: boolean }
     ) => {
       try {
         const rangeStart = new Date(start)
         const rangeEnd = new Date(end)
+
+        const onAccountId = process.env.NEXT_PUBLIC_ON_ACCOUNT_ID
+        const onAccountMethod = onAccountId
+          ? new Types.ObjectId(onAccountId)
+          : null
+
+        // Two reports share these totals and want opposite things from them.
+        // The sales report counts a sale the moment it is rung up, because a
+        // sale on account is still a sale. The payments report is about money
+        // actually taken, so it asks for paidOnly and an unsettled On Account
+        // tender is left out until the customer settles it. Off by default,
+        // so a caller that says nothing gets the plain trading figure.
+        const paidRatioStages: PipelineStage[] =
+          paidOnly && onAccountMethod
+            ? [
+                {
+                  $addFields: {
+                    outstanding: {
+                      $max: [
+                        0,
+                        {
+                          $subtract: [
+                            {
+                              $sum: {
+                                $map: {
+                                  input: {
+                                    $filter: {
+                                      input: { $ifNull: ["$payments", []] },
+                                      as: "payment",
+                                      cond: {
+                                        $eq: [
+                                          "$$payment.method",
+                                          onAccountMethod,
+                                        ],
+                                      },
+                                    },
+                                  },
+                                  as: "payment",
+                                  in: {
+                                    $subtract: [
+                                      "$$payment.amount",
+                                      { $ifNull: ["$$payment.change", 0] },
+                                    ],
+                                  },
+                                },
+                              },
+                            },
+                            { $ifNull: ["$settledAmount", 0] },
+                          ],
+                        },
+                      ],
+                    },
+                  },
+                },
+                {
+                  // Prorated so a part-settled sale still contributes the cash
+                  // it did bring in, and so subTotal/discount/net stay
+                  // consistent instead of the debt coming off one line only.
+                  $addFields: {
+                    paidRatio: {
+                      $cond: [
+                        { $gt: ["$total", 0] },
+                        {
+                          $divide: [
+                            {
+                              $max: [
+                                0,
+                                { $subtract: ["$total", "$outstanding"] },
+                              ],
+                            },
+                            "$total",
+                          ],
+                        },
+                        1,
+                      ],
+                    },
+                  },
+                },
+              ]
+            : [{ $addFields: { paidRatio: 1 } }]
 
         const [totals] = await Sale.aggregate([
           {
@@ -258,17 +360,18 @@ export const paymentResolver = {
               createdAt: { $gte: rangeStart, $lte: rangeEnd },
             },
           },
+          ...paidRatioStages,
           {
             $group: {
               _id: null,
-              salesEx: { $sum: "$subTotal" },
-              discounts: { $sum: "$discount" },
+              salesEx: { $sum: { $multiply: ["$subTotal", "$paidRatio"] } },
+              discounts: { $sum: { $multiply: ["$discount", "$paidRatio"] } },
             },
           },
         ])
 
-        const salesEx = totals?.salesEx || 0
-        const discounts = totals?.discounts || 0
+        const salesEx = parseFloat((totals?.salesEx || 0).toFixed(2))
+        const discounts = parseFloat((totals?.discounts || 0).toFixed(2))
         const refunds = 0 // No refund logic exists in this app.
 
         return {
@@ -276,7 +379,7 @@ export const paymentResolver = {
           salesEx,
           refunds,
           discounts,
-          netSales: salesEx - discounts - refunds,
+          netSales: parseFloat((salesEx - discounts - refunds).toFixed(2)),
         }
       } catch (error) {
         throw error

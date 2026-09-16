@@ -97,9 +97,12 @@ import RowViewDialog from "./_dialogs/row-view"
 import UpdatePaymentNoteDialog from "./_dialogs/update-note"
 import SaleRowViewDialog from "@/app/(auth)/sale-history/_dialogs/row-view"
 
+// paidOnly: this report is about money actually taken, so an unsettled On
+// Account tender is left out until it is settled. The sales report asks the
+// same query without it, because a sale on account is still a sale.
 const GET_PAYMENT_SUMMARY = gql`
   query PaymentSummary($start: String!, $end: String!) {
-    paymentSummary(start: $start, end: $end) {
+    paymentSummary(start: $start, end: $end, paidOnly: true) {
       salesInc
       salesEx
       refunds
