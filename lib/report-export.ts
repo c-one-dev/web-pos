@@ -1,7 +1,8 @@
 import ExcelJS from "exceljs"
 import jsPDF from "jspdf"
-import { format, startOfToday } from "date-fns"
+import { format } from "date-fns"
 import { DateRange } from "react-day-picker"
+import { businessToday } from "@/lib/business-day"
 
 export const ORG_NAME = "C-ONE Sports Center"
 
@@ -17,8 +18,8 @@ export const pdfCurrency = (value?: number | string | null) =>
   }).format(Number(value) || 0)
 
 const rangeBounds = (range: DateRange) => ({
-  from: range.from || startOfToday(),
-  to: range.to || range.from || startOfToday(),
+  from: range.from || businessToday(),
+  to: range.to || range.from || businessToday(),
 })
 
 const reportFilename = (title: string, range: DateRange, ext: string) => {

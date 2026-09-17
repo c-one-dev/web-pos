@@ -1,17 +1,68 @@
 import Sale from "../models/sale.model"
 import Customer from "../models/customer.model"
-import { format, differenceInCalendarDays } from "date-fns"
+import { format } from "date-fns"
 import type { PipelineStage } from "mongoose"
+import {
+  BUSINESS_DAY_START_HOUR,
+  BUSINESS_DAY_START_MINUTE,
+  BUSINESS_DAY_START_MS,
+} from "@/lib/business-day"
 
 // Bucket the Sales tab by day for short ranges, month for multi-month
 // ranges, and year once the range spans more than a year - otherwise an
 // "All time" range would render as thousands of unreadable daily bars.
+// Measured as elapsed time, not calendar days: a range of N business days
+// runs 3:01AM to 3:00AM and so touches N+1 calendar dates, which would tip a
+// full month over into monthly bars.
+const DAY_MS = 24 * 60 * 60 * 1000
 const resolveDateGranularity = (start: Date, end: Date) => {
-  const spanDays = differenceInCalendarDays(end, start) + 1
+  const spanDays = Math.ceil((end.getTime() - start.getTime()) / DAY_MS)
   if (spanDays <= 31) return "day" as const
   if (spanDays <= 366) return "month" as const
   return "year" as const
 }
+
+// A sale's business date: its timestamp pulled back to the day's 3:01AM start,
+// so a 2AM or 3:00AM sale groups with the previous day (and weekday).
+const BUSINESS_DATE = {
+  $subtract: ["$createdAt", BUSINESS_DAY_START_MS],
+}
+
+// Clock hours, except the minutes of the start hour that come before the
+// day's start (3:00-3:00:59AM). Those close the previous business day, so they
+// get their own bucket after 2AM instead of joining the 3AM bar that opens it.
+const END_OF_DAY_BUCKET = 24
+const HOUR_BUCKET = (tz: string) => ({
+  $cond: [
+    {
+      $and: [
+        {
+          $eq: [
+            { $hour: { date: "$createdAt", timezone: tz } },
+            BUSINESS_DAY_START_HOUR,
+          ],
+        },
+        {
+          $lt: [
+            { $minute: { date: "$createdAt", timezone: tz } },
+            BUSINESS_DAY_START_MINUTE,
+          ],
+        },
+      ],
+    },
+    END_OF_DAY_BUCKET,
+    { $hour: { date: "$createdAt", timezone: tz } },
+  ],
+})
+
+const hourLabel = (hour: number) =>
+  hour === 0
+    ? "12 am"
+    : hour < 12
+      ? `${hour} am`
+      : hour === 12
+        ? "12 pm"
+        : `${hour - 12} pm`
 
 const DATE_FORMAT_BY_GRANULARITY = {
   day: "%Y-%m-%d",
@@ -118,7 +169,7 @@ export const dashboardResolver = {
                     _id: {
                       $dateToString: {
                         format: DATE_FORMAT_BY_GRANULARITY[dateGranularity],
-                        date: "$createdAt",
+                        date: BUSINESS_DATE,
                         timezone: tz,
                       },
                     },
@@ -131,7 +182,7 @@ export const dashboardResolver = {
               byHour: [
                 {
                   $group: {
-                    _id: { $hour: { date: "$createdAt", timezone: tz } },
+                    _id: HOUR_BUCKET(tz),
                     total: { $sum: "$netAmount" },
                     ...paymentBreakdown(),
                   },
@@ -141,7 +192,9 @@ export const dashboardResolver = {
               byWeekday: [
                 {
                   $group: {
-                    _id: { $dayOfWeek: { date: "$createdAt", timezone: tz } },
+                    _id: {
+                      $dayOfWeek: { date: BUSINESS_DATE, timezone: tz },
+                    },
                     total: { $sum: "$netAmount" },
                   },
                 },
@@ -244,18 +297,23 @@ export const dashboardResolver = {
             unpaid: point.unpaid,
             partiallyPaid: point.partiallyPaid,
           })),
-          salesByHour: Array.from({ length: 24 }, (_, hour) => {
-            const point = facets.byHour.find((p: any) => p._id === hour)
+          // Clock hours in business-day order - 3AM first, the small hours
+          // after midnight next, and the closing 3:00AM minute last - so
+          // late-night trade reads as the tail of the day it belongs to.
+          salesByHour: [
+            ...Array.from(
+              { length: 24 },
+              (_, index) => (index + BUSINESS_DAY_START_HOUR) % 24
+            ),
+            END_OF_DAY_BUCKET,
+          ].map((bucket) => {
+            const point = facets.byHour.find((p: any) => p._id === bucket)
             return {
-              key: String(hour),
+              key: String(bucket),
               label:
-                hour === 0
-                  ? "12 am"
-                  : hour < 12
-                    ? `${hour} am`
-                    : hour === 12
-                      ? "12 pm"
-                      : `${hour - 12} pm`,
+                bucket === END_OF_DAY_BUCKET
+                  ? `${BUSINESS_DAY_START_HOUR}:00 am`
+                  : hourLabel(bucket),
               total: point?.total || 0,
               count: point?.count || 0,
               paid: point?.paid || 0,

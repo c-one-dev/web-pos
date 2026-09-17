@@ -33,6 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import SaleRowViewDialog from "@/app/(auth)/sale-history/_dialogs/row-view"
+import { BusinessDate } from "@/components/custom/business-date"
 
 type Props = {
   _id?: string
@@ -176,8 +177,7 @@ export default function RowViewDrawer({ _id, open, setOpen, onClose }: Props) {
       {
         id: "date",
         header: "Sale date",
-        cell: ({ row }) =>
-          row.original.date ? format(Number(row.original.date), "PP") : "-",
+        cell: ({ row }) => <BusinessDate value={row.original.date} />,
       },
       {
         id: "outletName",

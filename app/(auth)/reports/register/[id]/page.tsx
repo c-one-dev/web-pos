@@ -49,6 +49,7 @@ import DataTable from "@/components/custom/data-table"
 import SaleRowViewDialog from "@/app/(auth)/sale-history/_dialogs/row-view"
 import { useCursorPage } from "@/hooks/use-cursor-page"
 import { cn } from "@/lib/utils"
+import { BusinessDate, CountedAsNote } from "@/components/custom/business-date"
 
 const currency = (value?: number | null) =>
   new Intl.NumberFormat("en-PH", {
@@ -908,8 +909,14 @@ export default function Page() {
     {
       id: "date",
       header: "Date",
-      cell: ({ row }) =>
-        row.original.date ? format(Number(row.original.date), "PP · p") : "-",
+      cell: ({ row }) => (
+        <>
+          {row.original.date
+            ? format(Number(row.original.date), "PP · p")
+            : "-"}
+          <CountedAsNote value={row.original.date} />
+        </>
+      ),
     },
     {
       id: "saleNumber",
@@ -989,8 +996,14 @@ export default function Page() {
     {
       id: "date",
       header: "Transaction date",
-      cell: ({ row }) =>
-        row.original.date ? format(Number(row.original.date), "PP · p") : "-",
+      cell: ({ row }) => (
+        <>
+          {row.original.date
+            ? format(Number(row.original.date), "PP · p")
+            : "-"}
+          <CountedAsNote value={row.original.date} />
+        </>
+      ),
     },
     {
       id: "saleNumber",
@@ -1053,7 +1066,7 @@ export default function Page() {
           {row.original.date && (
             <span className="font-normal text-muted-foreground">
               {" · "}
-              {format(Number(row.original.date), "MMM d")}
+              <BusinessDate value={row.original.date} pattern="MMM d" />
             </span>
           )}
         </span>

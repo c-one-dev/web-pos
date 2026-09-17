@@ -67,7 +67,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
+import { Bar, BarChart, CartesianGrid, Cell, XAxis, YAxis } from "recharts"
 import { ChartContainer, ChartTooltip } from "@/components/ui/chart"
 import {
   Tooltip,
@@ -75,9 +75,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import {
-  startOfToday,
-  startOfDay,
-  endOfDay,
   startOfWeek,
   endOfWeek,
   startOfMonth,
@@ -88,6 +85,13 @@ import {
 import { formatDateRange } from "little-date"
 import { DateRange } from "react-day-picker"
 import SaleRowViewDialog from "@/app/(auth)/sale-history/_dialogs/row-view"
+import {
+  BUSINESS_DAY_START_HOUR,
+  businessToday,
+  startOfBusinessDay,
+  endOfBusinessDay,
+} from "@/lib/business-day"
+import { CountedAsNote } from "@/components/custom/business-date"
 
 const GET_PAYMENT_SUMMARY = gql`
   query SalesReportSummary($start: String!, $end: String!) {
@@ -108,6 +112,12 @@ const GET_DASHBOARD_BREAKDOWN = gql`
   ) {
     dashboardSummary(start: $start, end: $end, timezone: $timezone) {
       salesByDate {
+        key
+        label
+        total
+        count
+      }
+      salesByHour {
         key
         label
         total
@@ -206,41 +216,47 @@ const GET_SALES_TRANSACTIONS = gql`
 const DATE_PRESETS: { label: string; getRange: () => DateRange }[] = [
   {
     label: "Today",
-    getRange: () => ({ from: startOfToday(), to: startOfToday() }),
+    getRange: () => ({ from: businessToday(), to: businessToday() }),
   },
   {
     // A single past day - the shift a manager reviews first thing.
     label: "Yesterday",
     getRange: () => ({
-      from: startOfDay(subDays(new Date(), 1)),
-      to: startOfDay(subDays(new Date(), 1)),
+      from: subDays(businessToday(), 1),
+      to: subDays(businessToday(), 1),
     }),
   },
   {
     label: "This Week",
     getRange: () => ({
-      from: startOfWeek(new Date()),
-      to: endOfWeek(new Date()),
+      from: startOfWeek(businessToday()),
+      to: endOfWeek(businessToday()),
     }),
   },
   {
     label: "Last 7 Days",
-    getRange: () => ({ from: subDays(new Date(), 6), to: new Date() }),
+    getRange: () => ({
+      from: subDays(businessToday(), 6),
+      to: businessToday(),
+    }),
   },
   {
     label: "This Month",
     getRange: () => ({
-      from: startOfMonth(new Date()),
-      to: endOfMonth(new Date()),
+      from: startOfMonth(businessToday()),
+      to: endOfMonth(businessToday()),
     }),
   },
   {
     label: "Last 30 Days",
-    getRange: () => ({ from: subDays(new Date(), 29), to: new Date() }),
+    getRange: () => ({
+      from: subDays(businessToday(), 29),
+      to: businessToday(),
+    }),
   },
   {
     label: "All",
-    getRange: () => ({ from: new Date(2000, 0, 1), to: new Date() }),
+    getRange: () => ({ from: new Date(2000, 0, 1), to: businessToday() }),
   },
 ]
 
@@ -311,8 +327,10 @@ async function exportSalesVsPaymentExcel({
   client: ReturnType<typeof useApolloClient>
   range: DateRange
 }) {
-  const start = startOfDay(range.from || startOfToday()).toISOString()
-  const end = endOfDay(range.to || range.from || startOfToday()).toISOString()
+  const start = startOfBusinessDay(range.from || businessToday()).toISOString()
+  const end = endOfBusinessDay(
+    range.to || range.from || businessToday()
+  ).toISOString()
 
   const { data: outletsData } = await client.query({
     query: GET_SALES_OUTLETS,
@@ -406,8 +424,10 @@ async function exportSalesReportExcel({
   activeTab: string
   range: DateRange
 }) {
-  const start = startOfDay(range.from || startOfToday()).toISOString()
-  const end = endOfDay(range.to || range.from || startOfToday()).toISOString()
+  const start = startOfBusinessDay(range.from || businessToday()).toISOString()
+  const end = endOfBusinessDay(
+    range.to || range.from || businessToday()
+  ).toISOString()
   const title = TAB_LABELS[activeTab] || "Sales Report"
 
   const { data: outletsData } = await client.query({
@@ -608,8 +628,10 @@ async function exportSalesReportPdf({
   range: DateRange
   userName: string
 }) {
-  const start = startOfDay(range.from || startOfToday()).toISOString()
-  const end = endOfDay(range.to || range.from || startOfToday()).toISOString()
+  const start = startOfBusinessDay(range.from || businessToday()).toISOString()
+  const end = endOfBusinessDay(
+    range.to || range.from || businessToday()
+  ).toISOString()
   const title = TAB_LABELS[activeTab] || "Sales Report"
 
   const { data: outletsData } = await client.query({
@@ -935,6 +957,11 @@ function DailySalesTooltip({ active, payload }: any) {
         <span className="text-muted-foreground">Avg. sale value</span>
         <span className="font-mono">{currency(avg)}</span>
       </div>
+      {point.afterMidnight && (
+        <span className="text-muted-foreground">
+          After midnight - counts toward the previous day
+        </span>
+      )}
     </div>
   )
 }
@@ -1076,8 +1103,10 @@ function SalesSummaryTab({ range }: { range: DateRange }) {
     []
   )
   const variables = {
-    start: startOfDay(range.from || startOfToday()).toISOString(),
-    end: endOfDay(range.to || range.from || startOfToday()).toISOString(),
+    start: startOfBusinessDay(range.from || businessToday()).toISOString(),
+    end: endOfBusinessDay(
+      range.to || range.from || businessToday()
+    ).toISOString(),
   }
   const { data: summaryData, loading: summaryLoading } = useQuery(
     GET_PAYMENT_SUMMARY,
@@ -1090,6 +1119,17 @@ function SalesSummaryTab({ range }: { range: DateRange }) {
   const summary = (summaryData as any)?.paymentSummary
   const salesByDate =
     (breakdownData as any)?.dashboardSummary?.salesByDate || []
+  // Hours arrive in business-day order: 3AM through 2AM, then the closing
+  // 3:00AM minute (key "24"). Everything from midnight on was rung up the
+  // next calendar day but counts toward this one, so it's flagged to be drawn
+  // apart from the rest.
+  const salesByHour = (
+    (breakdownData as any)?.dashboardSummary?.salesByHour || []
+  ).map((point: any) => ({
+    ...point,
+    afterMidnight:
+      Number(point.key) < BUSINESS_DAY_START_HOUR || Number(point.key) >= 24,
+  }))
 
   return (
     <div className="flex flex-col gap-2.5 pt-4">
@@ -1120,7 +1160,8 @@ function SalesSummaryTab({ range }: { range: DateRange }) {
         />
       </div>
       <Card className="rounded-lg">
-        <CardContent>
+        <CardContent className="flex flex-col gap-3">
+          <span className="text-sm font-medium">Sales by day</span>
           {breakdownLoading ? (
             <Skeleton className="h-72 w-full rounded-lg" />
           ) : !salesByDate.some((p: any) => p.total > 0) ? (
@@ -1161,6 +1202,73 @@ function SalesSummaryTab({ range }: { range: DateRange }) {
           )}
         </CardContent>
       </Card>
+      <Card className="rounded-lg">
+        <CardContent className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="flex flex-col">
+              <span className="text-sm font-medium">Sales by hour</span>
+              <span className="text-xs text-muted-foreground">
+                Business day runs 3:01 AM to 3:00 AM
+              </span>
+            </div>
+            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <span className="size-2.5 rounded-sm bg-(--chart-2)" />
+                3:01 AM to midnight
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="size-2.5 rounded-sm bg-(--chart-5)" />
+                Midnight to 3:00 AM
+              </span>
+            </div>
+          </div>
+          {breakdownLoading ? (
+            <Skeleton className="h-72 w-full rounded-lg" />
+          ) : !salesByHour.some((p: any) => p.total > 0) ? (
+            <div className="flex h-72 w-full items-center justify-center text-sm text-muted-foreground">
+              No sales in this period.
+            </div>
+          ) : (
+            <ChartContainer
+              config={chartConfig}
+              className="aspect-auto h-72 w-full"
+            >
+              <BarChart data={salesByHour}>
+                <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                <XAxis
+                  dataKey="label"
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                />
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  tickFormatter={compactCurrency}
+                  width={64}
+                />
+                <ChartTooltip
+                  content={<DailySalesTooltip />}
+                  cursor={{ fill: "var(--muted)" }}
+                />
+                <Bar dataKey="total" radius={[2, 2, 0, 0]}>
+                  {salesByHour.map((point: any) => (
+                    <Cell
+                      key={point.key}
+                      fill={
+                        point.afterMidnight
+                          ? "var(--chart-5)"
+                          : "var(--color-total)"
+                      }
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ChartContainer>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }
@@ -1177,8 +1285,10 @@ type SalesByItemNode = {
 function SalesByItemsTab({ range }: { range: DateRange }) {
   const { data, loading } = useQuery(GET_SALES_BY_ITEMS, {
     variables: {
-      start: startOfDay(range.from || startOfToday()).toISOString(),
-      end: endOfDay(range.to || range.from || startOfToday()).toISOString(),
+      start: startOfBusinessDay(range.from || businessToday()).toISOString(),
+      end: endOfBusinessDay(
+        range.to || range.from || businessToday()
+      ).toISOString(),
     },
     fetchPolicy: "network-only",
   })
@@ -1236,8 +1346,10 @@ type TotalPoint = { key: string; label: string; total: number }
 function ByCategoryTab({ range }: { range: DateRange }) {
   const { data, loading } = useQuery(GET_DASHBOARD_BREAKDOWN, {
     variables: {
-      start: startOfDay(range.from || startOfToday()).toISOString(),
-      end: endOfDay(range.to || range.from || startOfToday()).toISOString(),
+      start: startOfBusinessDay(range.from || businessToday()).toISOString(),
+      end: endOfBusinessDay(
+        range.to || range.from || businessToday()
+      ).toISOString(),
     },
     fetchPolicy: "network-only",
   })
@@ -1278,8 +1390,10 @@ function ByCategoryTab({ range }: { range: DateRange }) {
 function UsersTab({ range }: { range: DateRange }) {
   const { data, loading } = useQuery(GET_DASHBOARD_BREAKDOWN, {
     variables: {
-      start: startOfDay(range.from || startOfToday()).toISOString(),
-      end: endOfDay(range.to || range.from || startOfToday()).toISOString(),
+      start: startOfBusinessDay(range.from || businessToday()).toISOString(),
+      end: endOfBusinessDay(
+        range.to || range.from || businessToday()
+      ).toISOString(),
     },
     fetchPolicy: "network-only",
   })
@@ -1363,8 +1477,10 @@ function SalesTransactionsTab({ range }: { range: DateRange }) {
   const variables = {
     first: rows,
     search,
-    start: startOfDay(range.from || startOfToday()).toISOString(),
-    end: endOfDay(range.to || range.from || startOfToday()).toISOString(),
+    start: startOfBusinessDay(range.from || businessToday()).toISOString(),
+    end: endOfBusinessDay(
+      range.to || range.from || businessToday()
+    ).toISOString(),
     sort,
   }
 
@@ -1426,6 +1542,7 @@ function SalesTransactionsTab({ range }: { range: DateRange }) {
             {row.original.date
               ? format(Number(row.original.date), "PP · p")
               : "-"}
+            <CountedAsNote value={row.original.date} />
           </span>
         ),
       },
@@ -1623,8 +1740,8 @@ function SalesTransactionsTab({ range }: { range: DateRange }) {
 
 export default function Page() {
   const [appliedRange, setAppliedRange] = useState<DateRange>({
-    from: startOfToday(),
-    to: startOfToday(),
+    from: businessToday(),
+    to: businessToday(),
   })
   const [presetLabel, setPresetLabel] = useState("Today")
   const [activeTab, setActiveTab] = useState("summary")

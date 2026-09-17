@@ -33,20 +33,27 @@ export const salesTargetResolver = {
         after,
         period = "MONTHLY",
         date,
+        start: startArg,
+        end: endArg,
         search,
       }: {
         first?: number
         after?: string
         period?: string
         date?: string
+        start?: string
+        end?: string
         search?: string
       }
     ) => {
       try {
-        const { start, end } = rangeForPeriod(
-          period,
-          date ? new Date(date) : new Date()
-        )
+        // The page sends the period already bounded to business days in the
+        // shop's own timezone. Working it out here would use the server's
+        // clock - UTC on Vercel, eight hours off Manila - and midnight cutoffs.
+        const { start, end } =
+          startArg && endArg
+            ? { start: new Date(startArg), end: new Date(endArg) }
+            : rangeForPeriod(period, date ? new Date(date) : new Date())
 
         const [users, salesTotals, targets] = await Promise.all([
           User.find({ isActive: true }).select("_id name surname").lean(),

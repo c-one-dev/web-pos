@@ -15,6 +15,7 @@ import { format } from "date-fns"
 import gql from "graphql-tag"
 import SaleRowViewDialog from "@/app/(auth)/sale-history/_dialogs/row-view"
 import { useState } from "react"
+import { CountedAsNote } from "@/components/custom/business-date"
 
 type Props = {
   _id?: string
@@ -143,6 +144,7 @@ export default function RowViewDialog({ _id, open, setOpen, onClose }: Props) {
               {data?.payment?.date
                 ? format(new Date(Number(data.payment.date)), "PPpp")
                 : "N/A"}
+              <CountedAsNote value={data?.payment?.date} />
             </span>
           </div>
           <div>

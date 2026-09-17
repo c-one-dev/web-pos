@@ -4,16 +4,15 @@ import gql from "graphql-tag"
 import { useQuery } from "@apollo/client/react"
 import { useRouter } from "next/navigation"
 import { format } from "date-fns"
+
 import {
-  startOfToday,
-  startOfDay,
-  endOfDay,
   startOfWeek,
   endOfWeek,
   startOfMonth,
   endOfMonth,
   subDays,
 } from "date-fns"
+
 import { formatDateRange } from "little-date"
 import { DateRange } from "react-day-picker"
 import { CalendarBlankIcon, CaretDownIcon } from "@phosphor-icons/react"
@@ -50,6 +49,11 @@ import { StatusBadge } from "@/components/custom/status-badge"
 import { IRegisterSessionTableNode } from "@/types/registerSession.type"
 import { IVoidedSaleNode } from "@/types/sale.type"
 import SaleRowViewDialog from "@/app/(auth)/sale-history/_dialogs/row-view"
+import {
+  businessToday,
+  startOfBusinessDay,
+  endOfBusinessDay,
+} from "@/lib/business-day"
 
 const GET_SHIFT_REPORT = gql`
   query ShiftReportTable(
@@ -137,41 +141,47 @@ const GET_VOIDED_SALES = gql`
 const DATE_PRESETS: { label: string; getRange: () => DateRange }[] = [
   {
     label: "Today",
-    getRange: () => ({ from: startOfToday(), to: startOfToday() }),
+    getRange: () => ({ from: businessToday(), to: businessToday() }),
   },
   {
     // A single past day - the shift a manager reviews first thing.
     label: "Yesterday",
     getRange: () => ({
-      from: startOfDay(subDays(new Date(), 1)),
-      to: startOfDay(subDays(new Date(), 1)),
+      from: subDays(businessToday(), 1),
+      to: subDays(businessToday(), 1),
     }),
   },
   {
     label: "This Week",
     getRange: () => ({
-      from: startOfWeek(new Date()),
-      to: endOfWeek(new Date()),
+      from: startOfWeek(businessToday()),
+      to: endOfWeek(businessToday()),
     }),
   },
   {
     label: "Last 7 Days",
-    getRange: () => ({ from: subDays(new Date(), 6), to: new Date() }),
+    getRange: () => ({
+      from: subDays(businessToday(), 6),
+      to: businessToday(),
+    }),
   },
   {
     label: "This Month",
     getRange: () => ({
-      from: startOfMonth(new Date()),
-      to: endOfMonth(new Date()),
+      from: startOfMonth(businessToday()),
+      to: endOfMonth(businessToday()),
     }),
   },
   {
     label: "Last 30 Days",
-    getRange: () => ({ from: subDays(new Date(), 29), to: new Date() }),
+    getRange: () => ({
+      from: subDays(businessToday(), 29),
+      to: businessToday(),
+    }),
   },
   {
     label: "All",
-    getRange: () => ({ from: new Date(2000, 0, 1), to: new Date() }),
+    getRange: () => ({ from: new Date(2000, 0, 1), to: businessToday() }),
   },
 ]
 
@@ -275,8 +285,8 @@ function ShiftReportTab() {
     order: "ASC" | "DESC"
   } | null>(null)
   const [appliedRange, setAppliedRange] = useState<DateRange>({
-    from: subDays(new Date(), 6),
-    to: new Date(),
+    from: subDays(businessToday(), 6),
+    to: businessToday(),
   })
   const [presetLabel, setPresetLabel] = useState("Last 7 Days")
 
@@ -284,9 +294,11 @@ function ShiftReportTab() {
     variables: {
       first: rows,
       search,
-      start: startOfDay(appliedRange.from || startOfToday()).toISOString(),
-      end: endOfDay(
-        appliedRange.to || appliedRange.from || startOfToday()
+      start: startOfBusinessDay(
+        appliedRange.from || businessToday()
+      ).toISOString(),
+      end: endOfBusinessDay(
+        appliedRange.to || appliedRange.from || businessToday()
       ).toISOString(),
       includeDeleted,
       sort,
@@ -422,9 +434,11 @@ function ShiftReportTab() {
           first: rows,
           after: endCursor,
           search,
-          start: startOfDay(appliedRange.from || startOfToday()).toISOString(),
-          end: endOfDay(
-            appliedRange.to || appliedRange.from || startOfToday()
+          start: startOfBusinessDay(
+            appliedRange.from || businessToday()
+          ).toISOString(),
+          end: endOfBusinessDay(
+            appliedRange.to || appliedRange.from || businessToday()
           ).toISOString(),
           includeDeleted,
           sort,
@@ -572,8 +586,8 @@ function VoidedTransactionsTab() {
     order: "ASC" | "DESC"
   } | null>(null)
   const [appliedRange, setAppliedRange] = useState<DateRange>({
-    from: subDays(new Date(), 6),
-    to: new Date(),
+    from: subDays(businessToday(), 6),
+    to: businessToday(),
   })
   const [presetLabel, setPresetLabel] = useState("Last 7 Days")
 
@@ -581,9 +595,11 @@ function VoidedTransactionsTab() {
     variables: {
       first: rows,
       search,
-      start: startOfDay(appliedRange.from || startOfToday()).toISOString(),
-      end: endOfDay(
-        appliedRange.to || appliedRange.from || startOfToday()
+      start: startOfBusinessDay(
+        appliedRange.from || businessToday()
+      ).toISOString(),
+      end: endOfBusinessDay(
+        appliedRange.to || appliedRange.from || businessToday()
       ).toISOString(),
       sort,
     },
@@ -673,9 +689,11 @@ function VoidedTransactionsTab() {
           first: rows,
           after: endCursor,
           search,
-          start: startOfDay(appliedRange.from || startOfToday()).toISOString(),
-          end: endOfDay(
-            appliedRange.to || appliedRange.from || startOfToday()
+          start: startOfBusinessDay(
+            appliedRange.from || businessToday()
+          ).toISOString(),
+          end: endOfBusinessDay(
+            appliedRange.to || appliedRange.from || businessToday()
           ).toISOString(),
           sort,
         },

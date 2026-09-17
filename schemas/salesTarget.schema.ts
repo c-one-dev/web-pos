@@ -34,6 +34,8 @@ export const salesTargetSchema = gql`
       after: String
       period: SalesTargetPeriod
       date: String
+      start: String
+      end: String
       search: String
     ): SalesTargetConnection
   }

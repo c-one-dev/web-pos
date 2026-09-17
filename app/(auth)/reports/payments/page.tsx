@@ -81,9 +81,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import {
-  startOfToday,
-  startOfDay,
-  endOfDay,
   startOfWeek,
   endOfWeek,
   startOfMonth,
@@ -96,6 +93,12 @@ import { DateRange } from "react-day-picker"
 import RowViewDialog from "./_dialogs/row-view"
 import UpdatePaymentNoteDialog from "./_dialogs/update-note"
 import SaleRowViewDialog from "@/app/(auth)/sale-history/_dialogs/row-view"
+import {
+  businessToday,
+  startOfBusinessDay,
+  endOfBusinessDay,
+} from "@/lib/business-day"
+import { CountedAsNote } from "@/components/custom/business-date"
 
 // paidOnly: this report is about money actually taken, so an unsettled On
 // Account tender is left out until it is settled. The sales report asks the
@@ -115,41 +118,47 @@ const GET_PAYMENT_SUMMARY = gql`
 const DATE_PRESETS: { label: string; getRange: () => DateRange }[] = [
   {
     label: "Today",
-    getRange: () => ({ from: startOfToday(), to: startOfToday() }),
+    getRange: () => ({ from: businessToday(), to: businessToday() }),
   },
   {
     // A single past day - the shift a manager reviews first thing.
     label: "Yesterday",
     getRange: () => ({
-      from: startOfDay(subDays(new Date(), 1)),
-      to: startOfDay(subDays(new Date(), 1)),
+      from: subDays(businessToday(), 1),
+      to: subDays(businessToday(), 1),
     }),
   },
   {
     label: "This Week",
     getRange: () => ({
-      from: startOfWeek(new Date()),
-      to: endOfWeek(new Date()),
+      from: startOfWeek(businessToday()),
+      to: endOfWeek(businessToday()),
     }),
   },
   {
     label: "Last 7 Days",
-    getRange: () => ({ from: subDays(new Date(), 6), to: new Date() }),
+    getRange: () => ({
+      from: subDays(businessToday(), 6),
+      to: businessToday(),
+    }),
   },
   {
     label: "This Month",
     getRange: () => ({
-      from: startOfMonth(new Date()),
-      to: endOfMonth(new Date()),
+      from: startOfMonth(businessToday()),
+      to: endOfMonth(businessToday()),
     }),
   },
   {
     label: "Last 30 Days",
-    getRange: () => ({ from: subDays(new Date(), 29), to: new Date() }),
+    getRange: () => ({
+      from: subDays(businessToday(), 29),
+      to: businessToday(),
+    }),
   },
   {
     label: "All",
-    getRange: () => ({ from: new Date(2000, 0, 1), to: new Date() }),
+    getRange: () => ({ from: new Date(2000, 0, 1), to: businessToday() }),
   },
 ]
 
@@ -283,8 +292,10 @@ function DateRangeFilter({
 function PaymentSummaryTab({ range }: { range: DateRange }) {
   const { data, loading } = useQuery(GET_PAYMENT_SUMMARY, {
     variables: {
-      start: startOfDay(range.from || startOfToday()).toISOString(),
-      end: endOfDay(range.to || range.from || startOfToday()).toISOString(),
+      start: startOfBusinessDay(range.from || businessToday()).toISOString(),
+      end: endOfBusinessDay(
+        range.to || range.from || businessToday()
+      ).toISOString(),
     },
     fetchPolicy: "network-only",
   })
@@ -390,8 +401,10 @@ function PaymentTypesTab({ range }: { range: DateRange }) {
 
   const { data, loading } = useQuery(GET_PAYMENT_TYPE_SUMMARY, {
     variables: {
-      start: startOfDay(range.from || startOfToday()).toISOString(),
-      end: endOfDay(range.to || range.from || startOfToday()).toISOString(),
+      start: startOfBusinessDay(range.from || businessToday()).toISOString(),
+      end: endOfBusinessDay(
+        range.to || range.from || businessToday()
+      ).toISOString(),
     },
     fetchPolicy: "network-only",
   })
@@ -624,8 +637,10 @@ async function exportPaymentsReportExcel({
   activeTab: string
   range: DateRange
 }) {
-  const start = startOfDay(range.from || startOfToday()).toISOString()
-  const end = endOfDay(range.to || range.from || startOfToday()).toISOString()
+  const start = startOfBusinessDay(range.from || businessToday()).toISOString()
+  const end = endOfBusinessDay(
+    range.to || range.from || businessToday()
+  ).toISOString()
   const title = TAB_LABELS[activeTab] || "Payment Report"
 
   const { data: outletsData } = await client.query({
@@ -754,8 +769,10 @@ async function exportPaymentsReportPdf({
   range: DateRange
   userName: string
 }) {
-  const start = startOfDay(range.from || startOfToday()).toISOString()
-  const end = endOfDay(range.to || range.from || startOfToday()).toISOString()
+  const start = startOfBusinessDay(range.from || businessToday()).toISOString()
+  const end = endOfBusinessDay(
+    range.to || range.from || businessToday()
+  ).toISOString()
   const title = TAB_LABELS[activeTab] || "Payment Report"
 
   const { data: outletsData } = await client.query({
@@ -956,14 +973,16 @@ export default function Page() {
   const [openSaleDialog, setOpenSaleDialog] = useState(false)
   // Shared date range + active tab (used by Export)
   const [appliedRange, setAppliedRange] = useState<DateRange>({
-    from: startOfToday(),
-    to: startOfToday(),
+    from: businessToday(),
+    to: businessToday(),
   })
   const [presetLabel, setPresetLabel] = useState("Today")
   const [activeTab, setActiveTab] = useState("summary")
-  const start = startOfDay(appliedRange.from || startOfToday()).toISOString()
-  const end = endOfDay(
-    appliedRange.to || appliedRange.from || startOfToday()
+  const start = startOfBusinessDay(
+    appliedRange.from || businessToday()
+  ).toISOString()
+  const end = endOfBusinessDay(
+    appliedRange.to || appliedRange.from || businessToday()
   ).toISOString()
   const { data, fetchMore, loading } = useQuery(GET_PAYMENTS, {
     variables: {
@@ -1088,6 +1107,7 @@ export default function Page() {
             {row.original.paymentDate
               ? format(Number(row.original.paymentDate), "PP · p")
               : "-"}
+            <CountedAsNote value={row.original.paymentDate} />
           </span>
         ),
       },

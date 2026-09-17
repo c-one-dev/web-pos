@@ -2,9 +2,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import gql from "graphql-tag"
 import { useApolloClient, useMutation, useQuery } from "@apollo/client/react"
-import { format } from "date-fns"
 import {
-  startOfToday,
+  format,
   startOfDay,
   endOfDay,
   startOfWeek,
@@ -51,6 +50,11 @@ import DataTable from "@/components/custom/data-table"
 import { useCursorPage } from "@/hooks/use-cursor-page"
 import { toast } from "sonner"
 import { downloadExcelWorkbook, styleExcelHeaderRow } from "@/lib/report-export"
+import {
+  businessToday,
+  startOfBusinessDay,
+  endOfBusinessDay,
+} from "@/lib/business-day"
 
 const currency = (value?: number | null) =>
   new Intl.NumberFormat("en-PH", {
@@ -73,6 +77,16 @@ const periodDateRange = (period: SalesTargetPeriod, date: Date): DateRange => {
   }
 }
 
+// The same period as query bounds: first to last business day of it, so a
+// sale at 2AM on the 1st counts toward the previous month's target.
+const periodBusinessBounds = (period: SalesTargetPeriod, date: Date) => {
+  const range = periodDateRange(period, date)
+  return {
+    start: startOfBusinessDay(range.from || date).toISOString(),
+    end: endOfBusinessDay(range.to || range.from || date).toISOString(),
+  }
+}
+
 // Users report has no outlet dimension (activity/targets aren't
 // outlet-scoped), so this is a lighter title block than the Sales/Payments
 // reports' addExcelTitleRows - title + period only, no outlet line.
@@ -82,8 +96,8 @@ function addTitleRows(
   range: DateRange,
   columnCount: number
 ) {
-  const from = range.from || startOfToday()
-  const to = range.to || range.from || startOfToday()
+  const from = range.from || businessToday()
+  const to = range.to || range.from || businessToday()
   sheet.mergeCells(1, 1, 1, columnCount)
   const titleCell = sheet.getCell(1, 1)
   titleCell.value = title
@@ -102,37 +116,43 @@ function addTitleRows(
 const DATE_PRESETS: { label: string; getRange: () => DateRange }[] = [
   {
     label: "Today",
-    getRange: () => ({ from: startOfToday(), to: startOfToday() }),
+    getRange: () => ({ from: businessToday(), to: businessToday() }),
   },
   {
     // A single past day - the shift a manager reviews first thing.
     label: "Yesterday",
     getRange: () => ({
-      from: startOfDay(subDays(new Date(), 1)),
-      to: startOfDay(subDays(new Date(), 1)),
+      from: subDays(businessToday(), 1),
+      to: subDays(businessToday(), 1),
     }),
   },
   {
     label: "This Week",
     getRange: () => ({
-      from: startOfWeek(new Date()),
-      to: endOfWeek(new Date()),
+      from: startOfWeek(businessToday()),
+      to: endOfWeek(businessToday()),
     }),
   },
   {
     label: "Last 7 Days",
-    getRange: () => ({ from: subDays(new Date(), 6), to: new Date() }),
+    getRange: () => ({
+      from: subDays(businessToday(), 6),
+      to: businessToday(),
+    }),
   },
   {
     label: "This Month",
     getRange: () => ({
-      from: startOfMonth(new Date()),
-      to: endOfMonth(new Date()),
+      from: startOfMonth(businessToday()),
+      to: endOfMonth(businessToday()),
     }),
   },
   {
     label: "Last 30 Days",
-    getRange: () => ({ from: subDays(new Date(), 29), to: new Date() }),
+    getRange: () => ({
+      from: subDays(businessToday(), 29),
+      to: businessToday(),
+    }),
   },
 ]
 
@@ -383,8 +403,10 @@ function MajorActivityLogTab({ range }: { range: DateRange }) {
 
   const baseVars = useMemo(
     () => ({
-      start: startOfDay(range.from || startOfToday()).toISOString(),
-      end: endOfDay(range.to || range.from || startOfToday()).toISOString(),
+      start: startOfBusinessDay(range.from || businessToday()).toISOString(),
+      end: endOfBusinessDay(
+        range.to || range.from || businessToday()
+      ).toISOString(),
       search,
     }),
     [range, search]
@@ -470,6 +492,8 @@ const GET_SALES_TARGETS = gql`
     $after: String
     $period: SalesTargetPeriod
     $date: String
+    $start: String
+    $end: String
     $search: String
   ) {
     salesTargetTable(
@@ -477,6 +501,8 @@ const GET_SALES_TARGETS = gql`
       after: $after
       period: $period
       date: $date
+      start: $start
+      end: $end
       search: $search
     ) {
       total
@@ -586,7 +612,7 @@ function SalesTargetsTab({
   const [rows, setRows] = useState<number>(8)
 
   const baseVars = useMemo(
-    () => ({ period, date: date.toISOString(), search }),
+    () => ({ period, ...periodBusinessBounds(period, date), search }),
     [period, date, search]
   )
 
@@ -700,8 +726,10 @@ async function exportActivityLogExcel(
   client: ReturnType<typeof useApolloClient>,
   range: DateRange
 ) {
-  const start = startOfDay(range.from || startOfToday()).toISOString()
-  const end = endOfDay(range.to || range.from || startOfToday()).toISOString()
+  const start = startOfBusinessDay(range.from || businessToday()).toISOString()
+  const end = endOfBusinessDay(
+    range.to || range.from || businessToday()
+  ).toISOString()
   const nodes: ActivityLogNode[] = await fetchAllPages<ActivityLogNode>(
     client,
     GET_ACTIVITY_LOG,
@@ -753,7 +781,7 @@ async function exportSalesTargetsExcel(
   const nodes: SalesTargetNode[] = await fetchAllPages<SalesTargetNode>(
     client,
     GET_SALES_TARGETS,
-    { period, date: date.toISOString() },
+    { period, ...periodBusinessBounds(period, date) },
     "salesTargetTable",
     2000
   )
@@ -831,12 +859,12 @@ function ExportButton({
 export default function Page() {
   const [activeTab, setActiveTab] = useState("activity-log")
   const [appliedRange, setAppliedRange] = useState<DateRange>({
-    from: subDays(new Date(), 6),
-    to: new Date(),
+    from: subDays(businessToday(), 6),
+    to: businessToday(),
   })
   const [presetLabel, setPresetLabel] = useState("Last 7 Days")
   const [period, setPeriod] = useState<SalesTargetPeriod>("MONTHLY")
-  const [targetDate, setTargetDate] = useState<Date>(new Date())
+  const [targetDate, setTargetDate] = useState<Date>(businessToday())
 
   const isSalesTargets = activeTab === "sales-targets"
 

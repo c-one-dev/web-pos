@@ -57,6 +57,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 
+import { CountedAsNote } from "@/components/custom/business-date"
 type Props = {
   _id?: string
   open?: boolean
@@ -210,6 +211,7 @@ function DateCell({ value }: { value?: string | number | null }) {
     <span className="flex flex-col leading-tight">
       <span>{format(date, "PP")}</span>
       <span className="text-xs text-muted-foreground">{format(date, "p")}</span>
+      <CountedAsNote value={date} />
     </span>
   )
 }
@@ -574,6 +576,7 @@ export default function RowViewDialog({
                   {sale?.createdAt
                     ? format(Number(sale.createdAt), "PPpp")
                     : "-"}
+                  <CountedAsNote value={sale?.createdAt} />
                 </Meta>
                 <Meta label="Cashier">
                   {sale?.by ? `${sale.by.name} ${sale.by.surname}` : "-"}

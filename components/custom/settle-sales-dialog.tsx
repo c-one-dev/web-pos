@@ -30,6 +30,7 @@ import { toast } from "sonner"
 import { refetchOnlyReadyQueries } from "@/lib/refetch"
 import { format } from "date-fns"
 import { useRegisterStore } from "@/hooks/use-register"
+import { BusinessDate } from "@/components/custom/business-date"
 
 // Settling one sale (from the Sale History row) and settling several (from a
 // customer's bulk payment) are the same transaction with a different starting
@@ -312,7 +313,7 @@ export default function SettleSalesDialog({
                             {row.saleNumber}
                           </span>
                           <span className="block text-xs text-muted-foreground">
-                            {row.date ? format(Number(row.date), "PP") : "-"} ·{" "}
+                            <BusinessDate value={row.date} /> ·{" "}
                             {peso(row.outstandingAmount)} outstanding
                           </span>
                         </div>

@@ -49,13 +49,19 @@ import {
   SalePaymentStatus,
   SaleStatus,
 } from "@/types/sale.type"
-import { format, startOfToday, endOfDay } from "date-fns"
+import { format } from "date-fns"
 import { ArrowElbowRightIcon } from "@phosphor-icons/react/dist/ssr"
 import { HandCoinsIcon } from "@phosphor-icons/react"
 import SaleHistoryFilterBar, {
   emptyFilters,
   type SaleHistoryFilters,
 } from "@/app/(auth)/sale-history/_components/filter-bar"
+import {
+  businessToday,
+  startOfBusinessDay,
+  endOfBusinessDay,
+} from "@/lib/business-day"
+import { BusinessDate } from "@/components/custom/business-date"
 
 const GET_SALE_HISTORY = gql`
   query SaleHistoryTable(
@@ -305,7 +311,7 @@ export default function Page() {
   >(() => [
     {
       key: "date",
-      value: `${startOfToday().toISOString()}_${endOfDay(new Date()).toISOString()}`,
+      value: `${startOfBusinessDay(businessToday()).toISOString()}_${endOfBusinessDay(businessToday()).toISOString()}`,
       type: FilterType.DATE,
     },
   ])
@@ -359,9 +365,7 @@ export default function Page() {
         ),
         cell: ({ row }) => (
           <span className="font-medium">
-            {row.original.date
-              ? format(new Date(Number(row.original.date)), "PP")
-              : ""}
+            <BusinessDate value={row.original.date} fallback="" />
           </span>
         ),
         footer: () => (

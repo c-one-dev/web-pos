@@ -30,53 +30,62 @@ import {
 } from "../ui/select"
 import { Calendar } from "../ui/calendar"
 import {
-  startOfToday,
-  startOfDay,
-  endOfDay,
   startOfWeek,
   endOfWeek,
   startOfMonth,
   endOfMonth,
   subDays,
 } from "date-fns"
+
 import { DateRange } from "react-day-picker"
 import { formatDateRange } from "little-date"
+import {
+  businessToday,
+  startOfBusinessDay,
+  endOfBusinessDay,
+} from "@/lib/business-day"
 
 const DATE_RANGE_PRESETS: { label: string; getRange: () => DateRange }[] = [
   {
     label: "Today",
-    getRange: () => ({ from: startOfToday(), to: startOfToday() }),
+    getRange: () => ({ from: businessToday(), to: businessToday() }),
   },
   {
     // A single past day, which is what a cashier reconciling last night's
     // shift actually wants - "Last 7 Days" sweeps in today's takings too.
     label: "Yesterday",
     getRange: () => ({
-      from: startOfDay(subDays(new Date(), 1)),
-      to: startOfDay(subDays(new Date(), 1)),
+      from: subDays(businessToday(), 1),
+      to: subDays(businessToday(), 1),
     }),
   },
   {
     label: "This Week",
     getRange: () => ({
-      from: startOfWeek(new Date()),
-      to: endOfWeek(new Date()),
+      from: startOfWeek(businessToday()),
+      to: endOfWeek(businessToday()),
     }),
   },
   {
     label: "Last 7 Days",
-    getRange: () => ({ from: subDays(new Date(), 6), to: new Date() }),
+    getRange: () => ({
+      from: subDays(businessToday(), 6),
+      to: businessToday(),
+    }),
   },
   {
     label: "This Month",
     getRange: () => ({
-      from: startOfMonth(new Date()),
-      to: endOfMonth(new Date()),
+      from: startOfMonth(businessToday()),
+      to: endOfMonth(businessToday()),
     }),
   },
   {
     label: "Last 30 Days",
-    getRange: () => ({ from: subDays(new Date(), 29), to: new Date() }),
+    getRange: () => ({
+      from: subDays(businessToday(), 29),
+      to: businessToday(),
+    }),
   },
 ]
 
@@ -116,7 +125,7 @@ export default function ColumnFilter({
     // resolver re-floor it - a server running in UTC (Vercel) would
     // otherwise shift the window by the local UTC offset and return the
     // wrong day's rows.
-    const dateRangeISO = `${startOfDay(range.from).toISOString()}_${endOfDay(range.to).toISOString()}`
+    const dateRangeISO = `${startOfBusinessDay(range.from).toISOString()}_${endOfBusinessDay(range.to).toISOString()}`
     onFilterChange((prev: Filter[]) => [
       ...prev.filter((f: Filter) => f.key != filterKey),
       { key: filterKey, value: dateRangeISO, type: FilterType.DATE },
