@@ -32,8 +32,7 @@ import SortHeader from "@/components/custom/sort-header"
 import StatusDialog from "./dialogs/status"
 import ResetPasswordDialog from "./dialogs/reset-password"
 import DeleteDialog from "./dialogs/delete"
-import Image from "next/image"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import RowViewDialog from "./dialogs/row-view"
 import {
   Select,
@@ -220,18 +219,16 @@ export default function Page() {
     () => [
       {
         id: "image",
-        cell: ({ row }) =>
-          row.original.image ? (
-            <Image
-              src={row.original.image}
+        cell: ({ row }) => (
+          <Avatar className="h-8 w-8">
+            <AvatarImage
+              src={row.original.image || undefined}
               alt={row.original.fullName}
-              className="h-8 w-8 rounded-full object-cover"
+              className="object-cover"
             />
-          ) : (
-            <Avatar className="h-8 w-8">
-              <AvatarFallback>{row.original.fullName[0]}</AvatarFallback>
-            </Avatar>
-          ),
+            <AvatarFallback>{row.original.fullName[0]}</AvatarFallback>
+          </Avatar>
+        ),
         size: 10,
       },
       {

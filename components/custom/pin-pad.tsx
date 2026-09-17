@@ -103,7 +103,21 @@ export default function PinPad({
             ))}
           </div>
         ))}
-        <div className="flex items-center gap-3">
+        {/*
+          Same three 3.5rem columns as the digit rows, so 0 sits under 8.
+          "Backspace" is wider than a column: it is end-aligned with unsafe
+          overflow so the extra width spills outward past the 7, never into
+          the 0. Clear is start-aligned to mirror it around the 0.
+        */}
+        <div className="grid grid-cols-[repeat(3,3.5rem)] items-center gap-3">
+          <button
+            type="button"
+            disabled={disabled || !value.length}
+            onClick={backspace}
+            className="flex h-14 items-center [justify-self:unsafe_end] text-xs font-medium tracking-wide whitespace-nowrap text-muted-foreground uppercase transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+          >
+            Backspace
+          </button>
           <button
             type="button"
             disabled={disabled}
@@ -115,16 +129,8 @@ export default function PinPad({
           <button
             type="button"
             disabled={disabled || !value.length}
-            onClick={backspace}
-            className="flex h-14 items-center justify-center px-3 text-xs font-medium tracking-wide text-muted-foreground uppercase transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
-          >
-            Backspace
-          </button>
-          <button
-            type="button"
-            disabled={disabled || !value.length}
             onClick={clear}
-            className="flex h-14 items-center justify-center px-3 text-xs font-medium tracking-wide text-muted-foreground uppercase transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+            className="flex h-14 items-center justify-self-start text-xs font-medium tracking-wide whitespace-nowrap text-muted-foreground uppercase transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
           >
             Clear
           </button>

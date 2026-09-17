@@ -271,7 +271,7 @@ export const userResolver = {
           const temporaryPassword = generateTempPassword()
           const result = await User.create({
             ...input,
-            image: "",
+            image: input.image || "",
             password: await bcrypt.hash(temporaryPassword, 10),
             pin: await bcrypt.hash(input.pin, 10),
             mustChangePassword: true,
@@ -473,7 +473,10 @@ export const userResolver = {
 
           // The activity log keeps `userName` as plain text, so the audit
           // trail survives the account. Only the dangling reference is cleared.
-          await ActivityLog.updateMany({ user: userId }, { $set: { user: null } })
+          await ActivityLog.updateMany(
+            { user: userId },
+            { $set: { user: null } }
+          )
           await User.findByIdAndDelete(_id)
 
           return {

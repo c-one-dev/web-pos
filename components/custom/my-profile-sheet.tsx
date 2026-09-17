@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button"
 import { Field, FieldError, FieldLabel, FieldSet } from "@/components/ui/field"
 import { InputGroup, InputGroupInput } from "@/components/ui/input-group"
 import { PasswordInput } from "@/components/ui/password-input"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import AvatarUpload from "@/components/custom/avatar-upload"
 
 const GET_MY_PROFILE = gql`
   query MyProfile($_id: ID!) {
@@ -61,12 +61,17 @@ export default function MyProfileSheet({ children }: Props) {
     nextFetchPolicy: "cache-first",
     skip: !currentUserId || !open,
   })
-  const [updateProfile] = useMutation(UPDATE_MY_PROFILE)
+  // The mutation only answers ok/message, so the header's copy of this user
+  // is refetched to pick up a new or removed picture.
+  const [updateProfile] = useMutation(UPDATE_MY_PROFILE, {
+    refetchQueries: ["HeaderUser"],
+  })
 
   const profile = data?.user
 
   const form = useForm({
     defaultValues: {
+      image: "" as string | null,
       name: "",
       surname: "",
       displayName: "",
@@ -79,6 +84,8 @@ export default function MyProfileSheet({ children }: Props) {
       startTransition(async () => {
         try {
           const input: Record<string, any> = {
+            // null rather than omitted, so removing a picture actually clears it.
+            image: value.image || null,
             name: value.name,
             surname: value.surname,
             displayName: value.displayName,
@@ -106,6 +113,7 @@ export default function MyProfileSheet({ children }: Props) {
 
   useEffect(() => {
     if (profile) {
+      form.setFieldValue("image", profile.image || "")
       form.setFieldValue("name", profile.name)
       form.setFieldValue("surname", profile.surname)
       form.setFieldValue("displayName", profile.displayName)
@@ -127,22 +135,23 @@ export default function MyProfileSheet({ children }: Props) {
           </SheetDescription>
         </SheetHeader>
         <div className="flex flex-col gap-4 px-4">
-          <div className="flex items-center gap-3">
-            <Avatar className="size-16">
-              <AvatarImage src={profile?.image || undefined} />
-              <AvatarFallback className="text-lg">
-                {profile?.name?.[0]}
-                {profile?.surname?.[0]}
-              </AvatarFallback>
-            </Avatar>
-            <div className="-space-y-0.5">
-              <span className="block font-medium capitalize">
-                {profile?.role?.toLowerCase()}
-              </span>
-              <span className="block text-xs text-muted-foreground">
-                @{profile?.username}
-              </span>
-            </div>
+          <form.Field name="image">
+            {(field) => (
+              <AvatarUpload
+                value={field.state.value}
+                onChange={(next) => field.handleChange(next)}
+                fallback={`${profile?.name?.[0] || ""}${profile?.surname?.[0] || ""}`}
+                disabled={isPending}
+              />
+            )}
+          </form.Field>
+          <div className="-space-y-0.5">
+            <span className="block font-medium capitalize">
+              {profile?.role?.toLowerCase()}
+            </span>
+            <span className="block text-xs text-muted-foreground">
+              @{profile?.username}
+            </span>
           </div>
           <form
             id="my-profile-form"

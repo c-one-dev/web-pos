@@ -12,8 +12,9 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
-import { useForm } from "@tanstack/react-form"
+import { useForm, useStore } from "@tanstack/react-form"
 import { userSchema } from "@/validators/user.validator"
+import AvatarUpload from "@/components/custom/avatar-upload"
 import { toast } from "sonner"
 import { copyToClipboard } from "@/lib/clipboard"
 import { Field, FieldError, FieldLabel, FieldSet } from "@/components/ui/field"
@@ -62,6 +63,7 @@ const FETCH_USER = gql`
   query User($_id: ID!) {
     user(_id: $_id) {
       _id
+      image
       name
       surname
       displayName
@@ -105,6 +107,8 @@ export default function FormDialog({ _id, onClose }: Props) {
     },
   })
   const [updateUser] = useMutation(UPDATE_USER, {
+    // An admin editing their own account should see the header change too.
+    refetchQueries: ["HeaderUser"],
     updateQueries: {
       UserTable: (prev, { mutationResult }: any) => {
         if (!mutationResult.data.updateUser.ok) return prev
@@ -135,6 +139,7 @@ export default function FormDialog({ _id, onClose }: Props) {
 
   const form = useForm({
     defaultValues: {
+      image: "" as string | null,
       name: "",
       surname: "",
       displayName: "",
@@ -166,6 +171,8 @@ export default function FormDialog({ _id, onClose }: Props) {
       startTransition(async () => {
         try {
           const payload = {
+            // null rather than omitted, so removing a picture actually clears it.
+            image: value.image || null,
             name: value.name,
             surname: value.surname,
             displayName: value.displayName,
@@ -207,6 +214,7 @@ export default function FormDialog({ _id, onClose }: Props) {
 
   useEffect(() => {
     if (data?.user) {
+      form.setFieldValue("image", data.user.image || "")
       form.setFieldValue("name", data.user.name)
       form.setFieldValue("surname", data.user.surname)
       form.setFieldValue("displayName", data.user.displayName)
@@ -215,6 +223,12 @@ export default function FormDialog({ _id, onClose }: Props) {
       form.setFieldValue("role", data.user.role)
     }
   }, [data, form])
+
+  const nameInitial = useStore(form.store, (state) => state.values.name?.[0])
+  const surnameInitial = useStore(
+    form.store,
+    (state) => state.values.surname?.[0]
+  )
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -243,6 +257,30 @@ export default function FormDialog({ _id, onClose }: Props) {
             }}
           >
             <FieldSet>
+              {/*
+                A real field, not just an uploader: the submit validator maps
+                each userSchema error onto the field of the same name, and an
+                image error with no "image" field to land on would throw.
+              */}
+              <form.Field name="image">
+                {(field) => {
+                  const isInvalid = !field.state.meta.isValid
+                  return (
+                    <Field data-invalid={isInvalid}>
+                      <FieldLabel>Profile Picture</FieldLabel>
+                      <AvatarUpload
+                        value={field.state.value}
+                        onChange={(next) => field.handleChange(next)}
+                        fallback={`${nameInitial || ""}${surnameInitial || ""}`}
+                        disabled={isPending}
+                      />
+                      {isInvalid && (
+                        <FieldError errors={field.state.meta.errors} />
+                      )}
+                    </Field>
+                  )
+                }}
+              </form.Field>
               <form.Field name="name">
                 {(field) => {
                   const isInvalid =
@@ -464,19 +502,19 @@ export default function FormDialog({ _id, onClose }: Props) {
           </AlertDialogHeader>
           <div className="flex items-center justify-between gap-2 border p-2 font-mono text-lg">
             <span
-                  // Click selects the whole thing, so Ctrl+C always works
-                  // even if the clipboard API is blocked.
-                  className="cursor-text select-all"
-                  onClick={(event) => {
-                    const range = document.createRange()
-                    range.selectNodeContents(event.currentTarget)
-                    const selection = window.getSelection()
-                    selection?.removeAllRanges()
-                    selection?.addRange(range)
-                  }}
-                >
-                  {tempPassword}
-                </span>
+              // Click selects the whole thing, so Ctrl+C always works
+              // even if the clipboard API is blocked.
+              className="cursor-text select-all"
+              onClick={(event) => {
+                const range = document.createRange()
+                range.selectNodeContents(event.currentTarget)
+                const selection = window.getSelection()
+                selection?.removeAllRanges()
+                selection?.addRange(range)
+              }}
+            >
+              {tempPassword}
+            </span>
             <Button
               type="button"
               variant="outline"
@@ -484,7 +522,10 @@ export default function FormDialog({ _id, onClose }: Props) {
               onClick={async () => {
                 const copied = await copyToClipboard(tempPassword || "")
                 if (copied) toast.success("Copied to clipboard.")
-                else toast.error("Could not copy - select the password and copy it by hand.")
+                else
+                  toast.error(
+                    "Could not copy - select the password and copy it by hand."
+                  )
               }}
             >
               Copy
