@@ -576,6 +576,7 @@ const GET_PAYMENTS = gql`
           }
           methodName
           paymentDate
+          reference
         }
       }
       pageInfo {
@@ -626,6 +627,36 @@ const TAB_LABELS: Record<string, string> = {
   summary: "Payment Summary",
   types: "Payment Types",
   transactions: "Payment Transactions",
+}
+
+/**
+ * Every payment in the range.
+ *
+ * The server clamps `first` at MAX_PAGE_SIZE (500), so asking for one big
+ * page silently cut a busy month off at 500 rows. The pages are walked
+ * instead.
+ */
+async function fetchAllPayments(
+  client: ReturnType<typeof useApolloClient>,
+  start: string,
+  end: string
+): Promise<IPaymentNode[]> {
+  const rows: IPaymentNode[] = []
+  let after: string | null = null
+  for (;;) {
+    const { data }: any = await client.query({
+      query: GET_PAYMENTS,
+      variables: { first: 500, after, start, end },
+      fetchPolicy: "network-only",
+    })
+    const connection = data?.paymentTable
+    if (!connection) break
+    rows.push(...(connection.edges || []).map((edge: any) => edge.node))
+    if (!connection.pageInfo?.hasNextPage) break
+    after = connection.pageInfo.endCursor
+    if (!after) break
+  }
+  return rows
 }
 
 async function exportPaymentsReportExcel({
@@ -704,21 +735,17 @@ async function exportPaymentsReportExcel({
     ])
     totalRow.font = { bold: true }
   } else {
-    const { data } = await client.query({
-      query: GET_PAYMENTS,
-      variables: { first: 500, start, end },
-      fetchPolicy: "network-only",
-    })
-    const nodes: IPaymentNode[] =
-      (data as any)?.paymentTable?.edges?.map((e: any) => e.node) || []
+    const nodes = await fetchAllPayments(client, start, end)
 
-    addExcelTitleRows(sheet, title, range, 6, outlets)
+    addExcelTitleRows(sheet, title, range, 7, outlets)
     sheet.columns = [
       { width: 20 },
       { width: 16 },
       { width: 20 },
       { width: 16 },
       { width: 16 },
+      // Card approval codes and e-wallet reference numbers both land here.
+      { width: 24 },
       { width: 20 },
     ]
     const headerRow = sheet.addRow([
@@ -727,6 +754,7 @@ async function exportPaymentsReportExcel({
       "Date & Time",
       "Method",
       "Payment Amount",
+      "Reference / Approval #",
       "User",
     ])
     styleExcelHeaderRow(headerRow)
@@ -737,6 +765,8 @@ async function exportPaymentsReportExcel({
         n.paymentDate ? format(Number(n.paymentDate), "PPp") : "-",
         n.methodName,
         Number(n.amount),
+        // Cash has none, and a blank cell says that more plainly than "-".
+        n.reference || "",
         n.byName,
       ])
     )
@@ -750,6 +780,7 @@ async function exportPaymentsReportExcel({
       "",
       "",
       nodes.reduce((sum, n) => sum + Number(n.amount), 0),
+      "",
       "",
     ])
     totalRow.font = { bold: true }
@@ -848,13 +879,7 @@ async function exportPaymentsReportPdf({
       ...pdfTableStyles,
     })
   } else {
-    const { data } = await client.query({
-      query: GET_PAYMENTS,
-      variables: { first: 500, start, end },
-      fetchPolicy: "network-only",
-    })
-    const nodes: IPaymentNode[] =
-      (data as any)?.paymentTable?.edges?.map((e: any) => e.node) || []
+    const nodes = await fetchAllPayments(client, start, end)
 
     autoTable(doc, {
       startY,
@@ -865,6 +890,7 @@ async function exportPaymentsReportPdf({
           "Date & Time",
           "Method",
           "Payment Amount",
+          "Reference / Approval #",
           "User",
         ],
       ],
@@ -874,6 +900,7 @@ async function exportPaymentsReportPdf({
         n.paymentDate ? format(Number(n.paymentDate), "PPp") : "-",
         n.methodName,
         pdfCurrency(n.amount),
+        n.reference || "",
         n.byName,
       ]),
       ...pdfTableStyles,

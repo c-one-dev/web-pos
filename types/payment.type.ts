@@ -16,7 +16,6 @@ export interface IPayment {
   reference?: string
 }
 
-
 export interface IPaymentNode {
   _id: Types.ObjectId
   amount: number
@@ -26,4 +25,6 @@ export interface IPaymentNode {
   sales: { _id: string; saleNumber: string; total: number }[]
   methodName: string
   paymentDate: string
+  // Provider reference / card approval code. Empty on cash.
+  reference?: string
 }

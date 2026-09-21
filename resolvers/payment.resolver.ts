@@ -24,6 +24,7 @@ const generateNode = (payment: any) => ({
   })),
   methodName: payment.method.name,
   paymentDate: payment.date,
+  reference: payment.reference,
 })
 
 export const paymentResolver = {
@@ -223,6 +224,7 @@ export const paymentResolver = {
               byName: 1,
               saleList: 1,
               sales: 1,
+              reference: 1,
             },
           },
         ]

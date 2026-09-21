@@ -37,6 +37,9 @@ export const paymentSchema = gql`
     sales: [PaymentSaleRef]
     methodName: String
     paymentDate: String
+    # Provider reference / card approval code, captured at checkout or when
+    # an account balance is settled. Empty on cash.
+    reference: String
   }
 
   type PaymentEdge {
