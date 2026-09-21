@@ -101,6 +101,10 @@ export function styleExcelHeaderRow(row: ExcelJS.Row) {
   })
 }
 
+// Excel number format, so the cells stay real numbers that still add up -
+// writing "₱680.00" as text would give a column nothing can sum.
+const PESO_FORMAT = '"₱"#,##0.00'
+
 export const SALES_TRANSACTION_COLUMNS = [
   { header: "Order #", width: 14 },
   { header: "Date", width: 14 },
@@ -108,20 +112,21 @@ export const SALES_TRANSACTION_COLUMNS = [
   { header: "Customer name", width: 24 },
   { header: "Status", width: 14 },
   { header: "Payment types", width: 20 },
-  { header: "Order total", width: 14 },
+  { header: "Order total", width: 14, numFmt: PESO_FORMAT },
   { header: "User", width: 22 },
   { header: "Item", width: 34 },
   { header: "SKU", width: 12 },
   { header: "Quantity sold", width: 13 },
-  { header: "Sales (inc)", width: 13 },
-  { header: "Sales (Ex. tax)", width: 15 },
-  { header: "Order discounts", width: 15 },
-  { header: "Discount offers", width: 15 },
-  { header: "Total markup value", width: 17 },
-  { header: "Purchase cost", width: 14 },
-  { header: "Gross profit", width: 13 },
-  { header: "Margin %", width: 11 },
-  { header: "Retail price", width: 13 },
+  { header: "Sales (inc)", width: 13, numFmt: PESO_FORMAT },
+  { header: "Sales (Ex. tax)", width: 15, numFmt: PESO_FORMAT },
+  { header: "Order discounts", width: 15, numFmt: PESO_FORMAT },
+  { header: "Discount offers", width: 15, numFmt: PESO_FORMAT },
+  { header: "Total markup value", width: 17, numFmt: PESO_FORMAT },
+  { header: "Purchase cost", width: 14, numFmt: PESO_FORMAT },
+  { header: "Gross profit", width: 13, numFmt: PESO_FORMAT },
+  // A rate, not an amount, so no peso sign - two decimals like the rest.
+  { header: "Margin %", width: 11, numFmt: "0.00" },
+  { header: "Retail price", width: 13, numFmt: PESO_FORMAT },
 ]
 
 /**
@@ -189,6 +194,7 @@ export function buildSalesTransactionsSheet(
   addTransactionsTitleRows(sheet, title, range, outlets)
   sheet.columns = SALES_TRANSACTION_COLUMNS.map((column) => ({
     width: column.width,
+    ...(column.numFmt ? { style: { numFmt: column.numFmt } } : {}),
   }))
   styleExcelHeaderRow(
     sheet.addRow(SALES_TRANSACTION_COLUMNS.map((column) => column.header))
@@ -217,7 +223,6 @@ export function buildSalesTransactionsSheet(
       sale.total,
       sale.byName,
     ])
-    orderRow.font = { bold: true }
     totals.orderTotal += sale.total || 0
 
     for (const item of sale.items || []) {
@@ -269,7 +274,7 @@ export function buildSalesTransactionsSheet(
 
   // Margin % and Retail price are per-unit rates, so they are left blank
   // rather than added up into a number that means nothing.
-  const totalRow = sheet.addRow([
+  sheet.addRow([
     "",
     "",
     "",
@@ -291,7 +296,6 @@ export function buildSalesTransactionsSheet(
     "",
     "",
   ])
-  totalRow.font = { bold: true }
 }
 
 export async function downloadExcelWorkbook(
