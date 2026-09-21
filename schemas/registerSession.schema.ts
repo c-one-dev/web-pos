@@ -158,6 +158,8 @@ export const registerSessionSchema = gql`
     openedByName: String
     closedAt: String
     closedByName: String
+    # The cashier's closing note, if they left one.
+    notes: String
     paymentReceived: Float
     refunds: Float
     netReceipts: Float
@@ -270,5 +272,7 @@ export const registerSessionSchema = gql`
     openRegisterSession(register: ID!, openingFloat: Float!): Response
     addCashMovement(_id: ID!, input: CashMovementInput!): Response
     closeRegisterSession(_id: ID!, input: CloseRegisterSessionInput!): Response
+    # Re-sends the closing report for a shift that is already closed.
+    emailRegisterClosure(_id: ID!): Response
   }
 `

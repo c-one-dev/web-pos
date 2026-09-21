@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react"
 import gql from "graphql-tag"
-import { useQuery } from "@apollo/client/react"
+import { useMutation, useQuery } from "@apollo/client/react"
 import { useParams, useRouter } from "next/navigation"
 import { format } from "date-fns"
 import {
@@ -49,6 +49,7 @@ import DataTable from "@/components/custom/data-table"
 import SaleRowViewDialog from "@/app/(auth)/sale-history/_dialogs/row-view"
 import { useCursorPage } from "@/hooks/use-cursor-page"
 import { cn } from "@/lib/utils"
+import { errorMessageOf } from "@/lib/graphql-error"
 import { BusinessDate, CountedAsNote } from "@/components/custom/business-date"
 
 const currency = (value?: number | null) =>
@@ -131,6 +132,17 @@ const CLOSURE_TABLE_TEXT = [
 // blank card. Capped so 100 rows per page does not reserve a screenful.
 const CLOSURE_TABLE_CONTAINER =
   "max-h-[60vh] min-h-[var(--closure-body)] overflow-y-auto"
+
+// Re-sends the closing report. The same report goes out on its own when the
+// register is closed; this is for a shift that needs it again.
+const EMAIL_CLOSURE = gql`
+  mutation EmailRegisterClosure($_id: ID!) {
+    emailRegisterClosure(_id: $_id) {
+      ok
+      message
+    }
+  }
+`
 
 const GET_CLOSURE_DETAIL = gql`
   query RegisterSessionClosureDetail($_id: ID!) {
@@ -816,6 +828,19 @@ export default function Page() {
   })
   const detail = (data as any)?.registerSessionClosureDetail
 
+  const [emailClosure, { loading: emailing }] = useMutation(EMAIL_CLOSURE)
+  const sendReport = async () => {
+    try {
+      const result = await emailClosure({ variables: { _id: sessionId } })
+      toast.success(
+        (result.data as any)?.emailRegisterClosure?.message ||
+          "Report sent by email."
+      )
+    } catch (error) {
+      toast.error(errorMessageOf(error))
+    }
+  }
+
   const paymentTypeOptions = useMemo(() => {
     const names = new Set<string>(
       (detail?.paymentSummary || []).map(
@@ -1197,11 +1222,10 @@ export default function Page() {
           <Button
             variant="outline"
             className="gap-1.5"
-            onClick={() =>
-              toast.info("Sending reports by email isn't available yet.")
-            }
+            onClick={sendReport}
+            disabled={emailing}
           >
-            <EnvelopeSimpleIcon /> Send Email
+            <EnvelopeSimpleIcon /> {emailing ? "Sending…" : "Send Email"}
           </Button>
         </div>
       </div>

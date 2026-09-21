@@ -7,6 +7,8 @@ import Sale from "../models/sale.model"
 import Customer from "../models/customer.model"
 import Outlet from "../models/outlet.model"
 import { fromCursor, toCursor } from "../helpers/cursor"
+import { closureRecipients, sendClosureEmail } from "../lib/closure-email"
+import { isMailConfigured } from "../lib/mailer"
 
 const REGISTER_SESSION_CURSOR_TYPE = "registerSession"
 
@@ -405,6 +407,197 @@ const paginateRows = (rows: any[], first: number, after?: string) => {
   }
 }
 
+// The whole closure report for one shift: the summary figures and every
+// tab's rows. Extracted from the query resolver so the closing email can
+// build exactly what the page shows, from one definition rather than two.
+export const loadClosureDetail = async (_id: string) => {
+  const session = await RegisterSession.findById(_id)
+    .populate(["openedBy", "closedBy", "tally.method", "cashMovements.by"])
+    .lean()
+  if (!session) throw new GraphQLError("Register session not found")
+
+  const registerDoc = await Register.findById(session.register).lean()
+  if (!registerDoc) throw new GraphQLError("Register not found")
+  const outletDoc = registerDoc.outlet
+    ? await Outlet.findById(registerDoc.outlet).lean()
+    : null
+
+  const start = session.openedAt
+  const end = session.closedAt || new Date()
+  const onAccountId = process.env.NEXT_PUBLIC_ON_ACCOUNT_ID
+
+  // Same scoping convention as resolveSummary above: sales on this
+  // register within the shift's time window, voided and carried-over
+  // sales excluded.
+  const sales = await Sale.find({
+    register: registerDoc._id,
+    currentSaleStatus: { $ne: "VOIDED" },
+    isImported: { $ne: true },
+    createdAt: { $gte: start, $lte: end },
+  })
+    .populate(["customer", "by", "payments.method", "items.product"])
+    .sort({ createdAt: 1 })
+    .lean()
+
+  // Money actually taken in this shift, which is not the same as what
+  // was sold: an On Account tender is a debt, so the goods leave and
+  // nothing goes in the drawer. Counting it here reported takings the
+  // shift never had, and put the closing count out by the same amount.
+  //
+  // Settlements are the other half of that: a customer repaying an old
+  // account balance hands over real money, on a sale that may have been
+  // rung up months ago, so it is added from its own query rather than
+  // from this shift's sales.
+  const [settlementTotals] = await Sale.aggregate([
+    { $match: { "settlements.register": registerDoc._id } },
+    { $unwind: "$settlements" },
+    {
+      $match: {
+        "settlements.register": registerDoc._id,
+        "settlements.date": { $gte: start, $lte: end },
+      },
+    },
+    { $group: { _id: null, total: { $sum: "$settlements.amount" } } },
+  ])
+  const settledInShift = settlementTotals?.total || 0
+
+  const tendersReceived = sales.reduce(
+    (sum, s: any) =>
+      sum +
+      (s.payments || [])
+        .filter((payment: any) => {
+          const method = payment.method?._id || payment.method
+          return method?.toString() !== onAccountId
+        })
+        .reduce(
+          (paid: number, payment: any) =>
+            paid + (payment.amount || 0) - (payment.change || 0),
+          0
+        ),
+    0
+  )
+  const paymentReceived = parseFloat(
+    (tendersReceived + settledInShift).toFixed(2)
+  )
+  const totalSalesInc = sales.reduce((sum, s: any) => sum + s.total, 0)
+  const itemDiscounts = sales.reduce(
+    (sum, s: any) =>
+      sum +
+      (s.items || []).reduce(
+        (a: number, i: any) => a + i.discount * i.quantity,
+        0
+      ),
+    0
+  )
+  const orderDiscounts = sales.reduce((sum, s: any) => sum + s.discount, 0)
+
+  // One row per individual payment. The On Account tab is built from
+  // this rather than from the grouped rows below, because a split
+  // payment only puts *part* of the sale on account - grouping first
+  // would report the whole sale total as owed.
+  const onAccountSales = buildPaymentRows(sales, onAccountId)
+    .filter((p) => p.isOnAccount)
+    .sort(
+      (a: any, b: any) =>
+        new Date(b.date).getTime() - new Date(a.date).getTime()
+    )
+
+  // Payment Details is one row per SALE: a sale settled with more than
+  // one tender shows a single line with the methods joined, matching
+  // the convention Transaction by SKU already uses for its payments
+  // column. paymentAmount is the sale's total net tender, not one
+  // method's share - use the Payment Summary tab for per-method totals.
+  // The per-method tally is written when the shift closes: it records
+  // what was counted against what was expected, and must never change
+  // afterwards. While the shift is still open there is nothing to
+  // record yet, so the expectations are computed live - otherwise this
+  // tab reads "No payments recorded in this shift" all day, however
+  // much has been taken.
+  const paymentSummary = session.closedAt
+    ? session.tally || []
+    : (await resolveSummary(registerDoc, session)).expectedTotals
+
+  const paymentDetails = buildPaymentDetails(sales, onAccountId)
+  const transactions = buildTransactions(sales)
+  const transactionsBySku = buildTransactionsBySku(sales)
+  const cogs = buildCogs(sales)
+
+  return {
+    _id: session._id,
+    registerName: registerDoc.name,
+    outletName: outletDoc?.name || "-",
+    openedAt: session.openedAt,
+    openedByName: fullName(session.openedBy),
+    closedAt: session.closedAt,
+    closedByName: fullName(session.closedBy),
+    notes: session.notes || null,
+    paymentReceived,
+    refunds: 0,
+    netReceipts: paymentReceived,
+    totalSalesInc,
+    totalSalesEx: totalSalesInc,
+    salesTaxCollected: 0,
+    itemDiscounts,
+    discounts: orderDiscounts,
+    surcharge: 0,
+    openingFloat: session.openingFloat || 0,
+    totalCashIn: (session.cashMovements || [])
+      .filter((movement: any) => movement.type === "IN")
+      .reduce((sum: number, movement: any) => sum + movement.amount, 0),
+    totalCashOut: (session.cashMovements || [])
+      .filter((movement: any) => movement.type === "OUT")
+      .reduce((sum: number, movement: any) => sum + movement.amount, 0),
+    newCustomers: await Customer.countDocuments({
+      createdAt: { $gte: start, $lte: end },
+    }),
+    numberOfTransactions: sales.length,
+    // Average of what was SOLD, not of what was collected - now that
+    // those differ, dividing takings by the number of sales would
+    // report a smaller average on any shift with an account sale in it.
+    avgSaleValue: sales.length ? totalSalesInc / sales.length : 0,
+    paymentSummary,
+    paymentDetails,
+    onAccountSales,
+    addsPayouts: session.cashMovements || [],
+    transactions,
+    transactionsBySku,
+    cogs,
+  }
+}
+
+/**
+ * Builds and sends the closing report for a shift.
+ *
+ * Never throws: closing a register must succeed whether or not the mail
+ * server is reachable, so the outcome comes back as a value for the caller
+ * to report. Misconfiguration is treated the same as a send failure, except
+ * that a site with no SMTP set up at all is not an error - it simply has the
+ * feature switched off.
+ */
+const sendClosureReport = async (_id: string) => {
+  if (!isMailConfigured())
+    return { ok: true, message: "Email is not configured; report not sent." }
+
+  const recipients = closureRecipients()
+  if (!recipients.length)
+    return {
+      ok: false,
+      message: "No recipients are configured (CLOSURE_REPORT_TO).",
+    }
+
+  try {
+    const detail = await loadClosureDetail(_id)
+    await sendClosureEmail(detail)
+    return {
+      ok: true,
+      message: `Closing report sent to ${recipients.join(", ")}.`,
+    }
+  } catch (error: any) {
+    console.error("[closure email] failed to send", error)
+    return { ok: false, message: error?.message || "Unknown error." }
+  }
+}
+
 export const registerSessionResolver = {
   Query: {
     activeRegisterSession: async (_: any, { register }: any) => {
@@ -465,165 +658,7 @@ export const registerSessionResolver = {
     },
     registerSessionClosureDetail: async (_: any, { _id }: any) => {
       try {
-        const session = await RegisterSession.findById(_id)
-          .populate([
-            "openedBy",
-            "closedBy",
-            "tally.method",
-            "cashMovements.by",
-          ])
-          .lean()
-        if (!session) throw new GraphQLError("Register session not found")
-
-        const registerDoc = await Register.findById(session.register).lean()
-        if (!registerDoc) throw new GraphQLError("Register not found")
-        const outletDoc = registerDoc.outlet
-          ? await Outlet.findById(registerDoc.outlet).lean()
-          : null
-
-        const start = session.openedAt
-        const end = session.closedAt || new Date()
-        const onAccountId = process.env.NEXT_PUBLIC_ON_ACCOUNT_ID
-
-        // Same scoping convention as resolveSummary above: sales on this
-        // register within the shift's time window, voided and carried-over
-        // sales excluded.
-        const sales = await Sale.find({
-          register: registerDoc._id,
-          currentSaleStatus: { $ne: "VOIDED" },
-          isImported: { $ne: true },
-          createdAt: { $gte: start, $lte: end },
-        })
-          .populate(["customer", "by", "payments.method", "items.product"])
-          .sort({ createdAt: 1 })
-          .lean()
-
-        // Money actually taken in this shift, which is not the same as what
-        // was sold: an On Account tender is a debt, so the goods leave and
-        // nothing goes in the drawer. Counting it here reported takings the
-        // shift never had, and put the closing count out by the same amount.
-        //
-        // Settlements are the other half of that: a customer repaying an old
-        // account balance hands over real money, on a sale that may have been
-        // rung up months ago, so it is added from its own query rather than
-        // from this shift's sales.
-        const [settlementTotals] = await Sale.aggregate([
-          { $match: { "settlements.register": registerDoc._id } },
-          { $unwind: "$settlements" },
-          {
-            $match: {
-              "settlements.register": registerDoc._id,
-              "settlements.date": { $gte: start, $lte: end },
-            },
-          },
-          { $group: { _id: null, total: { $sum: "$settlements.amount" } } },
-        ])
-        const settledInShift = settlementTotals?.total || 0
-
-        const tendersReceived = sales.reduce(
-          (sum, s: any) =>
-            sum +
-            (s.payments || [])
-              .filter((payment: any) => {
-                const method = payment.method?._id || payment.method
-                return method?.toString() !== onAccountId
-              })
-              .reduce(
-                (paid: number, payment: any) =>
-                  paid + (payment.amount || 0) - (payment.change || 0),
-                0
-              ),
-          0
-        )
-        const paymentReceived = parseFloat(
-          (tendersReceived + settledInShift).toFixed(2)
-        )
-        const totalSalesInc = sales.reduce((sum, s: any) => sum + s.total, 0)
-        const itemDiscounts = sales.reduce(
-          (sum, s: any) =>
-            sum +
-            (s.items || []).reduce(
-              (a: number, i: any) => a + i.discount * i.quantity,
-              0
-            ),
-          0
-        )
-        const orderDiscounts = sales.reduce(
-          (sum, s: any) => sum + s.discount,
-          0
-        )
-
-        // One row per individual payment. The On Account tab is built from
-        // this rather than from the grouped rows below, because a split
-        // payment only puts *part* of the sale on account - grouping first
-        // would report the whole sale total as owed.
-        const onAccountSales = buildPaymentRows(sales, onAccountId)
-          .filter((p) => p.isOnAccount)
-          .sort(
-            (a: any, b: any) =>
-              new Date(b.date).getTime() - new Date(a.date).getTime()
-          )
-
-        // Payment Details is one row per SALE: a sale settled with more than
-        // one tender shows a single line with the methods joined, matching
-        // the convention Transaction by SKU already uses for its payments
-        // column. paymentAmount is the sale's total net tender, not one
-        // method's share - use the Payment Summary tab for per-method totals.
-        // The per-method tally is written when the shift closes: it records
-        // what was counted against what was expected, and must never change
-        // afterwards. While the shift is still open there is nothing to
-        // record yet, so the expectations are computed live - otherwise this
-        // tab reads "No payments recorded in this shift" all day, however
-        // much has been taken.
-        const paymentSummary = session.closedAt
-          ? session.tally || []
-          : (await resolveSummary(registerDoc, session)).expectedTotals
-
-        const paymentDetails = buildPaymentDetails(sales, onAccountId)
-        const transactions = buildTransactions(sales)
-        const transactionsBySku = buildTransactionsBySku(sales)
-        const cogs = buildCogs(sales)
-
-        return {
-          _id: session._id,
-          registerName: registerDoc.name,
-          outletName: outletDoc?.name || "-",
-          openedAt: session.openedAt,
-          openedByName: fullName(session.openedBy),
-          closedAt: session.closedAt,
-          closedByName: fullName(session.closedBy),
-          paymentReceived,
-          refunds: 0,
-          netReceipts: paymentReceived,
-          totalSalesInc,
-          totalSalesEx: totalSalesInc,
-          salesTaxCollected: 0,
-          itemDiscounts,
-          discounts: orderDiscounts,
-          surcharge: 0,
-          openingFloat: session.openingFloat || 0,
-          totalCashIn: (session.cashMovements || [])
-            .filter((movement: any) => movement.type === "IN")
-            .reduce((sum: number, movement: any) => sum + movement.amount, 0),
-          totalCashOut: (session.cashMovements || [])
-            .filter((movement: any) => movement.type === "OUT")
-            .reduce((sum: number, movement: any) => sum + movement.amount, 0),
-          newCustomers: await Customer.countDocuments({
-            createdAt: { $gte: start, $lte: end },
-          }),
-          numberOfTransactions: sales.length,
-          // Average of what was SOLD, not of what was collected - now that
-          // those differ, dividing takings by the number of sales would
-          // report a smaller average on any shift with an account sale in it.
-          avgSaleValue: sales.length ? totalSalesInc / sales.length : 0,
-          paymentSummary,
-          paymentDetails,
-          onAccountSales,
-          addsPayouts: session.cashMovements || [],
-          transactions,
-          transactionsBySku,
-          cogs,
-        }
+        return await loadClosureDetail(_id)
       } catch (error) {
         throw error
       }
@@ -1016,11 +1051,32 @@ export const registerSessionResolver = {
 
         await Register.findByIdAndUpdate(session.register, { isOpen: false })
 
+        // The closing report goes out by email. Awaited rather than left to
+        // run loose, so a mail failure is logged against this request - but
+        // it must never undo a close: the shift is already ended in the
+        // database and the cashier has gone home. The response says whether
+        // it went.
+        const emailed = await sendClosureReport(_id)
+
         return {
           ok: true,
-          message: "Register closed successfully.",
+          message: emailed.ok
+            ? "Register closed successfully."
+            : `Register closed successfully, but the report email failed: ${emailed.message}`,
           data: updated,
         }
+      } catch (error) {
+        throw error
+      }
+    },
+    // Re-sends the closing report for a shift. The closure page's "Send
+    // Email" button, and the way to recover from a failed automatic send
+    // without reopening anything.
+    emailRegisterClosure: async (_: any, { _id }: any) => {
+      try {
+        const sent = await sendClosureReport(_id)
+        if (!sent.ok) throw new GraphQLError(sent.message)
+        return { ok: true, message: sent.message, data: null }
       } catch (error) {
         throw error
       }

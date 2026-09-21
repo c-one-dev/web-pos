@@ -91,6 +91,7 @@ export const mutationValidationRegistry: Record<
   openRegisterSession: openRegisterSessionSchema,
   addCashMovement: cashMovementSchema,
   closeRegisterSession: closeRegisterSessionSchema,
+  emailRegisterClosure: NO_VALIDATION,
 
   createCustomer: customerSchema,
   adjustAccountLimit: adjustAccountLimitSchema,

@@ -98,6 +98,7 @@ export const permissionTree: PermissionNode[] = [
               "Query.registerSession",
               "Query.activeRegisterSession",
               "Query.registerSessionClosureDetail",
+              "Mutation.emailRegisterClosure",
             ],
           },
           {
