@@ -13,24 +13,49 @@ let transporter: Transporter | null = null
 export const mailFrom = () =>
   process.env.SMTP_FROM || process.env.SMTP_USER || ""
 
-/** Whether mail is configured at all. Callers skip sending when it is not. */
-export const isMailConfigured = () =>
-  Boolean(
-    process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD
-  )
+const SMTP_KEYS = ["SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD"] as const
+
+/**
+ * How the mail settings stand.
+ *
+ * "off" means nothing at all is set, which is a deliberate choice: an
+ * installation that does not want the emails simply leaves them out.
+ * "incomplete" means some keys are filled and others are not - that is
+ * somebody half way through setting it up, and it must be reported rather
+ * than treated as "off", because it looks exactly like a working install
+ * from the outside while sending nothing.
+ */
+export const mailConfigStatus = () => {
+  const missing = SMTP_KEYS.filter((key) => !process.env[key]?.trim())
+  if (missing.length === SMTP_KEYS.length) return { state: "off" as const }
+  if (missing.length) return { state: "incomplete" as const, missing }
+  return { state: "ready" as const }
+}
+
+/** Whether mail can actually be sent. */
+export const isMailConfigured = () => mailConfigStatus().state === "ready"
+
+/**
+ * Google prints an App Password in four blocks of four ("abcd efgh ijkl
+ * mnop") to make it readable, but its SMTP server compares the string
+ * literally and rejects the spaces with 535 BadCredentials. An App Password
+ * never contains whitespace, so removing it is always safe and saves an hour
+ * of chasing a credential that was correct all along.
+ */
+const credential = (value?: string) => (value || "").replace(/\s+/g, "")
 
 const getTransporter = () => {
   if (transporter) return transporter
 
   const port = Number(process.env.SMTP_PORT || 587)
   transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
+    host: process.env.SMTP_HOST?.trim(),
     port,
     // 465 is implicit TLS; 587 starts plain and upgrades with STARTTLS.
     secure: port === 465,
     auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASSWORD,
+      user: process.env.SMTP_USER?.trim(),
+      pass: credential(process.env.SMTP_PASSWORD),
     },
     pool: true,
     maxConnections: 2,
@@ -42,6 +67,20 @@ const getTransporter = () => {
     socketTimeout: 20000,
   })
   return transporter
+}
+
+/**
+ * Opens a connection and authenticates, without sending anything. Used by
+ * scripts/test-closure-email.ts --verify to check credentials in a couple of
+ * seconds rather than by sending a whole report.
+ */
+export const verifyMail = async () => {
+  if (!isMailConfigured())
+    throw new Error(
+      "SMTP is not configured. Set SMTP_HOST, SMTP_USER and SMTP_PASSWORD."
+    )
+  await getTransporter().verify()
+  return true
 }
 
 /** Comma/semicolon separated address list from an env var. */

@@ -4,6 +4,7 @@
  *
  *   npx tsx scripts/test-closure-email.ts         # send it
  *   npx tsx scripts/test-closure-email.ts --dry   # write the HTML, send nothing
+ *   npx tsx scripts/test-closure-email.ts --verify # check the login only
  *
  * Reads the same .env the app does. It never touches the database: the
  * figures below are made up, and the point of the test is the SMTP
@@ -142,7 +143,17 @@ const sample = {
 const main = async () => {
   const { renderClosureEmail, sendClosureEmail, closureRecipients } =
     await import("../lib/closure-email")
-  const { isMailConfigured, mailFrom } = await import("../lib/mailer")
+  const { isMailConfigured, mailFrom, verifyMail } =
+    await import("../lib/mailer")
+
+  // Credentials only. Nothing is rendered or sent, so a wrong App Password
+  // comes back in about two seconds.
+  if (process.argv.includes("--verify")) {
+    console.log("Authenticating as", process.env.SMTP_USER, "...")
+    await verifyMail()
+    console.log("SMTP login accepted.")
+    return
+  }
 
   const { subject, html } = renderClosureEmail(sample)
   console.log("Subject:", subject)

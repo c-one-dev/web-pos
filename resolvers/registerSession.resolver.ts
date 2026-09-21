@@ -8,7 +8,7 @@ import Customer from "../models/customer.model"
 import Outlet from "../models/outlet.model"
 import { fromCursor, toCursor } from "../helpers/cursor"
 import { closureRecipients, sendClosureEmail } from "../lib/closure-email"
-import { isMailConfigured } from "../lib/mailer"
+import { mailConfigStatus } from "../lib/mailer"
 
 const REGISTER_SESSION_CURSOR_TYPE = "registerSession"
 
@@ -575,23 +575,35 @@ export const loadClosureDetail = async (_id: string) => {
  * feature switched off.
  */
 const sendClosureReport = async (_id: string) => {
-  if (!isMailConfigured())
+  const config = mailConfigStatus()
+
+  // Nothing configured at all: the site does not want these emails.
+  if (config.state === "off") {
+    console.info("[closure email] SMTP is not set up; no report sent.")
     return { ok: true, message: "Email is not configured; report not sent." }
+  }
+
+  // Half configured is a mistake, not a choice. Saying nothing here is what
+  // made a close look like it had emailed when it had not.
+  if (config.state === "incomplete") {
+    const message = `Email is half configured - ${config.missing.join(", ")} ${config.missing.length === 1 ? "is" : "are"} empty.`
+    console.error("[closure email]", message)
+    return { ok: false, message }
+  }
 
   const recipients = closureRecipients()
-  if (!recipients.length)
-    return {
-      ok: false,
-      message: "No recipients are configured (CLOSURE_REPORT_TO).",
-    }
+  if (!recipients.length) {
+    const message = "No recipients are configured (CLOSURE_REPORT_TO)."
+    console.error("[closure email]", message)
+    return { ok: false, message }
+  }
 
   try {
     const detail = await loadClosureDetail(_id)
     await sendClosureEmail(detail)
-    return {
-      ok: true,
-      message: `Closing report sent to ${recipients.join(", ")}.`,
-    }
+    const message = `Closing report sent to ${recipients.join(", ")}.`
+    console.info("[closure email]", message)
+    return { ok: true, message }
   } catch (error: any) {
     console.error("[closure email] failed to send", error)
     return { ok: false, message: error?.message || "Unknown error." }
