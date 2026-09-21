@@ -1201,6 +1201,30 @@ export default function Page() {
         ),
       },
       {
+        // Card approval codes and e-wallet reference numbers both live in
+        // this one field - they are the same thing to whoever is matching
+        // the day's takings against the terminal's batch.
+        id: "reference",
+        header: "Reference / Approval #",
+        cell: ({ row }) =>
+          row.original.reference ? (
+            <span className="font-medium">{row.original.reference}</span>
+          ) : (
+            // Cash has none. A dash says "nothing to capture" rather than
+            // leaving the reader wondering if it went missing.
+            <span className="text-muted-foreground">—</span>
+          ),
+        footer: () => (
+          <ColumnFilter
+            label="Reference"
+            filterKey="reference"
+            filterType={FilterType.TEXT}
+            filter={filter}
+            onFilterChange={onFilter}
+          />
+        ),
+      },
+      {
         id: "by",
         header: () => (
           <SortHeader
@@ -1329,7 +1353,7 @@ export default function Page() {
               <InputGroupInput
                 data-search-input
                 onChange={(e) => setSearchTerm(e.currentTarget.value)}
-                placeholder="Find by transaction number, method, or user..."
+                placeholder="Find by transaction number, reference, method, or user..."
                 onKeyDown={(e) => {
                   if (e.key === "Enter") onSearch(searchTerm)
                   if (e.key === "Escape") {

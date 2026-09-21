@@ -66,6 +66,9 @@ export const paymentResolver = {
             { note: { $regex: search, $options: "i" } },
             { byName: { $regex: search, $options: "i" } },
             { methodName: { $regex: search, $options: "i" } },
+            // Reconciling a card batch starts from the approval code, so it
+            // has to be findable by it.
+            { reference: { $regex: search, $options: "i" } },
             { "sale.saleNumber": { $regex: search, $options: "i" } },
             { amount: isNaN(Number(search)) ? undefined : Number(search) },
           ]
