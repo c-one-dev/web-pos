@@ -604,12 +604,31 @@ type LegacyItem = { sku: string; name: string; quantity: number; price: number }
 // value because a parsed row is flat strings by design - see ImportRow.
 const ITEMS_KEY = "__items"
 
+// The item line a row carries, or null if it carries none.
+const saleItemOf = (row: ImportRow): LegacyItem | null => {
+  const sku = row["sku"]?.trim()
+  const quantity = parseNumber(row["quantity"])
+  if (!sku || !quantity) return null
+  const lineTotal = parseNumber(row["line total"])
+  const price =
+    lineTotal !== undefined
+      ? parseFloat((lineTotal / quantity).toFixed(2))
+      : parseNumber(row["price"])
+  if (price === undefined) return null
+  return { sku, name: row["item name"]?.trim() || "", quantity, price }
+}
+
 // Folds a Sales Transactions export into one row per order.
 //
-// That report writes the order on one row and each of its items on the rows
-// beneath it, with the order columns left blank. So a row carrying a sale
-// number opens a new order, and every row after it that names an item
-// belongs to that order.
+// That report writes the order and its first item on one row, then each
+// further item on a row beneath it with the order columns left blank. So a
+// row carrying a sale number opens a new order - taking its own item line
+// with it if it has one - and every row after it that names an item belongs
+// to that order.
+//
+// An order row with no item on it is still valid: the previous system's
+// export left that row blank from the Item column onwards, and files in that
+// shape must keep importing.
 const groupSaleItemRows = (rows: ImportRow[]): ImportRow[] => {
   const grouped: ImportRow[] = []
   let current: ImportRow | null = null
@@ -627,24 +646,17 @@ const groupSaleItemRows = (rows: ImportRow[]): ImportRow[] => {
     if (row["sale number"]?.trim()) {
       flush()
       current = { ...row }
+      const first = saleItemOf(row)
+      if (first) items.push(first)
       continue
     }
 
-    const sku = row["sku"]?.trim()
-    const quantity = parseNumber(row["quantity"])
-    if (current && sku && quantity) {
-      const lineTotal = parseNumber(row["line total"])
-      const price =
-        lineTotal !== undefined
-          ? parseFloat((lineTotal / quantity).toFixed(2))
-          : parseNumber(row["price"])
-      if (price !== undefined)
-        items.push({
-          sku,
-          name: row["item name"]?.trim() || "",
-          quantity,
-          price,
-        })
+    // Anything naming a product and a quantity under an open order is one of
+    // its lines, and is consumed either way - a line whose price cannot be
+    // worked out is dropped, not treated as a row of its own.
+    if (current && row["sku"]?.trim() && parseNumber(row["quantity"])) {
+      const item = saleItemOf(row)
+      if (item) items.push(item)
       continue
     }
 

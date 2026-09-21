@@ -176,11 +176,15 @@ export type SalesTransactionSheetRow = {
 /**
  * Writes the Sales Transactions sheet.
  *
- * Laid out the way the previous system exported this report: an order row
- * carrying columns A-H, then one row per line carrying I-T, then a totals
- * row. Keeping the shape means an export from here can be read against one
- * from there column by column, and can be fed straight back into the sale
- * importer, which expects exactly this file.
+ * The columns are the ones the previous system exported, in its order, so
+ * the two files can be read against each other - and so a file from here
+ * feeds straight back into the sale importer.
+ *
+ * The rows differ from it in one way: that export left the order row blank
+ * from the Item column onwards and started the items beneath it, so every
+ * receipt opened with a line of blanks. Here the first line sits on the
+ * order's own row and only the rest go underneath. groupSaleItemRows reads
+ * both shapes.
  */
 export function buildSalesTransactionsSheet(
   sheet: ExcelJS.Worksheet,
@@ -210,10 +214,60 @@ export function buildSalesTransactionsSheet(
     profit: 0,
   }
 
+  // The item half of a row: columns I-T. Also adds the line into the totals,
+  // because every line that is written is a line that counts.
+  const itemCells = (
+    item: NonNullable<SalesTransactionSheetRow["items"]>[0]
+  ) => {
+    const sales = item.sales || 0
+    const cost = item.purchaseCost || 0
+    const profit = sales - cost
+    // Markup is what the goods were marked up by over what they cost. With
+    // no cost recorded there is nothing to mark up from, so it reads zero
+    // rather than the whole retail value - the same way the old report left
+    // it.
+    const markup = cost
+      ? (item.retailPrice || 0) * (item.quantitySold || 0) - cost
+      : 0
+
+    totals.quantity += item.quantitySold || 0
+    totals.sales += sales
+    totals.discounts += item.discounts || 0
+    totals.markup += markup
+    totals.cost += cost
+    totals.profit += profit
+
+    return [
+      item.name,
+      item.sku,
+      item.quantitySold,
+      sales,
+      // No tax in this system, so inc and ex are the same figure. The column
+      // is kept because the accounts team reconciles against the old layout.
+      sales,
+      item.discounts,
+      // Promotional offers: this system has none, so always zero. Kept so the
+      // columns line up with the old export.
+      0,
+      markup,
+      cost,
+      profit,
+      sales ? parseFloat(((profit / sales) * 100).toFixed(2)) : 0,
+      item.retailPrice,
+    ]
+  }
+
+  const BLANK_ORDER_CELLS = ["", "", "", "", "", "", "", ""]
+
   for (const sale of sales) {
     const date = sale.date ? new Date(Number(sale.date)) : null
     const valid = date && !Number.isNaN(date.getTime())
-    const orderRow = sheet.addRow([
+    const items = sale.items || []
+
+    // The order's first line sits on the order's own row rather than under
+    // it, so a receipt reads across in one line instead of starting with a
+    // row of blanks.
+    sheet.addRow([
       sale.saleNumber,
       valid ? format(date, "dd MMM, yyyy") : "",
       valid ? format(date, "h:mmaaa") : "",
@@ -222,54 +276,12 @@ export function buildSalesTransactionsSheet(
       sale.paymentTypes?.join(", ") || "",
       sale.total,
       sale.byName,
+      ...(items[0] ? itemCells(items[0]) : []),
     ])
     totals.orderTotal += sale.total || 0
 
-    for (const item of sale.items || []) {
-      const sales = item.sales || 0
-      const cost = item.purchaseCost || 0
-      const profit = sales - cost
-      // Markup is what the goods were marked up by over what they cost. With
-      // no cost recorded there is nothing to mark up from, so it reads zero
-      // rather than the whole retail value - the same way the old report
-      // left it.
-      const markup = cost
-        ? (item.retailPrice || 0) * (item.quantitySold || 0) - cost
-        : 0
-      sheet.addRow([
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        item.name,
-        item.sku,
-        item.quantitySold,
-        sales,
-        // No tax in this system, so inc and ex are the same figure. The
-        // column is kept because the accounts team reconciles against the
-        // old layout.
-        sales,
-        item.discounts,
-        // Promotional offers: this system has none, so always zero. Kept so
-        // the columns line up with the old export.
-        0,
-        markup,
-        cost,
-        profit,
-        sales ? parseFloat(((profit / sales) * 100).toFixed(2)) : 0,
-        item.retailPrice,
-      ])
-      totals.quantity += item.quantitySold || 0
-      totals.sales += sales
-      totals.discounts += item.discounts || 0
-      totals.markup += markup
-      totals.cost += cost
-      totals.profit += profit
-    }
+    for (const item of items.slice(1))
+      sheet.addRow([...BLANK_ORDER_CELLS, ...itemCells(item)])
   }
 
   // Margin % and Retail price are per-unit rates, so they are left blank
