@@ -10,6 +10,7 @@ import { toast } from "sonner"
 import { useSession } from "next-auth/react"
 import {
   addExcelTitleRows as addTitleRows,
+  buildSalesTransactionsSheet,
   styleExcelHeaderRow as styleHeaderRow,
   downloadExcelWorkbook,
   addPdfHeader,
@@ -189,6 +190,8 @@ const GET_SALES_TRANSACTIONS = gql`
             quantitySold
             sales
             discounts
+            purchaseCost
+            retailPrice
           }
           outletName
           currentSaleStatus
@@ -312,6 +315,35 @@ const TAB_LABELS: Record<string, string> = {
   users: "Sales by User",
 }
 
+/**
+ * Every transaction in the range.
+ *
+ * The server clamps `first` at MAX_PAGE_SIZE (500), so one large request
+ * would silently truncate a busy month - the pages are walked instead.
+ */
+async function fetchAllSalesTransactions(
+  client: ReturnType<typeof useApolloClient>,
+  start: string,
+  end: string
+): Promise<SalesTransactionNode[]> {
+  const rows: SalesTransactionNode[] = []
+  let after: string | null = null
+  for (;;) {
+    const { data }: any = await client.query({
+      query: GET_SALES_TRANSACTIONS,
+      variables: { first: 500, after, start, end },
+      fetchPolicy: "network-only",
+    })
+    const connection = data?.salesTransactionTable
+    if (!connection) break
+    rows.push(...(connection.edges || []).map((edge: any) => edge.node))
+    if (!connection.pageInfo?.hasNextPage) break
+    after = connection.pageInfo.endCursor
+    if (!after) break
+  }
+  return rows
+}
+
 // "SalesVSPayment" - one row per sale, pairing what was sold against how it
 // was paid. Deliberately separate from the tab exports above: it always covers
 // every transaction in the range regardless of which tab is open, because it
@@ -339,23 +371,7 @@ async function exportSalesVsPaymentExcel({
   })
   const outlets: string[] = (outletsData as any)?.salesOutlets || []
 
-  // The server clamps `first` at MAX_PAGE_SIZE (500), so a single large
-  // request would silently truncate. Page through instead.
-  const rows: any[] = []
-  let after: string | null = null
-  for (;;) {
-    const { data }: any = await client.query({
-      query: GET_SALES_TRANSACTIONS,
-      variables: { first: 500, after, start, end },
-      fetchPolicy: "network-only",
-    })
-    const connection = data?.salesTransactionTable
-    if (!connection) break
-    rows.push(...(connection.edges || []).map((edge: any) => edge.node))
-    if (!connection.pageInfo?.hasNextPage) break
-    after = connection.pageInfo.endCursor
-    if (!after) break
-  }
+  const rows = await fetchAllSalesTransactions(client, start, end)
 
   const title = "SalesVSPayment"
   const workbook = new ExcelJS.Workbook()
@@ -521,74 +537,11 @@ async function exportSalesReportExcel({
     ])
     totalRow.font = { bold: true }
   } else if (activeTab === "transactions") {
-    const { data } = await client.query({
-      query: GET_SALES_TRANSACTIONS,
-      variables: { first: 500, start, end },
-      fetchPolicy: "network-only",
-    })
-    const nodes: SalesTransactionNode[] =
-      (data as any)?.salesTransactionTable?.edges?.map((e: any) => e.node) || []
-
-    addTitleRows(sheet, title, range, 9, outlets)
-    sheet.columns = [
-      { width: 14 },
-      { width: 20 },
-      { width: 28 },
-      { width: 14 },
-      { width: 14 },
-      { width: 14 },
-      { width: 14 },
-      { width: 14 },
-      { width: 14 },
-    ]
-    const headerRow = sheet.addRow([
-      "Order total",
-      "User",
-      "Item",
-      "SKU",
-      "Quantity sold",
-      "Sales",
-      "Discounts",
-      "Purchase cost",
-      "Gross profit",
-    ])
-    styleHeaderRow(headerRow)
-
-    let qtyTotal = 0
-    let salesTotal = 0
-    let discountsTotal = 0
-    nodes.forEach((sale) => {
-      const orderRow = sheet.addRow([sale.total, sale.byName])
-      orderRow.font = { bold: true }
-      sale.items.forEach((item) => {
-        sheet.addRow([
-          "",
-          "",
-          item.name,
-          item.sku,
-          item.quantitySold,
-          item.sales,
-          item.discounts,
-          "N/A",
-          "N/A",
-        ])
-        qtyTotal += item.quantitySold
-        salesTotal += item.sales
-        discountsTotal += item.discounts
-      })
-    })
-    const totalRow = sheet.addRow([
-      nodes.reduce((sum, s) => sum + s.total, 0),
-      "",
-      "",
-      "",
-      qtyTotal,
-      salesTotal,
-      discountsTotal,
-      "N/A",
-      "N/A",
-    ])
-    totalRow.font = { bold: true }
+    buildSalesTransactionsSheet(
+      sheet,
+      await fetchAllSalesTransactions(client, start, end),
+      { title, range, outlets }
+    )
   } else {
     // by-category / users share the same shape
     const { data } = await client.query({
@@ -1437,6 +1390,8 @@ type SalesTransactionItem = {
   quantitySold: number
   sales: number
   discounts: number
+  purchaseCost: number
+  retailPrice: number
 }
 
 type SalesTransactionNode = {
@@ -1454,6 +1409,12 @@ type SalesTransactionNode = {
   paymentTypes: string[]
   total: number
   byName: string
+  // Only the SalesVSPayment sheet reads these; the table above does not.
+  completedDate: string | null
+  notes: string
+  itemDiscount: number
+  saleDiscount: number
+  quantitySold: number
 }
 
 function SalesTransactionsTab({ range }: { range: DateRange }) {

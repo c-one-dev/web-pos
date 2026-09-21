@@ -196,9 +196,11 @@ export const salesReportResolver = {
 
         const sliced = result.slice(0, first)
         const edges = sliced.map((edge: any) => {
-          const skuByProduct = new Map(
-            (edge.productDocs || []).map((p: any) => [p._id.toString(), p.sku])
+          const productById = new Map(
+            (edge.productDocs || []).map((p: any) => [p._id.toString(), p])
           )
+          const productOf = (item: any): any =>
+            productById.get(item.product?.toString()) || {}
           return {
             node: {
               _id: edge._id,
@@ -209,13 +211,21 @@ export const salesReportResolver = {
               itemsSummary: (edge.items || [])
                 .map((item: any) => `${item.snapshotName} (${item.quantity})`)
                 .join(", "),
-              items: (edge.items || []).map((item: any) => ({
-                name: item.snapshotName,
-                sku: skuByProduct.get(item.product?.toString()) || "-",
-                quantitySold: item.quantity,
-                sales: item.total,
-                discounts: item.discount * item.quantity,
-              })),
+              items: (edge.items || []).map((item: any) => {
+                const product = productOf(item)
+                return {
+                  name: item.snapshotName,
+                  sku: product.sku || "-",
+                  quantitySold: item.quantity,
+                  sales: item.total,
+                  discounts: item.discount * item.quantity,
+                  purchaseCost: (product.cost || 0) * (item.quantity || 0),
+                  // Same fallback the closure report's COGS tab uses: the
+                  // product's price today, or what it was sold at if the
+                  // product is gone.
+                  retailPrice: product.currentPrice ?? item.snapshotPrice,
+                }
+              }),
               currentSaleStatus: edge.currentSaleStatus,
               currentSalePaymentStatus: edge.currentSalePaymentStatus,
               isOnAccount: edge.isOnAccount,

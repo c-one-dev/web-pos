@@ -7,6 +7,12 @@ export const salesReportSchema = gql`
     quantitySold: Float
     sales: Float
     discounts: Float
+    # What the line cost to buy, for the whole quantity. Zero on a product
+    # with no cost recorded, which is most of them.
+    purchaseCost: Float
+    # Per unit, not for the line - the product's price now, falling back to
+    # the price it was sold at if the product has since been removed.
+    retailPrice: Float
   }
 
   type SalesTransactionNode {
