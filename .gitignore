@@ -48,3 +48,6 @@ certificates
 # Throwaway scripts used while debugging an import.
 *-scratch.mjs
 check-scratch.mjs
+
+# Output of scripts/test-closure-email.ts --dry
+closure-email-preview.html
