@@ -236,9 +236,19 @@ export function renderClosureEmail(detail: ClosureDetail) {
     table<any>(detail.paymentDetails || [], paymentColumns)
   )
 
+  // On Account carries the customer as well: the row is a debt, and a debt
+  // that does not name who owes it is of no use to whoever reads this at the
+  // end of the night. Slotted after the receipt number, so the line reads
+  // "this sale, this customer, this much".
+  const onAccountColumns: Column<any>[] = [
+    ...paymentColumns.slice(0, 2),
+    { header: "Customer", cell: (row) => escapeHtml(row.customerName) },
+    ...paymentColumns.slice(2),
+  ]
+
   const onAccount = section(
     "On Account Sale",
-    table<any>(detail.onAccountSales || [], paymentColumns)
+    table<any>(detail.onAccountSales || [], onAccountColumns)
   )
 
   const addsPayouts = section(

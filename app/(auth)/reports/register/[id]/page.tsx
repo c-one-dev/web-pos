@@ -33,6 +33,7 @@ import { Button } from "@/components/ui/button"
 import { ReportPageSkeleton } from "@/components/custom/skeletons"
 import { Card, CardContent } from "@/components/ui/card"
 import { StatusBadge } from "@/components/custom/status-badge"
+import { CustomerBadge } from "@/components/custom/customer-badge"
 import { Badge } from "@/components/ui/badge"
 import {
   Select,
@@ -202,6 +203,7 @@ type PaymentDetailRow = {
   type: string
   isOnAccount?: boolean
   isSettlement?: boolean
+  customerName: string
   userName: string
 }
 type AddsPayoutRow = {
@@ -540,6 +542,7 @@ const GET_CLOSURE_PAYMENT_DETAILS = gql`
           type
           isOnAccount
           isSettlement
+          customerName
           userName
         }
       }
@@ -990,6 +993,19 @@ export default function Page() {
     },
   ]
 
+  // On Account is the same table plus who owes it. A debt that does not name
+  // the account it sits against says nothing useful at the end of a shift.
+  // Kept in step with the closing email, which lists this tab the same way.
+  const onAccountColumns: ColumnDef<PaymentDetailRow>[] = [
+    ...paymentDetailColumns.slice(0, 2),
+    {
+      id: "customerName",
+      header: "Customer",
+      cell: ({ row }) => <CustomerBadge name={row.original.customerName} />,
+    },
+    ...paymentDetailColumns.slice(2),
+  ]
+
   const addsPayoutsColumns: ColumnDef<AddsPayoutRow>[] = [
     {
       id: "type",
@@ -1386,7 +1402,7 @@ export default function Page() {
                 variables={onAccountVars}
                 sumField="paymentAmount"
                 sumLabel="Total payments on this page"
-                columns={paymentDetailColumns}
+                columns={onAccountColumns}
                 emptyLabel="No on-account sales in this shift."
                 rowView={<SaleRowViewDialog external />}
               />

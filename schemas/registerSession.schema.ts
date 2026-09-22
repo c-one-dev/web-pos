@@ -108,6 +108,9 @@ export const registerSessionSchema = gql`
     # An account balance repaid in this shift, rather than a tender on a sale
     # rung up in it.
     isSettlement: Boolean
+    # Who owes it. Populated for the On Account list, where the whole point
+    # of the row is which account carries the debt.
+    customerName: String
     userName: String
   }
 

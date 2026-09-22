@@ -187,6 +187,10 @@ const buildPaymentRows = (sales: any[], onAccountId?: string) =>
       paymentAmount: p.amount - p.change,
       type: p.method?.name || "-",
       isOnAccount: p.method?._id?.toString() === onAccountId,
+      // Who owes it. An On Account sale always has one - that is what the
+      // debt is recorded against - but the fallback keeps the other tenders
+      // on this list readable too.
+      customerName: s.customer?.name || "Walk-in",
       userName: fullName(s.by),
     }))
   )
