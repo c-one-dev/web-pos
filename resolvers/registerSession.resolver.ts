@@ -321,6 +321,9 @@ const buildTransactionsBySku = (sales: any[]) =>
     .flatMap((s: any) =>
       (s.items || []).map((item: any) => ({
         sku: item.product?.sku || "-",
+        // The name as it was sold under, so a later rename cannot change
+        // what an old shift report says.
+        name: item.snapshotName,
         _id: s._id,
         date: s.createdAt,
         saleNumber: s.saleNumber,

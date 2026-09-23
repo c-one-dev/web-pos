@@ -171,6 +171,10 @@ const groupBySku = (rows: any[]) => {
     const key = row.sku || "-"
     const existing = bySku.get(key) || {
       sku: key,
+      // The name is the one it was sold under. Rows come newest first, so
+      // the first seen is the most recent name if the product was renamed
+      // part way through the shift.
+      name: row.name || "-",
       quantity: 0,
       salesInc: 0,
       discountOffers: 0,
@@ -357,6 +361,7 @@ export function renderClosureEmail(detail: ClosureDetail) {
       skuRows,
       [
         { header: "SKU", cell: (row) => escapeHtml(row.sku) },
+        { header: "Item", cell: (row) => escapeHtml(row.name) },
         {
           header: "Qty",
           align: "right",
@@ -377,6 +382,7 @@ export function renderClosureEmail(detail: ClosureDetail) {
       // order total was not: each line's money is counted exactly once.
       [
         "TOTAL",
+        "",
         quantity(skuTotals.quantity),
         currency(skuTotals.salesInc),
         currency(skuTotals.discountOffers),

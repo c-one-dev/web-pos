@@ -130,6 +130,8 @@ export const registerSessionSchema = gql`
 
   type ClosureSkuItem {
     sku: String
+    # The product name as it was sold under.
+    name: String
     _id: ID
     date: String
     saleNumber: String
