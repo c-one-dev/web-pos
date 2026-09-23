@@ -8,6 +8,10 @@ import { recipientsFrom, sendMail } from "./mailer"
  * order and with the same columns, so the mail and the screen can be read
  * against each other. Written as plain tables with inline styles because that
  * is all an email client reliably renders - no flex, no grid, no stylesheet.
+ *
+ * Transaction by SKU is the one table that does not match its tab: see
+ * groupBySku for why a mail wants one row per SKU where a page wants one row
+ * per line sold.
  */
 
 // Gmail clips a message past ~102KB and shows "View entire message". A busy
@@ -129,6 +133,39 @@ const transactionStatus = (row: { status?: string; paymentStatus?: string }) =>
   (row.paymentStatus === "PENDING" || row.paymentStatus === "PARTIALLY_PAID")
     ? "ON ACCOUNT"
     : String(row.status || "-").replace(/_/g, " ")
+
+/**
+ * Folds the by-SKU rows into one row per SKU.
+ *
+ * The closure page lists one row per line sold, which is the right grain on
+ * screen, where a receipt number can be clicked through to the sale. In an
+ * email nothing is clickable and the same SKU comes up again and again, so
+ * the question it can actually answer is "how much of each thing went out
+ * tonight" - one row per SKU answers that in a fraction of the space.
+ *
+ * Sale number and payment methods are dropped because they belong to a
+ * receipt, not to a SKU, and so is the order total, which cannot be added up
+ * across lines without counting the same receipt several times.
+ *
+ * Biggest seller first: a summary is read from the top.
+ */
+const groupBySku = (rows: any[]) => {
+  const bySku = new Map<string, any>()
+  for (const row of rows) {
+    const key = row.sku || "-"
+    const existing = bySku.get(key) || {
+      sku: key,
+      quantity: 0,
+      salesInc: 0,
+      discountOffers: 0,
+    }
+    existing.quantity += row.quantity || 0
+    existing.salesInc += row.salesInc || 0
+    existing.discountOffers += row.discountOffers || 0
+    bySku.set(key, existing)
+  }
+  return [...bySku.values()].sort((a, b) => b.salesInc - a.salesInc)
+}
 
 // The closure detail as the resolver builds it. Typed loosely on purpose:
 // this is the same object the GraphQL layer returns, and mirroring every
@@ -290,9 +327,8 @@ export function renderClosureEmail(detail: ClosureDetail) {
 
   const bySku = section(
     "Transaction by SKU",
-    table<any>(detail.transactionsBySku || [], [
+    table<any>(groupBySku(detail.transactionsBySku || []), [
       { header: "SKU", cell: (row) => escapeHtml(row.sku) },
-      { header: "Sale", cell: (row) => escapeHtml(row.saleNumber) },
       { header: "Qty", align: "right", cell: (row) => quantity(row.quantity) },
       {
         header: "Sales (inc)",
@@ -304,12 +340,6 @@ export function renderClosureEmail(detail: ClosureDetail) {
         align: "right",
         cell: (row) => currency(row.discountOffers),
       },
-      {
-        header: "Sale total",
-        align: "right",
-        cell: (row) => currency(row.saleTotal),
-      },
-      { header: "Payments", cell: (row) => escapeHtml(row.payments) },
     ])
   )
 
