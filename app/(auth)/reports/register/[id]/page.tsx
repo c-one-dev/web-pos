@@ -1431,7 +1431,10 @@ export default function Page() {
               <PagedTab<SkuRow>
                 query={GET_CLOSURE_BY_SKU}
                 field="closureTransactionsBySku"
-                sumField="saleTotal"
+                // The line's own money, not its receipt's total. Summing
+                // saleTotal counted a receipt once per line it had, so four
+                // lines off one ₱315 sale reported ₱1,260.
+                sumField="salesInc"
                 sumLabel="Total sales on this page"
                 variables={sessionVars}
                 columns={skuColumns}
