@@ -77,7 +77,12 @@ const cellStyle = (align: "left" | "right", last: boolean) =>
   `padding:8px 10px;text-align:${align};font-size:12px;color:${COLORS.ink};` +
   (last ? "" : `border-bottom:1px solid ${COLORS.line};`)
 
-function table<T>(rows: T[], columns: Column<T>[]) {
+/**
+ * `total` adds a bold row under the body, one entry per column. It is only
+ * given to tables whose columns can honestly be added up - see groupBySku,
+ * where the order total could not be.
+ */
+function table<T>(rows: T[], columns: Column<T>[], total?: string[]) {
   if (!rows.length)
     return `<p style="margin:0;padding:14px 10px;font-size:12px;color:${COLORS.muted};background:${COLORS.band};border-radius:6px;">Nothing recorded in this shift.</p>`
 
@@ -91,7 +96,9 @@ function table<T>(rows: T[], columns: Column<T>[]) {
 
   const body = shown
     .map((row, index) => {
-      const last = index === shown.length - 1
+      // The body's last row keeps its bottom border when a totals row
+      // follows, so the two are separated.
+      const last = index === shown.length - 1 && !total
       const cells = columns
         .map(
           (column) =>
@@ -102,12 +109,21 @@ function table<T>(rows: T[], columns: Column<T>[]) {
     })
     .join("")
 
+  const totalRow = total
+    ? `<tr>${columns
+        .map(
+          (column, index) =>
+            `<td style="padding:10px;text-align:${column.align || "left"};font-size:12px;font-weight:600;color:${COLORS.ink};">${total[index] ?? ""}</td>`
+        )
+        .join("")}</tr>`
+    : ""
+
   const footnote =
     rows.length > shown.length
       ? `Showing the first ${shown.length} of ${rows.length} rows. The full list is on the register closure page.`
       : `${rows.length} ${rows.length === 1 ? "row" : "rows"}.`
 
-  return `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;border-collapse:collapse;border:1px solid ${COLORS.line};border-radius:6px;"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table><p style="margin:8px 0 0;font-size:11px;color:${COLORS.muted};">${footnote}</p>`
+  return `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;border-collapse:collapse;border:1px solid ${COLORS.line};border-radius:6px;"><thead><tr>${head}</tr></thead><tbody>${body}${totalRow}</tbody></table><p style="margin:8px 0 0;font-size:11px;color:${COLORS.muted};">${footnote}</p>`
 }
 
 const section = (title: string, content: string) =>
@@ -325,22 +341,47 @@ export function renderClosureEmail(detail: ClosureDetail) {
     ])
   )
 
+  const skuRows = groupBySku(detail.transactionsBySku || [])
+  const skuTotals = skuRows.reduce(
+    (sum, row) => ({
+      quantity: sum.quantity + row.quantity,
+      salesInc: sum.salesInc + row.salesInc,
+      discountOffers: sum.discountOffers + row.discountOffers,
+    }),
+    { quantity: 0, salesInc: 0, discountOffers: 0 }
+  )
+
   const bySku = section(
     "Transaction by SKU",
-    table<any>(groupBySku(detail.transactionsBySku || []), [
-      { header: "SKU", cell: (row) => escapeHtml(row.sku) },
-      { header: "Qty", align: "right", cell: (row) => quantity(row.quantity) },
-      {
-        header: "Sales (inc)",
-        align: "right",
-        cell: (row) => currency(row.salesInc),
-      },
-      {
-        header: "Discount offers",
-        align: "right",
-        cell: (row) => currency(row.discountOffers),
-      },
-    ])
+    table<any>(
+      skuRows,
+      [
+        { header: "SKU", cell: (row) => escapeHtml(row.sku) },
+        {
+          header: "Qty",
+          align: "right",
+          cell: (row) => quantity(row.quantity),
+        },
+        {
+          header: "Sales (inc)",
+          align: "right",
+          cell: (row) => currency(row.salesInc),
+        },
+        {
+          header: "Discount offers",
+          align: "right",
+          cell: (row) => currency(row.discountOffers),
+        },
+      ],
+      // Adding these down the page is sound in a way the old per-receipt
+      // order total was not: each line's money is counted exactly once.
+      [
+        "TOTAL",
+        quantity(skuTotals.quantity),
+        currency(skuTotals.salesInc),
+        currency(skuTotals.discountOffers),
+      ]
+    )
   )
 
   const cogs = section(
