@@ -4,14 +4,20 @@ import { recipientsFrom, sendMail } from "./mailer"
 /**
  * The shift closure report, rendered as an email.
  *
- * Every tab of the closure page is included as its own table, in the same
- * order and with the same columns, so the mail and the screen can be read
- * against each other. Written as plain tables with inline styles because that
- * is all an email client reliably renders - no flex, no grid, no stylesheet.
+ * The closure page's tabs each become a table here, in the same order, so the
+ * mail and the screen can be read against each other. Written as plain tables
+ * with inline styles because that is all an email client reliably renders -
+ * no flex, no grid, no stylesheet.
  *
- * Transaction by SKU is the one table that does not match its tab: see
- * groupBySku for why a mail wants one row per SKU where a page wants one row
- * per line sold.
+ * Three deliberately differ from their tab:
+ *
+ * - Transactions is left out. Every sale it lists is already accounted for by
+ *   Payment Details and On Account Sale between them, so in a mail it was a
+ *   third pass over the same receipts.
+ * - Payment Details drops a sale tendered wholly on account - see where it is
+ *   built below.
+ * - Transaction by SKU is grouped per SKU rather than per line - see
+ *   groupBySku.
  */
 
 // Gmail clips a message past ~102KB and shows "View entire message". A busy
@@ -138,17 +144,6 @@ const statGrid = (cells: string[]) => {
     rows.push(`<tr>${cells.slice(index, index + 3).join("")}</tr>`)
   return `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;border-collapse:collapse;">${rows.join("")}</table>`
 }
-
-/**
- * The same rule the Transactions tab uses: a sale can be COMPLETED and still
- * owed for, so the status reads the sale status and the payment status
- * together rather than the sale status alone.
- */
-const transactionStatus = (row: { status?: string; paymentStatus?: string }) =>
-  row.status !== "VOIDED" &&
-  (row.paymentStatus === "PENDING" || row.paymentStatus === "PARTIALLY_PAID")
-    ? "ON ACCOUNT"
-    : String(row.status || "-").replace(/_/g, " ")
 
 /**
  * Folds the by-SKU rows into one row per SKU.
@@ -318,12 +313,10 @@ export function renderClosureEmail(detail: ClosureDetail) {
 
   // On Account carries the customer as well: the row is a debt, and a debt
   // that does not name who owes it is of no use to whoever reads this at the
-  // end of the night. Slotted after the receipt number, so the line reads
-  // "this sale, this customer, this much".
+  // end of the night.
   const onAccountColumns: Column<any>[] = [
-    ...paymentColumns.slice(0, 2),
+    ...paymentColumns,
     { header: "Customer", cell: (row) => escapeHtml(row.customerName) },
-    ...paymentColumns.slice(2),
   ]
 
   const onAccount = section(
@@ -345,26 +338,6 @@ export function renderClosureEmail(detail: ClosureDetail) {
           ),
       },
       { header: "Notes", cell: (row) => escapeHtml(row.note || "-") },
-    ])
-  )
-
-  const transactions = section(
-    "Transactions",
-    table<any>(detail.transactions || [], [
-      { header: "Transaction date", cell: (row) => dateTime(row.date) },
-      { header: "Sale", cell: (row) => escapeHtml(row.saleNumber) },
-      { header: "Status", cell: (row) => escapeHtml(transactionStatus(row)) },
-      { header: "Customer Name", cell: (row) => escapeHtml(row.customerName) },
-      {
-        header: "Discount",
-        align: "right",
-        cell: (row) => currency(row.discount),
-      },
-      {
-        header: "Sale total",
-        align: "right",
-        cell: (row) => currency(row.saleTotal),
-      },
     ])
   )
 
@@ -456,7 +429,7 @@ export function renderClosureEmail(detail: ClosureDetail) {
 <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;background:#f3f4f6;padding:20px 0;">
   <tr><td align="center">
     <table role="presentation" cellpadding="0" cellspacing="0" width="900" style="width:900px;max-width:100%;background:#ffffff;border-radius:10px;font-family:Arial,Helvetica,sans-serif;">
-      ${header}${receipts}${salesSummary}${paymentSummary}${paymentDetails}${onAccount}${addsPayouts}${transactions}${bySku}${cogs}${notes}${footer}
+      ${header}${receipts}${salesSummary}${paymentSummary}${paymentDetails}${onAccount}${addsPayouts}${bySku}${cogs}${notes}${footer}
     </table>
   </td></tr>
 </table>
