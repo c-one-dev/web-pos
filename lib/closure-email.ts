@@ -288,9 +288,32 @@ export function renderClosureEmail(detail: ClosureDetail) {
     { header: "User", cell: (row) => escapeHtml(row.userName) },
   ]
 
+  // Payment Details is what came into the drawer. An On Account tender is a
+  // debt rather than a payment, and it already has its own section below, so
+  // a sale tendered entirely on account is left out here.
+  //
+  // A split sale stays: part of it was paid for real. Its Payment column
+  // still shows the whole tender, including the part still owed - the same
+  // figure the closure page shows, and the On Account section below says how
+  // much of it is outstanding.
+  //
+  // Counted rather than matched on the name: "On Account" is a payment
+  // method someone could rename, and isOnAccount already knows which one it
+  // is. One distinct tender on a row flagged isOnAccount means that tender
+  // was the only one.
+  const paymentDetailRows = (detail.paymentDetails || []).filter(
+    (row: any) =>
+      !(
+        row.isOnAccount &&
+        String(row.type || "")
+          .split(", ")
+          .filter(Boolean).length <= 1
+      )
+  )
+
   const paymentDetails = section(
     "Payment Details",
-    table<any>(detail.paymentDetails || [], paymentColumns)
+    table<any>(paymentDetailRows, paymentColumns)
   )
 
   // On Account carries the customer as well: the row is a debt, and a debt
