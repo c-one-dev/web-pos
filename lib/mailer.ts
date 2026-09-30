@@ -95,6 +95,9 @@ export type MailInput = {
   subject: string
   html: string
   text?: string
+  // Files to send with the message. Nodemailer takes the content as a
+  // Buffer and works the MIME type out from the filename.
+  attachments?: { filename: string; content: Buffer }[]
 }
 
 /**
@@ -102,7 +105,13 @@ export type MailInput = {
  * own transaction (closeRegisterSession) catch it themselves, so that the
  * decision of whether a failed email is fatal stays with the caller.
  */
-export const sendMail = async ({ to, subject, html, text }: MailInput) => {
+export const sendMail = async ({
+  to,
+  subject,
+  html,
+  text,
+  attachments,
+}: MailInput) => {
   if (!isMailConfigured())
     throw new Error(
       "Email is not configured. Set SMTP_HOST, SMTP_USER and SMTP_PASSWORD."
@@ -115,6 +124,7 @@ export const sendMail = async ({ to, subject, html, text }: MailInput) => {
     subject,
     html,
     text,
+    attachments,
   })
   return info.messageId
 }

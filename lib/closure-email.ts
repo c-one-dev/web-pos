@@ -192,7 +192,10 @@ export const closureEmailSubject = (detail: ClosureDetail) => {
   return `C-ONE SPORTS CENTER ${detail.registerName || "Register"} : ${format(closed, "d MMM yyyy")}`
 }
 
-export function renderClosureEmail(detail: ClosureDetail) {
+export function renderClosureEmail(
+  detail: ClosureDetail,
+  attachment?: { filename: string; rangeLabel: string } | null
+) {
   const subject = closureEmailSubject(detail)
   const difference = (detail.paymentSummary || []).reduce(
     (sum: number, item: any) => sum + (item.difference || 0),
@@ -421,6 +424,14 @@ export function renderClosureEmail(detail: ClosureDetail) {
       )
     : ""
 
+  // Says what the attached workbook covers. It is the whole business day,
+  // which is wider than this shift - without a line saying so, a reader
+  // reconciling the tables above against the file would find more in the file
+  // and nothing to explain the difference.
+  const attachmentNote = attachment
+    ? `<tr><td style="padding:22px 24px 0;"><p style="margin:0;padding:12px;font-size:12px;color:${COLORS.ink};background:${COLORS.band};border-radius:6px;">Attached: <strong>${escapeHtml(attachment.filename)}</strong> &mdash; every sales transaction of ${escapeHtml(attachment.rangeLabel)}, across all registers. The tables above cover this shift only.</p></td></tr>`
+    : ""
+
   const footer = `<tr><td style="padding:22px 24px 26px;"><p style="margin:0;font-size:11px;color:${COLORS.muted};border-top:1px solid ${COLORS.line};padding-top:12px;">Sent automatically by the C-ONE POS when this register was closed. Do not reply to this address.</p></td></tr>`
 
   const html = `<!doctype html>
@@ -429,7 +440,7 @@ export function renderClosureEmail(detail: ClosureDetail) {
 <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;background:#f3f4f6;padding:20px 0;">
   <tr><td align="center">
     <table role="presentation" cellpadding="0" cellspacing="0" width="900" style="width:900px;max-width:100%;background:#ffffff;border-radius:10px;font-family:Arial,Helvetica,sans-serif;">
-      ${header}${receipts}${salesSummary}${paymentSummary}${paymentDetails}${onAccount}${addsPayouts}${bySku}${cogs}${notes}${footer}
+      ${header}${receipts}${salesSummary}${paymentSummary}${paymentDetails}${onAccount}${addsPayouts}${bySku}${cogs}${notes}${attachmentNote}${footer}
     </table>
   </td></tr>
 </table>
@@ -447,6 +458,12 @@ export function renderClosureEmail(detail: ClosureDetail) {
     `Transactions: ${detail.numberOfTransactions ?? 0}`,
     `Tally difference: ${currency(difference)}`,
     "",
+    ...(attachment
+      ? [
+          `Attached: ${attachment.filename} - every sales transaction of ${attachment.rangeLabel}, across all registers.`,
+          "",
+        ]
+      : []),
     "The full breakdown is in the HTML version of this email.",
   ].join("\n")
 
@@ -458,6 +475,33 @@ export const closureRecipients = () =>
   recipientsFrom(process.env.CLOSURE_REPORT_TO)
 
 export async function sendClosureEmail(detail: ClosureDetail) {
-  const { subject, html, text } = renderClosureEmail(detail)
-  return sendMail({ to: closureRecipients(), subject, html, text })
+  // The Sales Transactions workbook for the day this shift closed in, so the
+  // accounts team stops exporting it by hand. Never allowed to stop the
+  // report going out: a failure here costs an attachment, and the figures in
+  // the message body are the important part.
+  let attachment: Awaited<
+    ReturnType<
+      typeof import("./closure-attachment").buildSalesTransactionsAttachment
+    >
+  > = null
+  try {
+    const { buildSalesTransactionsAttachment } =
+      await import("./closure-attachment")
+    attachment = await buildSalesTransactionsAttachment(
+      toDate(detail.closedAt) || new Date()
+    )
+  } catch (error) {
+    console.error("[closure email] could not build the attachment", error)
+  }
+
+  const { subject, html, text } = renderClosureEmail(detail, attachment)
+  return sendMail({
+    to: closureRecipients(),
+    subject,
+    html,
+    text,
+    attachments: attachment
+      ? [{ filename: attachment.filename, content: attachment.content }]
+      : undefined,
+  })
 }
