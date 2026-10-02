@@ -220,10 +220,13 @@ export const salesReportResolver = {
                   sales: item.total,
                   discounts: item.discount * item.quantity,
                   purchaseCost: (product.cost || 0) * (item.quantity || 0),
-                  // Same fallback the closure report's COGS tab uses: the
-                  // product's price today, or what it was sold at if the
-                  // product is gone.
-                  retailPrice: product.currentPrice ?? item.snapshotPrice,
+                  // The price this line was actually sold at, which the sale
+                  // recorded at checkout. Reading the product's price instead
+                  // rewrote history: raise a price today and re-exporting
+                  // last month reported the new one, so the same day exported
+                  // twice gave two different files. The product is only
+                  // consulted when the sale carries no snapshot at all.
+                  retailPrice: item.snapshotPrice ?? product.currentPrice,
                 }
               }),
               currentSaleStatus: edge.currentSaleStatus,

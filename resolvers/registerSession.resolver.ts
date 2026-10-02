@@ -352,7 +352,10 @@ const buildCogs = (sales: any[]) => {
         salesInc: 0,
         salesExTax: 0,
         purchaseCost: 0,
-        retailPrice: item.product?.currentPrice ?? item.snapshotPrice,
+        // What it sold for in this shift, not what it costs today. A shift
+        // report is a record of a night that has already happened, so a
+        // price change tomorrow must not rewrite it.
+        retailPrice: item.snapshotPrice ?? item.product?.currentPrice,
       }
       existing.quantitySold += item.quantity
       existing.salesInc += item.total
