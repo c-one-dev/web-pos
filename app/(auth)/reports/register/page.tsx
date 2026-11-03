@@ -325,6 +325,17 @@ function ShiftReportTab() {
     }
   }, [data])
 
+  // Sorting re-runs the query from the first row, so the page counter has to
+  // go back with it. Left where it was, the table asked for a slice of rows
+  // that had not been fetched under the new order and showed nothing.
+  const onSort = useCallback(
+    (value: { key: string; order: "ASC" | "DESC" } | null) => {
+      setSort(value)
+      setPage({ current: 1, loaded: 1, max: 1 })
+    },
+    []
+  )
+
   const columns: ColumnDef<IRegisterSessionTableNode>[] = useMemo(
     () => [
       {
@@ -348,7 +359,7 @@ function ShiftReportTab() {
             label="Time opened"
             sortKey="openedAt"
             sortState={sort}
-            onSortChange={setSort}
+            onSortChange={onSort}
           />
         ),
         cell: ({ row }) =>
@@ -368,7 +379,7 @@ function ShiftReportTab() {
             label="Time closed"
             sortKey="closedAt"
             sortState={sort}
-            onSortChange={setSort}
+            onSortChange={onSort}
           />
         ),
         cell: ({ row }) =>
@@ -625,6 +636,17 @@ function VoidedTransactionsTab() {
     }
   }, [data])
 
+  // Sorting re-runs the query from the first row, so the page counter has to
+  // go back with it. Left where it was, the table asked for a slice of rows
+  // that had not been fetched under the new order and showed nothing.
+  const onSort = useCallback(
+    (value: { key: string; order: "ASC" | "DESC" } | null) => {
+      setSort(value)
+      setPage({ current: 1, loaded: 1, max: 1 })
+    },
+    []
+  )
+
   const columns: ColumnDef<IVoidedSaleNode>[] = useMemo(
     () => [
       {
@@ -658,7 +680,7 @@ function VoidedTransactionsTab() {
             label="Voided Date"
             sortKey="voidedAt"
             sortState={sort}
-            onSortChange={setSort}
+            onSortChange={onSort}
           />
         ),
         cell: ({ row }) =>

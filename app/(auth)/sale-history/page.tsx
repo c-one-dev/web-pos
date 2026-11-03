@@ -351,6 +351,17 @@ export default function Page() {
     }
   }, [data])
 
+  // Sorting re-runs the query from the first row, so the page counter has to
+  // go back with it. Left where it was, the table asked for a slice of rows
+  // that had not been fetched under the new order and showed nothing.
+  const onSort = useCallback(
+    (value: { key: string; order: "ASC" | "DESC" } | null) => {
+      setSort(value)
+      setPage({ current: 1, loaded: 1, max: 1 })
+    },
+    []
+  )
+
   const columns: ColumnDef<ISaleHistoryNode>[] = useMemo(
     () => [
       {
@@ -360,7 +371,7 @@ export default function Page() {
             label="Date"
             sortKey="date"
             sortState={sort}
-            onSortChange={setSort}
+            onSortChange={onSort}
           />
         ),
         cell: ({ row }) => (
@@ -385,7 +396,7 @@ export default function Page() {
             label="Sale No."
             sortKey="saleNumber"
             sortState={sort}
-            onSortChange={setSort}
+            onSortChange={onSort}
           />
         ),
         cell: ({ row }) => (
@@ -434,7 +445,7 @@ export default function Page() {
             label="Customer"
             sortKey="customerName"
             sortState={sort}
-            onSortChange={setSort}
+            onSortChange={onSort}
           />
         ),
         cell: ({ row }) => <CustomerBadge name={row.original.customerName} />,
@@ -455,7 +466,7 @@ export default function Page() {
             label="Sale Status"
             sortKey="currentSaleStatus"
             sortState={sort}
-            onSortChange={setSort}
+            onSortChange={onSort}
           />
         ),
         // A sale whose money is still owed reads "On Account" rather than
@@ -505,7 +516,7 @@ export default function Page() {
             label="Payment Status"
             sortKey="currentSalePaymentStatus"
             sortState={sort}
-            onSortChange={setSort}
+            onSortChange={onSort}
           />
         ),
         cell: ({ row }) => <PaymentStatusCell row={row.original} />,
@@ -530,7 +541,7 @@ export default function Page() {
             label="Sale Total"
             sortKey="saleTotal"
             sortState={sort}
-            onSortChange={setSort}
+            onSortChange={onSort}
           />
         ),
         cell: ({ row }) => (

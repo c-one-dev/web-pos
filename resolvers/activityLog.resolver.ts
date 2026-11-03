@@ -1,7 +1,6 @@
 import ActivityLog from "../models/activityLog.model"
 import { Types } from "mongoose"
 import { fromCursor, toCursor } from "../helpers/cursor"
-import { isISOString } from "../helpers/isoString"
 
 const CURSOR_TYPE = "activityLog"
 
@@ -49,7 +48,9 @@ export const activityLogResolver = {
           const { id, type, value } = fromCursor(after)
           if (type !== CURSOR_TYPE) throw new Error("Invalid cursor")
           const cursorId = new Types.ObjectId(id)
-          const cursorValue = isISOString(value) ? new Date(value) : value
+          // The cursor carries the value's own type, so nothing is guessed
+          // from the text here - see toCursor in helpers/cursor.ts.
+          const cursorValue = value
 
           // Descending only (newest first), so the next page is strictly
           // older than the cursor - ties on identical timestamps broken by

@@ -13,7 +13,6 @@ import {
   legacySaleSchema,
   legacySaleItemsSchema,
 } from "../validators/sale.validator"
-import { isISOString } from "../helpers/isoString"
 import Register from "@/models/register.model"
 import RegisterSession from "@/models/registerSession.model"
 import Payment from "@/models/payment.model"
@@ -275,7 +274,9 @@ export const saleResolver = {
           const { id, type, value } = fromCursor(after)
           if (type !== CURSOR_TYPE) throw new Error("Invalid cursor")
           const cursorId = new Types.ObjectId(id)
-          const cursorValue = isISOString(value) ? new Date(value) : value
+          // The cursor carries the value's own type, so nothing is guessed
+          // from the text here - see toCursor in helpers/cursor.ts.
+          const cursorValue = value
 
           matchStage.$and = [
             ...(matchStage.$and || []),
@@ -705,7 +706,9 @@ export const saleResolver = {
           if (type !== VOIDED_SALE_CURSOR_TYPE)
             throw new Error("Invalid cursor")
           const cursorId = new Types.ObjectId(id)
-          const cursorValue = sortKey === "voidedAt" ? new Date(value) : value
+          // The cursor carries the value's own type, so nothing is guessed
+          // from the text here - see toCursor in helpers/cursor.ts.
+          const cursorValue = value
           paginationStages.push({
             $match: {
               $or: [

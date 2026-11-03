@@ -1470,6 +1470,17 @@ function SalesTransactionsTab({ range }: { range: DateRange }) {
     }
   }, [data])
 
+  // Sorting re-runs the query from the first row, so the page counter has to
+  // go back with it. Left where it was, the table asked for a slice of rows
+  // that had not been fetched under the new order and showed nothing.
+  const onSort = useCallback(
+    (value: { key: string; order: "ASC" | "DESC" } | null) => {
+      setSort(value)
+      setPage({ current: 1, loaded: 1, max: 1 })
+    },
+    []
+  )
+
   const columns: ColumnDef<SalesTransactionNode>[] = useMemo(
     () => [
       {
@@ -1479,7 +1490,7 @@ function SalesTransactionsTab({ range }: { range: DateRange }) {
             label="Order #"
             sortKey="saleNumber"
             sortState={sort}
-            onSortChange={setSort}
+            onSortChange={onSort}
           />
         ),
         cell: ({ row }) => (
@@ -1495,7 +1506,7 @@ function SalesTransactionsTab({ range }: { range: DateRange }) {
             label="Date"
             sortKey="date"
             sortState={sort}
-            onSortChange={setSort}
+            onSortChange={onSort}
           />
         ),
         cell: ({ row }) => (
@@ -1562,7 +1573,7 @@ function SalesTransactionsTab({ range }: { range: DateRange }) {
               label="Order total"
               sortKey="total"
               sortState={sort}
-              onSortChange={setSort}
+              onSortChange={onSort}
             />
           </div>
         ),

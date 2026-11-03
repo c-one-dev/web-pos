@@ -6,7 +6,6 @@ import { fromCursor, toCursor } from "../helpers/cursor"
 import { flatten } from "../helpers/flatten"
 import { checkSchema, validate } from "../helpers/validate"
 import { registerSchema } from "../validators/register.validator"
-import { isISOString } from "../helpers/isoString"
 import Product from "../models/product.model"
 
 const CURSOR_TYPE = "register"
@@ -112,7 +111,9 @@ export const registerResolver = {
           const { id, type, value } = fromCursor(after)
           if (type !== CURSOR_TYPE) throw new Error("Invalid cursor")
           const cursorId = new Types.ObjectId(id)
-          const cursorValue = isISOString(value) ? new Date(value) : value
+          // The cursor carries the value's own type, so nothing is guessed
+          // from the text here - see toCursor in helpers/cursor.ts.
+          const cursorValue = value
 
           matchStage.$and = [
             ...(matchStage.$and || []),

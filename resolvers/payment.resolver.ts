@@ -5,7 +5,6 @@ import type { IDataTableArgs } from "../types/shared.type"
 import { fromCursor, toCursor } from "../helpers/cursor"
 import { flatten } from "../helpers/flatten"
 import { checkSchema, validate } from "../helpers/validate"
-import { isISOString } from "../helpers/isoString"
 import Sale from "../models/sale.model"
 import PaymentMethod from "../models/paymentMethod.model"
 
@@ -101,7 +100,16 @@ export const paymentResolver = {
             }
           })
 
-        const sortKey = sort?.key || "_id"
+        // A payment can cover more than one sale, so saleList is an array -
+        // and a keyset cursor cannot be built from one. Comparing an array
+        // against an array in the cursor clause below matches nothing, so
+        // sorting by Receipt # used to hand back an empty second page and
+        // the table stopped there however many rows were left. Sorting and
+        // paging run on the first receipt number instead, which is the one
+        // the column leads with anyway.
+        const requestedSortKey = sort?.key || "_id"
+        const sortKey =
+          requestedSortKey === "saleList" ? "saleSort" : requestedSortKey
         const sortOrder = sort?.order === "ASC" ? 1 : -1
 
         // The lookups and the fields they feed - paymentDate, methodName,
@@ -173,6 +181,14 @@ export const paymentResolver = {
               },
             },
           },
+          // Its own stage because saleList is not readable from inside the
+          // $addFields that builds it. Empty string rather than null so a
+          // payment with no sale still sorts somewhere definite.
+          {
+            $addFields: {
+              saleSort: { $ifNull: [{ $arrayElemAt: ["$saleList", 0] }, ""] },
+            },
+          },
         ]
 
         // Counted before the cursor clause is appended below, so every page
@@ -189,7 +205,9 @@ export const paymentResolver = {
           const { id, type, value } = fromCursor(after)
           if (type !== CURSOR_TYPE) throw new Error("Invalid cursor")
           const cursorId = new Types.ObjectId(id)
-          const cursorValue = isISOString(value) ? new Date(value) : value
+          // The cursor carries the value's own type, so nothing is guessed
+          // from the text here - see toCursor in helpers/cursor.ts.
+          const cursorValue = value
 
           matchStage.$and = [
             ...(matchStage.$and || []),
@@ -226,6 +244,9 @@ export const paymentResolver = {
               methodName: 1,
               byName: 1,
               saleList: 1,
+              // Kept past the projection only so the cursor below can read
+              // it; GraphQL ignores the extra field.
+              saleSort: 1,
               sales: 1,
               reference: 1,
             },

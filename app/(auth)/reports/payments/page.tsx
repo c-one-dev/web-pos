@@ -1056,6 +1056,17 @@ export default function Page() {
     }
   }, [data])
 
+  // A new sort re-runs the query from the first row, so the page counter has
+  // to go back with it. Left where it was, the table asked for a slice of
+  // rows that had not been fetched under the new order and showed nothing.
+  const onSort = useCallback(
+    (value: { key: string; order: "ASC" | "DESC" } | null) => {
+      setSort(value)
+      setPage({ current: 1, loaded: 1, max: 1 })
+    },
+    []
+  )
+
   const columns: ColumnDef<IPaymentNode>[] = useMemo(
     () => [
       {
@@ -1065,7 +1076,7 @@ export default function Page() {
             label="Receipt #"
             sortKey="saleList"
             sortState={sort}
-            onSortChange={setSort}
+            onSortChange={onSort}
           />
         ),
         cell: ({ row }) =>
@@ -1126,7 +1137,7 @@ export default function Page() {
             label="Date & Time"
             sortKey="paymentDate"
             sortState={sort}
-            onSortChange={setSort}
+            onSortChange={onSort}
           />
         ),
         cell: ({ row }) => (
@@ -1145,7 +1156,7 @@ export default function Page() {
             label="Method"
             sortKey="methodName"
             sortState={sort}
-            onSortChange={setSort}
+            onSortChange={onSort}
           />
         ),
         cell: ({ row }) => (
@@ -1170,7 +1181,7 @@ export default function Page() {
               label="Payment Amount"
               sortKey="amount"
               sortState={sort}
-              onSortChange={setSort}
+              onSortChange={onSort}
             />
           </div>
         ),
@@ -1231,7 +1242,7 @@ export default function Page() {
             label="User"
             sortKey="byName"
             sortState={sort}
-            onSortChange={setSort}
+            onSortChange={onSort}
           />
         ),
         cell: ({ row }) => (

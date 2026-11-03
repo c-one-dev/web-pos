@@ -13,7 +13,6 @@ import {
   deleteStoreCreditHistoryItemSchema,
 } from "../validators/customer.validator"
 import { settleAccountBalanceSchema } from "../validators/customer.server.validator"
-import { isISOString } from "../helpers/isoString"
 import { IStoreCreditHistoryItem } from "@/types/customer.type"
 import Sale from "../models/sale.model"
 import { outstandingAmount } from "@/helpers/salesFn"
@@ -165,7 +164,9 @@ export const customerResolver = {
           const { id, type, value } = fromCursor(after)
           if (type !== CURSOR_TYPE) throw new Error("Invalid cursor")
           const cursorId = new Types.ObjectId(id)
-          const cursorValue = isISOString(value) ? new Date(value) : value
+          // The cursor carries the value's own type, so nothing is guessed
+          // from the text here - see toCursor in helpers/cursor.ts.
+          const cursorValue = value
 
           matchStage.$and = [
             ...(matchStage.$and || []),
@@ -271,13 +272,37 @@ export const customerResolver = {
 
         const sortKey = sort?.key || "_id"
         const sortOrder = sort?.order === "ASC" ? 1 : -1
-        const total = await Customer.countDocuments(matchStage)
+
+        // The two remaining-balance columns are filtered, sorted and paged
+        // on, so they have to exist before $match and $sort. Spelling them
+        // out in the closing $project instead left all three reading a field
+        // that did not exist yet: the columns did not sort, filtering them
+        // returned nothing, and the cursor clause matched nothing - so page
+        // two came back empty.
+        const balances: PipelineStage = {
+          $addFields: {
+            remainingAccountLimit: "$accountLimit.current",
+            remainingStoreCredit: "$storeCredit.current",
+          },
+        }
+
+        // Counted through the same stage, and before the cursor clause is
+        // appended below, so a filter on either balance is counted the way
+        // it is matched and every page reports the whole filtered set.
+        const [countResult] = await Customer.aggregate([
+          balances,
+          { $match: matchStage },
+          { $count: "total" },
+        ])
+        const total = countResult?.total || 0
 
         if (after) {
           const { id, type, value } = fromCursor(after)
           if (type !== CURSOR_TYPE) throw new Error("Invalid cursor")
           const cursorId = new Types.ObjectId(id)
-          const cursorValue = isISOString(value) ? new Date(value) : value
+          // The cursor carries the value's own type, so nothing is guessed
+          // from the text here - see toCursor in helpers/cursor.ts.
+          const cursorValue = value
 
           matchStage.$and = [
             ...(matchStage.$and || []),
@@ -299,6 +324,7 @@ export const customerResolver = {
         }
 
         const pipeline: PipelineStage[] = [
+          balances,
           { $match: matchStage },
           {
             $sort: { [sortKey]: sortOrder, _id: sortOrder },
@@ -307,8 +333,8 @@ export const customerResolver = {
           {
             $project: {
               name: 1,
-              remainingAccountLimit: "$accountLimit.current",
-              remainingStoreCredit: "$storeCredit.current",
+              remainingAccountLimit: 1,
+              remainingStoreCredit: 1,
               isActive: 1,
             },
           },
